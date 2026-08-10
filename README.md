@@ -29,10 +29,22 @@ The main addition over the original mod is an **Item Search + Minimap Marker** f
 
 ## Installation
 
-1. Download `EtherHack-3.1.0-B42.jar` from the repository root.
-2. Copy it into `ProjectZomboid/mods/EtherHack/` (create the folder if needed).
-3. Enable the mod in the main menu → Mods.
-4. In-game: press **Insert** to open the EtherHack panel.
+Two options:
+
+**Option A — use the prebuilt jar:**
+
+1. Download `EtherHack-3.1.2-B42.jar` from the repository root.
+2. Copy the jar together with `etherhack-src/install.bat` into the **game root directory** (`ProjectZomboid/`).
+3. Run `install.bat` — it installs/uninstalls the mod automatically (requires a JDK on the system).
+
+**Option B — build from source:**
+
+1. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
+2. Take `EtherHack-3.1.2-B42.jar` from the `build` directory.
+3. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
+4. Run `install.bat` to install the mod.
+
+In-game: press **Insert** to open the EtherHack panel.
 
 ## Building from source
 
@@ -43,7 +55,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/EtherHack-3.1.0-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
+The output jar is at `etherhack-src/build/EtherHack-3.1.2-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
 
 ## Testing
 
@@ -61,8 +73,8 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `EtherHack-3.1.0-B42.jar` | Ready-to-use build (current release) |
-| `etherhack-src/` | Full source (Gradle project) |
+| `EtherHack-3.1.2-B42.jar` | Ready-to-use build (current release) |
+| `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `分析报告.md` | Analysis report (Chinese): feasibility study, decompilation evidence, scanning design and limitations |
 | `analysis/` | Decompiled class extracts used for verification |

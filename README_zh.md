@@ -29,10 +29,22 @@
 
 ## 安装
 
-1. 从仓库根目录下载 `EtherHack-3.1.0-B42.jar`。
-2. 复制到 `ProjectZomboid/mods/EtherHack/` 目录(没有就新建)。
-3. 主菜单 → 模组 → 启用该模组。
-4. 游戏中按 **Insert** 打开 EtherHack 面板。
+两种方式:
+
+**方式一: 直接使用构建好的 jar**
+
+1. 从仓库根目录下载 `EtherHack-3.1.2-B42.jar`。
+2. 将 jar 和 `etherhack-src/install.bat` **一起复制到游戏根目录**(`ProjectZomboid/`)。
+3. 运行 `install.bat` 即可自动安装/卸载模组(需要系统装有 JDK)。
+
+**方式二: 从源码构建**
+
+1. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
+2. 从 `build` 目录中拿到 `EtherHack-3.1.2-B42.jar`。
+3. 将 jar 和 `etherhack-src/install.bat` 一起复制到游戏根目录。
+4. 运行 `install.bat` 完成安装。
+
+游戏中按 **Insert** 打开 EtherHack 面板。
 
 ## 从源码构建
 
@@ -43,7 +55,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-产物在 `etherhack-src/build/EtherHack-3.1.0-B42.jar`。Lua 源码嵌入在 `src/main/resources/EtherHack/lua/` 中, 构建时自动打包。
+产物在 `etherhack-src/build/EtherHack-3.1.2-B42.jar`。Lua 源码嵌入在 `src/main/resources/EtherHack/lua/` 中, 构建时自动打包。
 
 ## 测试
 
@@ -61,8 +73,8 @@ temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main
 
 | 路径 | 说明 |
 |---|---|
-| `EtherHack-3.1.0-B42.jar` | 可直接使用的构建产物(当前版本) |
-| `etherhack-src/` | 完整源码 (Gradle 工程) |
+| `EtherHack-3.1.2-B42.jar` | 可直接使用的构建产物(当前版本) |
+| `etherhack-src/` | 完整源码 (Gradle 工程, 含 `build.bat` / `install.bat`) |
 | `tests/` | Lua 冒烟测试 + Kahlua 兼容性检查脚本 |
 | `分析报告.md` | 分析报告: 可行性研究、反编译取证、扫描方案设计与限制 |
 | `analysis/` | 反编译取证用的类文件片段 |
