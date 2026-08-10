@@ -246,3 +246,20 @@ function EtherItemSearch.clear()
     EtherItemSearch._scanX = nil;
     EtherItemSearch._scanY = nil;
 end
+
+--*********************************************************
+--* 小地图"物品"开关: 关闭时清掉标记并停止事件开销 (保留搜索目标),
+--* 重新开启时立即按上次目标静默重扫
+--*********************************************************
+EtherItemSearch.showOnMap = true; -- 小地图物品标记显示开关 (UIMap 渲染时判断)
+function EtherItemSearch.setEnabled(enabled)
+    EtherItemSearch.showOnMap = enabled;
+    if enabled then
+        if EtherItemSearch.lastTargets ~= nil then
+            EtherItemSearch.scan(EtherItemSearch.lastTargets, true);
+        end
+    else
+        EtherItemSearch.results = nil;
+        EtherItemSearch.refreshPending = false;
+    end
+end

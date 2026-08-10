@@ -12,7 +12,34 @@ UIMovableMiniMap.instance = nil;
 function UIMovableMiniMap:createChildren()
     ISPanel.createChildren(self);
 
-    self.map = UIMap:new(10, 30, self.width - 20, self.height - 40)
+    -- 快捷开关按钮行 (我/玩家/载具/僵尸/物品), 白=开, 灰=关
+    UIMap.ensureDrawFlags();
+    self.toggleButtons = {};
+    local defs = {
+        { "UI_Map_Toggle_LocalPlayer", "drawLocalPlayer" },
+        { "UI_Map_Toggle_OtherPlayers", "drawAllPlayers" },
+        { "UI_Map_Toggle_Vehicles", "drawVehicles" },
+        { "UI_Map_Toggle_Zombies", "drawZombies" },
+        { "UI_Map_Toggle_Items", "drawItems" },
+    }
+    local bx = 6;
+    for _, d in ipairs(defs) do
+        local b = ISButton:new(bx, 20, 48, 18, getTranslate(d[1]), self, function(self, button)
+            UIMap[button.toggleKey] = not UIMap[button.toggleKey];
+            button.textColor = UIMap[button.toggleKey] and { r = 1, g = 1, b = 1, a = 1 } or { r = 0.35, g = 0.35, b = 0.35, a = 1 };
+            if button.toggleKey == "drawItems" then
+                EtherItemSearch.setEnabled(UIMap.drawItems);
+            end
+        end);
+        b:initialise();
+        b.toggleKey = d[2];
+        b.textColor = UIMap[d[2]] and { r = 1, g = 1, b = 1, a = 1 } or { r = 0.35, g = 0.35, b = 0.35, a = 1 };
+        self:addChild(b);
+        table.insert(self.toggleButtons, b);
+        bx = bx + 50;
+    end
+
+    self.map = UIMap:new(10, 40, self.width - 20, self.height - 50)
     self.map:initialise()
     self.map:instantiate()
     self.map:initDataAndStyle()

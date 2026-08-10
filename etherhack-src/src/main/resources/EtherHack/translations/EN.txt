@@ -1,4 +1,4 @@
-﻿{
+{
 	UI_InformationPanel_General_Title = "General",
 	UI_InformationPanel_General_Text1 = "This cheat significantly expands the functionality of the game,",
 	UI_InformationPanel_General_Text2 = "that can be detected by anti-readers. Therefore, some functions",
@@ -197,6 +197,11 @@
 	UI_Map_MiniMapOpenButton = "Open",
 	UI_Map_TeleportContext = "Teleport here",
 	UI_ItemSearch_ShowOnMap = "Show on map",
+	UI_Map_Toggle_LocalPlayer = "Me",
+	UI_Map_Toggle_OtherPlayers = "Plyr",
+	UI_Map_Toggle_Vehicles = "Veh",
+	UI_Map_Toggle_Zombies = "Zeds",
+	UI_Map_Toggle_Items = "Item",
 	UI_ItemSearch_Scanning = "Searching...",
 	UI_ItemSearch_NoResults = "No items found",
 	UI_Settings_Language = "UI Language",

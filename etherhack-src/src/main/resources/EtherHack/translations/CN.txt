@@ -1,4 +1,4 @@
-﻿{
+{
 	UI_InformationPanel_General_Title = "常规",
 	UI_InformationPanel_General_Text1 = "这个作弊工具极大地扩展了游戏功能，",
 	UI_InformationPanel_General_Text2 = "可能会被反作弊系统检测到。因此部分功能",
@@ -197,6 +197,11 @@
 	UI_Map_MiniMapOpenButton = "打开",
 	UI_Map_TeleportContext = "传送到这里",
 	UI_ItemSearch_ShowOnMap = "在地图上显示",
+	UI_Map_Toggle_LocalPlayer = "我",
+	UI_Map_Toggle_OtherPlayers = "玩家",
+	UI_Map_Toggle_Vehicles = "载具",
+	UI_Map_Toggle_Zombies = "僵尸",
+	UI_Map_Toggle_Items = "物品",
 	UI_ItemSearch_Scanning = "正在搜索...",
 	UI_ItemSearch_NoResults = "未找到该物品",
 	UI_Settings_Language = "界面语言",

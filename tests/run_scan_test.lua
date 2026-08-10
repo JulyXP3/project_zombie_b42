@@ -185,6 +185,20 @@ handlers.onPlayerUpdate(player)  -- 走够 5 格且冷却已过 -> 重扫
 assert(squareCalls > callsBefore, "movement >= 5 tiles and cooldown passed must rescan")
 assert(EtherItemSearch.results ~= nil, "movement rescan keeps results")
 
+-- 用例 3d: 小地图"物品"开关 —— 关闭清标记并停止开销, 开启按上次目标静默重扫
+EtherItemSearch.setEnabled(false)
+assert(EtherItemSearch.showOnMap == false, "setEnabled(false) must clear showOnMap flag")
+assert(EtherItemSearch.results == nil, "setEnabled(false) must clear results")
+callsBefore = squareCalls
+fakeClock.now = fakeClock.now + 5000
+handlers.onPlayerUpdate(player)
+assert(squareCalls == callsBefore, "disabled: per-tick handlers must stay idle")
+px, py = 100.4, 200.6
+EtherItemSearch.setEnabled(true)
+assert(EtherItemSearch.showOnMap == true, "setEnabled(true) must set flag")
+assert(squareCalls > callsBefore, "re-enable must silently rescan last targets")
+assert(#EtherItemSearch.results == 4, "re-enable finds the 4 locations again")
+
 -- 用例 4: 无匹配 -> n==0 且 results 清空 (手动扫描才打印诊断)
 local n2 = EtherItemSearch.scan({ ["Base.Nope"] = true })
 assert(n2 == 0, "expected 0 locations for unmatched target")

@@ -59,13 +59,27 @@ end
 --*********************************************************
 --* Отрисовка
 --*********************************************************
+--*********************************************************
+--* 图层显示开关 (小地图上方按钮控制, 首次初始化为游戏原设置)
+--*********************************************************
+function UIMap.ensureDrawFlags()
+    if UIMap.drawZombies ~= nil then return end
+    UIMap.drawZombies = isMapDrawZombies();
+    UIMap.drawVehicles = isMapDrawVehicles();
+    UIMap.drawAllPlayers = isMapDrawAllPlayers();
+    UIMap.drawLocalPlayer = isMapDrawLocalPlayer();
+    UIMap.drawItems = true;
+end
+
 function UIMap:render() 
 	
 	self:suspendStencil()
     self:clampStencilRectToParent(0, 0, self:getWidth(), self:getHeight() )
 
+	UIMap.ensureDrawFlags();
+
 	-- Отрисовка зомби
-	if isMapDrawZombies() then
+	if UIMap.drawZombies then
 		local zombies = getCell():getZombieList()
 		for i=1,zombies:size() do
 			local zombie = zombies:get(i-1)
@@ -82,7 +96,7 @@ function UIMap:render()
 	end
 
 	-- Отрисовка машин
-	if isMapDrawVehicles() then
+	if UIMap.drawVehicles then
 		local vehicles = getCell():getVehicles():toArray()
 		for i=1,#vehicles do
 			local vehicle = vehicles[i]
@@ -103,7 +117,7 @@ function UIMap:render()
 	end
 
 	-- Отрисовка других игроков
-	if isMapDrawAllPlayers() then
+	if UIMap.drawAllPlayers then
 		local players = getOnlinePlayers()
 
 		if players ~= nil then
@@ -128,7 +142,7 @@ function UIMap:render()
 	end
 
 	-- Отрисовка локального игрока
-	if isMapDrawLocalPlayer() then
+	if UIMap.drawLocalPlayer then
 		local player = self.localPlayer;
 		
 		local x = self.mapAPI:worldToUIX(player:getX(), player:getY());
@@ -146,7 +160,7 @@ function UIMap:render()
 	end
 
 	-- Отрисовка найденных предметов (поиск по миру); 刷新由事件驱动 (EtherItemSearch.refresh)
-	if EtherItemSearch.results ~= nil then
+	if EtherItemSearch.showOnMap and EtherItemSearch.results ~= nil then
 		for _, p in pairs(EtherItemSearch.results) do
 			local x = self.mapAPI:worldToUIX(p.x, p.y);
 			local y = self.mapAPI:worldToUIY(p.x, p.y);
