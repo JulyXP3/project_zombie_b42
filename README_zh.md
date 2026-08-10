@@ -29,20 +29,10 @@
 
 ## 安装
 
-两种方式:
-
-**方式一: 直接使用构建好的 jar**
-
-1. 从仓库根目录下载 `EtherHack-3.1.2-B42.jar`。
-2. 将 jar 和 `etherhack-src/install.bat` **一起复制到游戏根目录**(`ProjectZomboid/`)。
-3. 运行 `install.bat` 即可自动安装/卸载模组(需要系统装有 JDK)。
-
-**方式二: 从源码构建**
-
 1. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
 2. 从 `build` 目录中拿到 `EtherHack-3.1.2-B42.jar`。
 3. 将 jar 和 `etherhack-src/install.bat` 一起复制到游戏根目录。
-4. 运行 `install.bat` 完成安装。
+4. 运行 `install.bat` 完成安装(需要系统装有 JDK)。
 
 游戏中按 **Insert** 打开 EtherHack 面板。
 

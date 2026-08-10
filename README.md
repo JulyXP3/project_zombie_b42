@@ -29,20 +29,10 @@ The main addition over the original mod is an **Item Search + Minimap Marker** f
 
 ## Installation
 
-Two options:
-
-**Option A — use the prebuilt jar:**
-
-1. Download `EtherHack-3.1.2-B42.jar` from the repository root.
-2. Copy the jar together with `etherhack-src/install.bat` into the **game root directory** (`ProjectZomboid/`).
-3. Run `install.bat` — it installs/uninstalls the mod automatically (requires a JDK on the system).
-
-**Option B — build from source:**
-
 1. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
 2. Take `EtherHack-3.1.2-B42.jar` from the `build` directory.
 3. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
-4. Run `install.bat` to install the mod.
+4. Run `install.bat` to install the mod (requires a JDK on the system).
 
 In-game: press **Insert** to open the EtherHack panel.
 
