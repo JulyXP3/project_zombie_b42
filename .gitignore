@@ -10,4 +10,5 @@ temp/
 # large binaries (jars tracked explicitly if needed)
 *.jar.bak
 *.jar
+!etherhack-src/gradle/wrapper/gradle-wrapper.jar
 analysis/pz_jar/projectzomboid.jar
