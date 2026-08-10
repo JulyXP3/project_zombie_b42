@@ -82,10 +82,13 @@ function EtherItemSearch.scan(targetTypes)
         if itemHits(item) then
             addAt(w:getX(), w:getY());
         end
-        local ok, inv = pcall(function() return item:getInventory() end);
-        if ok and inv ~= nil then
-            stats.bags = stats.bags + 1;
-            scanItems(inv:getItems(), w:getX(), w:getY());
+        -- 仅当物品是容器 (包/箱子) 时才取内部物品; IsInventoryContainer 所有物品都有, 不会抛异常
+        if item:IsInventoryContainer() then
+            local inv = item:getInventory();
+            if inv ~= nil then
+                stats.bags = stats.bags + 1;
+                scanItems(inv:getItems(), w:getX(), w:getY());
+            end
         end
     end
 
@@ -126,19 +129,19 @@ function EtherItemSearch.scan(targetTypes)
         end
     end
 
-    -- 附近车辆部件容器 (后备箱/座位等)
-    pcall(function()
-        local vehicles = cell:getVehicles();
-        if vehicles == nil then return end
-        for _, v in pairs(vehicles) do
+    -- 附近车辆部件容器 (后备箱/座位等); getVehicles 返回集合, 用 size/get 遍历
+    local vehicles = cell:getVehicles();
+    if vehicles ~= nil then
+        for vi = 1, vehicles:size() do
+            local v = vehicles:get(vi - 1);
             if v ~= nil and math.abs(v:getX() - px) <= R and math.abs(v:getY() - py) <= R then
                 local parts = v:getParts();
                 local nParts = parts:getPartCount();
                 for i = 0, nParts - 1 do
                     local part = parts:getPartByIndex(i);
                     if part ~= nil then
-                        local ok, c = pcall(function() return part:getItemContainer() end);
-                        if ok and c ~= nil then
+                        local c = part:getItemContainer();
+                        if c ~= nil then
                             stats.containers = stats.containers + 1;
                             scanItems(c:getItems(), part:getX(), part:getY());
                         end
@@ -146,7 +149,7 @@ function EtherItemSearch.scan(targetTypes)
                 end
             end
         end
-    end);
+    end
 
     EtherItemSearch.results = out;
     if n == 0 then

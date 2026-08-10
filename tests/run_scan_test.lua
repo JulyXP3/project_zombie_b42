@@ -1,5 +1,5 @@
--- EtherItemSearch.scan ?????? (????? API)
--- ??: lua5.1.exe run_scan_test.lua <??>/EtherItemSearch.lua
+-- EtherItemSearch.scan 逻辑冒烟测试 (桩模拟游戏 API)
+-- 运行: lua5.1.exe run_scan_test.lua <路径>/EtherItemSearch.lua
 local function fakeList(...)
     local arr = { ... }
     return {
@@ -14,6 +14,7 @@ local function fakeItem(fullType, typeName, inventory)
     local o = {
         getFullType = function() return fullType end,
         getType = function() return typeName or fullType end,
+        IsInventoryContainer = function() return inventory ~= nil end,
     }
     if inventory ~= nil then
         o.getInventory = function() return inventory end
@@ -36,7 +37,7 @@ local function fakeObj(x, y, o)
     return o
 end
 
--- ??: 1 ??? (?? Axe + ?? Saw + ???? Pen? -> ??? "Axe" ??)
+-- 家具: 1 个容器 (全名命中 Axe + 短名命中 Alternative/Axe + 忽略 Saw)
 local shortNameItem = fakeItem("Base.Alternative", "Axe")
 local worldObj = fakeObj(110, 210, {
     getContainerCount = function() return 1 end,
@@ -48,17 +49,17 @@ local worldObj = fakeObj(110, 210, {
     end,
 })
 
--- ????: getItem ?? + getInventory ?????
+-- 地面背包: getItem 命中 + getInventory 容器内命中
 local groundBag = fakeObj(120, 220, {
-    getItem = function() return fakeItem("Base.Axe", "Axe", fakeContainer(fakeItem("Base.Axe", "Axe"), fakeItem("Base.Pen"))) end,
+    getItem = function() return fakeItem("Base.Axe", "Axe", fakeContainer(fakeItem("Base.Axe", "Axe"), fakeItem("Base.Pen", "Pen"))) end,
 })
 
--- ?????: ??
+-- 地面散落物: 命中 (非容器 -> 不取内部物品)
 local groundItem = fakeObj(130, 230, {
     getItem = function() return fakeItem("Base.Axe", "Axe") end,
 })
 
--- ????: ??? -> ??
+-- 普通物体: 无容器 -> 忽略
 local wall = fakeObj(140, 240, {
     getContainerCount = function() return 0 end,
 })
@@ -70,7 +71,7 @@ local squares = {
     },
 }
 
--- ??: ???????? (????)
+-- 车辆: 后备箱容器内命中 (短名匹配); 集合按 size/get 遍历 (同官方写法)
 local vehicle = {
     getX = function() return 148 end, getY = function() return 248 end,
     getParts = function()
@@ -90,11 +91,12 @@ local vehicle = {
         }
     end,
 }
+local vehicles = { size = function() return 1 end, get = function(_, i) return vehicle end }
 
--- ????? (??????????)
+-- 桩全局环境 (在加载被测模块前定义)
 getCell = function()
     return {
-        getVehicles = function() return { vehicle } end,
+        getVehicles = function() return vehicles end,
         getGridSquare = function(_, x, y, z)
             if z ~= 0 then return nil end
             return squares[x * 100000 + y]
@@ -105,7 +107,7 @@ getPlayer = function() return player end
 
 dofile(arg[1])  -- EtherItemSearch.lua
 
--- ?? 1: ????
+-- 用例 1: 全名匹配
 local target = { ["Base.Axe"] = true }
 local n = EtherItemSearch.scan(target)
 
@@ -121,7 +123,7 @@ assert(byKey["120,220"] == 2, "120,220 (ground bag) should have count 2")
 assert(byKey["130,230"] == 1, "130,230 (floor item) should have count 1")
 assert(byKey["149,249"] == 1, "149,249 (vehicle trunk) should have count 1")
 
--- ?? 2: ???? (??? getFullName ????????)
+-- 用例 2: 短名匹配 (按钮侧 getFullName 返回短名时的回退)
 EtherItemSearch.clear()
 local n3 = EtherItemSearch.scan({ ["Axe"] = true })
 assert(n3 == 4, "expected 4 locations with short name, got " .. n3)
@@ -131,7 +133,7 @@ for _, p in ipairs(EtherItemSearch.results) do
 end
 assert(byKey3["110,210"] == 2, "110,210 (full+short) should have count 2 with short-name target")
 
--- ?? 3: ??? -> n==0 ? results ?? (????????????)
+-- 用例 3: 无匹配 -> n==0 且 results 清空 (诊断行仅在真实环境下可看)
 local n2 = EtherItemSearch.scan({ ["Base.Nope"] = true })
 assert(n2 == 0, "expected 0 locations for unmatched target")
 
