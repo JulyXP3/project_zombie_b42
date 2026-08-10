@@ -141,7 +141,7 @@ function EtherItemSearch.scan(targetTypes, silent)
 
     -- 车辆部件容器 (后备箱/座位等); getVehicles() 返回 Set, :toArray() 转 Lua 数组 (官方 UIMap 同款用法)
     -- 注意: 部件遍历必须在车辆对象上调用 getPartCount()/getPartByIndex()
-    --       (官方 ISInventoryPage 同款); v:getParts() 返回的 VehicleParts
+    --       (官方 ISInventoryPage 同款); 车辆.getParts 返回的 VehicleParts
     --       java 对象未暴露给 Lua, 无法对其点方法
     local vehicles = cell:getVehicles();
     if vehicles ~= nil then
