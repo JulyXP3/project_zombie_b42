@@ -168,12 +168,14 @@ function UIItemTables:createChildren()
         end
 
         local targetTypes = {};
+        local nTargets = 0;
         if hasFilter then
             if self.datas.items == nil or #self.datas.items == 0 then return end
             for i = 1, #self.datas.items do
                 local scriptItem = self.datas.items[i].item;
                 if scriptItem ~= nil then
                     targetTypes[scriptItem:getFullName()] = true;
+                    nTargets = nTargets + 1;
                 end
             end
         else
@@ -182,9 +184,10 @@ function UIItemTables:createChildren()
             local scriptItem = self.datas.items[sel].item;
             if scriptItem ~= nil then
                 targetTypes[scriptItem:getFullName()] = true;
+                nTargets = nTargets + 1;
             end
         end
-        if next(targetTypes) == nil then return end
+        if nTargets == 0 then return end
 
         self.showOnMap.title = getTranslate("UI_ItemSearch_Scanning");
         EtherItemSearch.scan(targetTypes);
