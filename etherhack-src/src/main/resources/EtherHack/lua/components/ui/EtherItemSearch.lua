@@ -129,27 +129,10 @@ function EtherItemSearch.scan(targetTypes)
         end
     end
 
-    -- 附近车辆部件容器 (后备箱/座位等); getVehicles 返回集合, 用 size/get 遍历
-    local vehicles = cell:getVehicles();
-    if vehicles ~= nil then
-        for vi = 1, vehicles:size() do
-            local v = vehicles:get(vi - 1);
-            if v ~= nil and math.abs(v:getX() - px) <= R and math.abs(v:getY() - py) <= R then
-                local parts = v:getParts();
-                local nParts = parts:getPartCount();
-                for i = 0, nParts - 1 do
-                    local part = parts:getPartByIndex(i);
-                    if part ~= nil then
-                        local c = part:getItemContainer();
-                        if c ~= nil then
-                            stats.containers = stats.containers + 1;
-                            scanItems(c:getItems(), part:getX(), part:getY());
-                        end
-                    end
-                end
-            end
-        end
-    end
+    -- 车辆部件容器 (后备箱/座位等): 暂不扫描
+    -- ponytail: getVehicles() 返回 java.util.Set, 只有 size() 无 get(),
+    --   pairs() 也会报 "Expected a table", 无可靠 Lua 遍历 API;
+    --   需要时改用 cell:getMovingObjects() (ArrayList) + instanceof 过滤车辆
 
     EtherItemSearch.results = out;
     if n == 0 then
