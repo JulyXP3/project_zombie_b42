@@ -145,9 +145,8 @@ function UIMap:render()
 		end
 	end
 
-	-- Отрисовка найденных предметов (поиск по миру); 每帧顺便驱动自动刷新
+	-- Отрисовка найденных предметов (поиск по миру); 刷新由事件驱动 (EtherItemSearch.refresh)
 	if EtherItemSearch.results ~= nil then
-		EtherItemSearch.tick();
 		for _, p in pairs(EtherItemSearch.results) do
 			local x = self.mapAPI:worldToUIX(p.x, p.y);
 			local y = self.mapAPI:worldToUIY(p.x, p.y);

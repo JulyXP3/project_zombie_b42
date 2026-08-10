@@ -11,4 +11,6 @@ temp/
 *.jar.bak
 *.jar
 !etherhack-src/gradle/wrapper/gradle-wrapper.jar
-analysis/pz_jar/projectzomboid.jar
+analysis/pz_jar/projectzomboid.jarluac.out
+# stale jar xf extraction (junk)
+/EtherHack/

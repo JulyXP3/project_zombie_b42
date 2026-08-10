@@ -1,17 +1,18 @@
--- EtherItemSearch.scan / tick 逻辑冒烟测试 (桩模拟游戏 API)
+-- EtherItemSearch.scan / 事件刷新逻辑冒烟测试 (桩模拟游戏 API)
 -- 运行: lua5.1.exe run_scan_test.lua <路径>/EtherItemSearch.lua
 local fakeClock = { now = 100000 }
 getTimestampMs = function() return fakeClock.now end
 
-local function fakeList(...)
-    local arr = { ... }
-    return {
-        size = function() return #arr end,
-        get = function(_, i) return arr[i + 1] end,
-    }
-end
+-- 捕获事件注册, 便于手动触发 (注: dot 调用无隐式 self, Add 只收 1 个参数)
+local handlers = {}
+Events = {
+    OnPlayerUpdate = { Add = function(f) handlers.onPlayerUpdate = f end },
+    OnRefreshInventoryWindowContainers = { Add = function(f) handlers.onInventoryWindowChanged = f end },
+}
 
+local invSize = 5
 local player = { getX = function() return 100.4 end, getY = function() return 200.6 end, getZ = function() return 0 end }
+player.getInventory = function() return { size = function() return invSize end } end
 
 local function fakeItem(fullType, typeName, inventory)
     local o = {
@@ -23,6 +24,14 @@ local function fakeItem(fullType, typeName, inventory)
         o.getInventory = function() return inventory end
     end
     return o
+end
+
+local function fakeList(...)
+    local arr = { ... }
+    return {
+        size = function() return #arr end,
+        get = function(_, i) return arr[i + 1] end,
+    }
 end
 
 local function fakeContainer(...)
@@ -137,15 +146,32 @@ for _, p in ipairs(EtherItemSearch.results) do
 end
 assert(byKey3["110,210"] == 2, "110,210 (full+short) should have count 2 with short-name target")
 
--- 用例 3: 自动刷新 tick —— 3 秒内不重扫, 超时后静默重扫
+-- 用例 3: 防抖刷新 —— 背包物品数变化后不立即扫; 安静满 1 秒才重扫一次
 local callsBefore = squareCalls
-EtherItemSearch.tick()
-assert(squareCalls == callsBefore, "tick within 3s must not rescan")
+invSize = invSize + 1
+handlers.onPlayerUpdate(player)          -- 变化事件: 只置脏
+assert(squareCalls == callsBefore, "change must not rescan immediately (debounce)")
 
-fakeClock.now = fakeClock.now + 3100
-EtherItemSearch.tick()
-assert(squareCalls > callsBefore, "tick after 3s must rescan")
+fakeClock.now = fakeClock.now + 500
+handlers.onPlayerUpdate(player)          -- 仅安静 0.5s, 不扫
+assert(squareCalls == callsBefore, "must not rescan before 1s quiet")
+
+fakeClock.now = fakeClock.now + 600
+handlers.onPlayerUpdate(player)          -- 安静满 1s -> 重扫一次
+assert(squareCalls > callsBefore, "must rescan once after 1s quiet")
 assert(EtherItemSearch.results ~= nil and #EtherItemSearch.results == 4, "silent rescan keeps results")
+
+local callsAfter = squareCalls
+handlers.onPlayerUpdate(player)          -- pending 已清, 不再扫
+assert(squareCalls == callsAfter, "no rescan when nothing changed")
+
+-- 用例 3b: 库存窗口容器变化同样走防抖
+callsBefore = squareCalls
+handlers.onInventoryWindowChanged()
+assert(squareCalls == callsBefore, "container window change must not rescan immediately")
+fakeClock.now = fakeClock.now + 1000
+handlers.onPlayerUpdate(player)
+assert(squareCalls > callsBefore, "container window change rescans after 1s quiet")
 
 -- 用例 4: 无匹配 -> n==0 且 results 清空 (手动扫描才打印诊断)
 local n2 = EtherItemSearch.scan({ ["Base.Nope"] = true })
