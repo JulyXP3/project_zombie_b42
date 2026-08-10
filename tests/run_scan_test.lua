@@ -11,7 +11,8 @@ Events = {
 }
 
 local invSize = 5
-local player = { getX = function() return 100.4 end, getY = function() return 200.6 end, getZ = function() return 0 end }
+local px, py = 100.4, 200.6
+local player = { getX = function() return px end, getY = function() return py end, getZ = function() return 0 end }
 player.getInventory = function() return { getItems = function() return { size = function() return invSize end } end } end
 
 local function fakeItem(fullType, typeName, inventory)
@@ -168,6 +169,21 @@ assert(squareCalls == callsBefore, "container window change must not rescan imme
 fakeClock.now = fakeClock.now + 1000
 handlers.onPlayerUpdate(player)
 assert(squareCalls > callsBefore, "container window change rescans after 1s quiet")
+
+-- 用例 3c: 移动刷新 —— 走够 5 格且距上次扫描 >= 2 秒才重扫
+callsBefore = squareCalls
+px = px + 3  -- 只走 3 格, 不触发
+handlers.onPlayerUpdate(player)
+assert(squareCalls == callsBefore, "movement < 5 tiles must not rescan")
+
+px = px + 3  -- 累计 6 格, 但距上次扫描不足 2 秒
+handlers.onPlayerUpdate(player)
+assert(squareCalls == callsBefore, "movement must respect 2s cooldown")
+
+fakeClock.now = fakeClock.now + 2100
+handlers.onPlayerUpdate(player)  -- 走够 5 格且冷却已过 -> 重扫
+assert(squareCalls > callsBefore, "movement >= 5 tiles and cooldown passed must rescan")
+assert(EtherItemSearch.results ~= nil, "movement rescan keeps results")
 
 -- 用例 4: 无匹配 -> n==0 且 results 清空 (手动扫描才打印诊断)
 local n2 = EtherItemSearch.scan({ ["Base.Nope"] = true })

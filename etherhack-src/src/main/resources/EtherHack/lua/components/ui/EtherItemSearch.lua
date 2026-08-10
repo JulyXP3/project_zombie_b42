@@ -9,10 +9,11 @@
 --*       首行 if (GameClient.client) return), 只能用已加载方格扫描
 --* 匹配: 先比 getFullType() ("Base.Axe"), 不比中再比 getType() ("Axe"),
 --*       兼容按钮侧 scriptItem:getFullName() 返回短名的可能
---* 刷新: 事件驱动而非定时器 —— OnPlayerUpdate 每 tick 比较玩家背包物品数
---*       (一次 size() 调用), 有变化只置"脏"标记; 安静满 1 秒才真正重扫
---*       一次 (防抖: 连续转移物品期间 0 次扫描)。空闲零开销,
---*       拾取/丢弃物品停手后标记一次性刷新到位。
+--* 刷新: 事件驱动而非定时器 —— OnPlayerUpdate 每 tick:
+--*       1. 比较玩家背包物品数 (getItems():size() 一次调用), 有变化置"脏",
+--*          安静满 1 秒才真正重扫一次 (防抖: 连续转移物品期间 0 次扫描);
+--*       2. 比较玩家位置, 走出 5 格且距上次扫描 ≥2 秒即静默重扫 (标记跟随角色)。
+--*       空闲零开销, 拾取/丢弃物品停手后标记一次性刷新到位。
 --* 注意: 禁止 "obj:getItem ~= nil" 这类索引式方法探测 (Kahlua2 不可靠),
 --*       一律直接调用或 pcall 兜底
 --*********************************************************
@@ -24,6 +25,11 @@ EtherItemSearch.lastTargets = nil;    -- 上次扫描目标, 供自动刷新复�
 EtherItemSearch.debounceMs = 1000;    -- 防抖: 背包变动后安静满 1 秒才重扫
 EtherItemSearch.refreshPending = false; -- 待重扫标记
 EtherItemSearch.lastChangeAt = 0;     -- 最后一次背包变动时刻
+EtherItemSearch.lastScanAt = 0;       -- 上次扫描时刻
+EtherItemSearch.moveRefreshTiles = 5; -- 玩家走出 N 格触发移动重扫
+EtherItemSearch.moveRefreshMs = 2000; -- 移动重扫最小间隔 (连续奔跑也不超过 1 次/2 秒)
+EtherItemSearch._scanX = nil;         -- 上次扫描时的玩家位置
+EtherItemSearch._scanY = nil;
 
 --*********************************************************
 --* 扫描: targetTypes = { ["Base.Axe"]=true, ... }
@@ -39,6 +45,9 @@ function EtherItemSearch.scan(targetTypes, silent)
     end
 
     EtherItemSearch.lastTargets = targetTypes;
+    EtherItemSearch.lastScanAt = getTimestampMs();
+    EtherItemSearch._scanX = player:getX();
+    EtherItemSearch._scanY = player:getY();
 
     local out, key, n = {}, {}, 0;
     local stats = { squares = 0, floor = 0, containers = 0, bags = 0, items = 0 };
@@ -189,13 +198,27 @@ local function onPlayerUpdate(player)
     if EtherItemSearch.results == nil or player == nil then return end
     -- 官方写法: getInventory():getItems():size() (ItemContainer 未直接暴露 size)
     local items = player:getInventory():getItems();
-    if items == nil then return end
-    local s = items:size();
-    if s ~= EtherItemSearch._invSize then
-        EtherItemSearch._invSize = s;
-        EtherItemSearch.refreshPending = true;
-        EtherItemSearch.lastChangeAt = getTimestampMs();
+    if items ~= nil then
+        local s = items:size();
+        if s ~= EtherItemSearch._invSize then
+            EtherItemSearch._invSize = s;
+            EtherItemSearch.refreshPending = true;
+            EtherItemSearch.lastChangeAt = getTimestampMs();
+        end
     end
+
+    -- 移动刷新: 走出 5 格且距上次扫描 ≥2 秒 -> 静默重扫, 标记跟随角色
+    if EtherItemSearch._scanX ~= nil then
+        local dx = player:getX() - EtherItemSearch._scanX;
+        local dy = player:getY() - EtherItemSearch._scanY;
+        local now = getTimestampMs();
+        if dx * dx + dy * dy >= (EtherItemSearch.moveRefreshTiles * EtherItemSearch.moveRefreshTiles)
+           and now - EtherItemSearch.lastScanAt >= EtherItemSearch.moveRefreshMs then
+            EtherItemSearch.scan(EtherItemSearch.lastTargets, true);
+            return;
+        end
+    end
+
     EtherItemSearch.refresh();
 end
 
@@ -220,4 +243,6 @@ function EtherItemSearch.clear()
     EtherItemSearch._invSize = nil;
     EtherItemSearch.refreshPending = false;
     EtherItemSearch.lastChangeAt = 0;
+    EtherItemSearch._scanX = nil;
+    EtherItemSearch._scanY = nil;
 end
