@@ -1,0 +1,13 @@
+# temp / scratch files
+temp/
+*.tmp
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# large binaries (jars tracked explicitly if needed)
+*.jar.bak
+*.jar
+analysis/pz_jar/projectzomboid.jar
