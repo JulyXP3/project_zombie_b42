@@ -37,7 +37,7 @@ function UIItemTables:refreshShowOnMap()
     else
         show = self.datas.selected > 0 and self.datas.items ~= nil and self.datas.selected <= #self.datas.items;
     end
-    if show ~= self.showOnMap:getVisible() then
+    if show ~= self.showOnMap:getIsVisible() then
         self.showOnMap:setVisible(show);
         if not show then
             EtherItemSearch.clear();
