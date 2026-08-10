@@ -86,21 +86,17 @@ local squares = {
 -- 车辆: 后备箱容器内命中; getVehicles 返回 Set, 用 :toArray() 转数组 (官方同款)
 local vehicle = {
     getX = function() return 148 end, getY = function() return 248 end,
-    getParts = function()
-        return {
-            getPartCount = function() return 2 end,
-            getPartByIndex = function(_, i)
-                if i ~= 0 then
-                    return { getItemContainer = function() return nil end, getX = function() return 149 end, getY = function() return 249 end }
-                end
-                local part = {
-                    isContainer = function() return true end,
-                    getItemContainer = function() return fakeContainer(fakeItem("Base.Axe", "Axe")) end,
-                    getX = function() return 149 end, getY = function() return 249 end,
-                }
-                return part
-            end,
+    getPartCount = function() return 2 end,
+    getPartByIndex = function(_, i)
+        if i ~= 0 then
+            return { getItemContainer = function() return nil end, getX = function() return 149 end, getY = function() return 249 end }
+        end
+        local part = {
+            isContainer = function() return true end,
+            getItemContainer = function() return fakeContainer(fakeItem("Base.Axe", "Axe")) end,
+            getX = function() return 149 end, getY = function() return 249 end,
         }
+        return part
     end,
 }
 
