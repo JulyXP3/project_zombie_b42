@@ -1,4 +1,4 @@
-{
+﻿{
 	UI_InformationPanel_General_Title = "常规",
 	UI_InformationPanel_General_Text1 = "这个作弊工具极大地扩展了游戏功能，",
 	UI_InformationPanel_General_Text2 = "可能会被反作弊系统检测到。因此部分功能",
@@ -196,6 +196,9 @@
 	UI_Map_MiniMapOpenLabel = "打开可移动小地图",
 	UI_Map_MiniMapOpenButton = "打开",
 	UI_Map_TeleportContext = "传送到这里",
+	UI_ItemSearch_ShowOnMap = "在地图上显示",
+	UI_ItemSearch_Scanning = "正在搜索...",
+	UI_ItemSearch_NoResults = "未找到该物品",
 	UI_Settings_Language = "界面语言",
 	UI_Settings_PanelSize = "面板尺寸 (宽 x 高)",
 	UI_Settings_PanelSizeSave = "应用并保存",

@@ -28,6 +28,7 @@ local etherModules = {
     "EtherHack/lua/components/ui/UIModalAddTrait.lua",
     "EtherHack/lua/components/ui/UIHealth.lua",
     "EtherHack/lua/components/ui/UIItemTables.lua",
+    "EtherHack/lua/components/ui/EtherItemSearch.lua",
     "EtherHack/lua/components/ui/UIMap.lua",
     "EtherHack/lua/components/ui/UISkillTable.lua",
     "EtherHack/lua/components/ui/UITraitsTable.lua",

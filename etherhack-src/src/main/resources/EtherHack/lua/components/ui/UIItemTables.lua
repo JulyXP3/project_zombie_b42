@@ -128,6 +128,35 @@ function UIItemTables:createChildren()
     self:addChild(self.addItemX10);
     table.insert(self.buttonList, self.addItemX10);
 
+    self.showOnMap = UIButton:new(self.addItemX10:getX() + self.addItemX10.width + 10, self.height - 80, 150, 24, getTranslate("UI_ItemSearch_ShowOnMap"), 
+    function() 
+        if self.datas.items == nil or #self.datas.items == 0 then return end
+
+        local targetTypes = {}
+        for i = 1, #self.datas.items do
+            local scriptItem = self.datas.items[i].item;
+            if scriptItem ~= nil then
+                targetTypes[scriptItem:getFullName()] = true;
+            end
+        end
+
+        self.showOnMap.title = getTranslate("UI_ItemSearch_Scanning");
+        local found = EtherItemSearch.scan(targetTypes);
+        self.showOnMap.title = getTranslate("UI_ItemSearch_ShowOnMap");
+
+        if found == 0 then
+            print("[EtherHack] " .. getTranslate("UI_ItemSearch_NoResults"));
+        end
+
+        UIMovableMiniMap.openPanel();
+    end)
+    self.showOnMap:initialise();
+    self.showOnMap:instantiate();
+    self.showOnMap:setVisible(false);
+    self.showOnMap.isOnlyInGame = true;
+    self:addChild(self.showOnMap);
+    table.insert(self.buttonList, self.showOnMap);
+
     self:updatePanel();
 end
 
@@ -207,6 +236,19 @@ function UIItemTables.onFilterChange(widget)
             datas:addItem(i, v.item);
             widget.parent.totalResult = widget.parent.totalResult + 1;
         end
+    end
+
+    -- 搜索框非空且有结果时, 显示"在地图上显示"按钮; 清空搜索词则隐藏并清除标记
+    local hasFilter = false;
+    for j = 1, #widget.parent.filterWidgets do
+        if widget.parent.filterWidgets[j]:getInternalText() ~= "" then
+            hasFilter = true;
+            break;
+        end
+    end
+    widget.parent.showOnMap:setVisible(hasFilter and widget.parent.totalResult > 0);
+    if not hasFilter then
+        EtherItemSearch.clear();
     end
 end
 
