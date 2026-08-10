@@ -71,6 +71,7 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 ## Known limitations
 
+- **Item radar name-match bug**: when a search filter is active, clicking "Show on map" tracks **every** item in the filtered list (the name filter is a substring match). For example, searching `Wrench` will also track `Ratchet Wrench`. To track a single item only, clear the filter text and select the item directly.
 - Only **loaded** chunks around the player can be scanned (client-side limitation; the server's `processItems` registry is empty on the client).
 - Player inventories/equipment are intentionally excluded; other players' items appear with the 1–2s sync delay.
 - Loot encryption on servers hides container contents from the client entirely.
