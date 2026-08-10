@@ -12,7 +12,7 @@ Events = {
 
 local invSize = 5
 local player = { getX = function() return 100.4 end, getY = function() return 200.6 end, getZ = function() return 0 end }
-player.getInventory = function() return { size = function() return invSize end } end
+player.getInventory = function() return { getItems = function() return { size = function() return invSize end } end } end
 
 local function fakeItem(fullType, typeName, inventory)
     local o = {

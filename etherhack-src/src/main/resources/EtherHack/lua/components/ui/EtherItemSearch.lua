@@ -187,7 +187,10 @@ end
 
 local function onPlayerUpdate(player)
     if EtherItemSearch.results == nil or player == nil then return end
-    local s = player:getInventory():size();
+    -- 官方写法: getInventory():getItems():size() (ItemContainer 未直接暴露 size)
+    local items = player:getInventory():getItems();
+    if items == nil then return end
+    local s = items:size();
     if s ~= EtherItemSearch._invSize then
         EtherItemSearch._invSize = s;
         EtherItemSearch.refreshPending = true;
