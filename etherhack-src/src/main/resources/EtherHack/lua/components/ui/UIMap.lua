@@ -154,10 +154,10 @@ function UIMap:render()
 			local size = 125 / self.mapAPI:getWorldScale()
 			size = clamp(size, 3, 8)
 
-			self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, 1.0, 1.0, 0.8, 0.2);
+			self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, 1.0, 0.75, 0.75, 0.75);
 			self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
 			if p.count > 1 then
-				self:drawTextCentre(tostring(p.count), x, y + size + 2, 1.0, 1.0, 0.2, 1.0, UIFont.Small);
+				self:drawTextCentre(tostring(p.count), x, y + size + 2, 0.75, 0.75, 0.75, 1.0, UIFont.Small);
 			end
 		end
 	end

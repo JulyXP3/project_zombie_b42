@@ -141,14 +141,8 @@ function UIItemTables:createChildren()
         end
 
         self.showOnMap.title = getTranslate("UI_ItemSearch_Scanning");
-        local found = EtherItemSearch.scan(targetTypes);
+        EtherItemSearch.scan(targetTypes);
         self.showOnMap.title = getTranslate("UI_ItemSearch_ShowOnMap");
-
-        if found == 0 then
-            print("[EtherHack] " .. getTranslate("UI_ItemSearch_NoResults"));
-        end
-
-        UIMovableMiniMap.openPanel();
     end)
     self.showOnMap:initialise();
     self.showOnMap:instantiate();
