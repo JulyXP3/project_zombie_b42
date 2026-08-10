@@ -1,0 +1,32 @@
+/*
+ * Decompiled with CFR 0.152.
+ */
+package EtherHack.utils;
+
+import java.io.IOException;
+import java.util.Properties;
+
+public class Info {
+    private static final String CHEAT_VERSION;
+    public static final String CHEAT_GUI_TITLE;
+    public static final String CHEAT_CREDITS_TITLE;
+    public static final String CHEAT_WINDOW_TITLE_SUFFIX;
+    public static final String CHEAT_NAME = "EtherHack";
+    public static final String CHEAT_AUTHOR = "Quzile";
+    public static final String CHEAT_TAG = "[EtherHack]: ";
+    public static final String CHEAT_CREDITS_AUTHOR = "Author: Quzile";
+
+    static {
+        Properties var0 = new Properties();
+        try {
+            var0.load(Info.class.getClassLoader().getResourceAsStream("EtherHack/EtherHack.properties"));
+            CHEAT_VERSION = var0.getProperty("version").replace("'", "");
+        }
+        catch (IOException var1) {
+            throw new ExceptionInInitializerError("Unable to load version from DeiClient.properties");
+        }
+        CHEAT_GUI_TITLE = "EtherHack (" + CHEAT_VERSION + ")";
+        CHEAT_CREDITS_TITLE = "Author: Quzile Updated By: dei0 Updated2 By: july (" + CHEAT_VERSION + ")";
+        CHEAT_WINDOW_TITLE_SUFFIX = " by EtherHack  (" + CHEAT_VERSION + ")";
+    }
+}
