@@ -15,6 +15,34 @@ function UIItemTables:render()
     
     local y = self.datas.y + self.datas.height + 5
     self:drawText(getText("IGUI_DbViewer_TotalResult") .. self.totalResult, 0, y, 1,1,1,1,UIFont.Small)
+
+    -- 按钮显隐: 搜索有结果, 或直接选中了某项物品时显示 (每帧计算, 覆盖列表点击)
+    self:refreshShowOnMap();
+end
+
+--*********************************************************
+--* "在地图上显示"按钮显隐: 搜索词非空且有结果, 或未搜索但选中了物品
+--*********************************************************
+function UIItemTables:refreshShowOnMap()
+    local hasFilter = false;
+    for j = 1, #self.filterWidgets do
+        if self.filterWidgets[j]:getInternalText() ~= "" then
+            hasFilter = true;
+            break;
+        end
+    end
+    local show = false;
+    if hasFilter then
+        show = self.totalResult > 0;
+    else
+        show = self.datas.selected > 0 and self.datas.items ~= nil and self.datas.selected <= #self.datas.items;
+    end
+    if show ~= self.showOnMap:getVisible() then
+        self.showOnMap:setVisible(show);
+        if not show then
+            EtherItemSearch.clear();
+        end
+    end
 end
 
 --*********************************************************
@@ -130,15 +158,33 @@ function UIItemTables:createChildren()
 
     self.showOnMap = UIButton:new(self.addItemX10:getX() + self.addItemX10.width + 10, self.height - 80, 150, 24, getTranslate("UI_ItemSearch_ShowOnMap"), 
     function() 
-        if self.datas.items == nil or #self.datas.items == 0 then return end
+        -- 搜索词非空: 扫描当前过滤列表里的全部物品; 否则: 扫描选中的单个物品
+        local hasFilter = false;
+        for j = 1, #self.filterWidgets do
+            if self.filterWidgets[j]:getInternalText() ~= "" then
+                hasFilter = true;
+                break;
+            end
+        end
 
-        local targetTypes = {}
-        for i = 1, #self.datas.items do
-            local scriptItem = self.datas.items[i].item;
+        local targetTypes = {};
+        if hasFilter then
+            if self.datas.items == nil or #self.datas.items == 0 then return end
+            for i = 1, #self.datas.items do
+                local scriptItem = self.datas.items[i].item;
+                if scriptItem ~= nil then
+                    targetTypes[scriptItem:getFullName()] = true;
+                end
+            end
+        else
+            local sel = self.datas.selected;
+            if self.datas.items == nil or sel < 1 or sel > #self.datas.items then return end
+            local scriptItem = self.datas.items[sel].item;
             if scriptItem ~= nil then
                 targetTypes[scriptItem:getFullName()] = true;
             end
         end
+        if next(targetTypes) == nil then return end
 
         self.showOnMap.title = getTranslate("UI_ItemSearch_Scanning");
         EtherItemSearch.scan(targetTypes);
@@ -232,7 +278,7 @@ function UIItemTables.onFilterChange(widget)
         end
     end
 
-    -- 搜索框非空且有结果时, 显示"在地图上显示"按钮; 清空搜索词则隐藏并清除标记
+    -- 按钮显隐统一交给 render() 里的 refreshShowOnMap 计算; 清空搜索词时清除标记
     local hasFilter = false;
     for j = 1, #widget.parent.filterWidgets do
         if widget.parent.filterWidgets[j]:getInternalText() ~= "" then
@@ -240,7 +286,6 @@ function UIItemTables.onFilterChange(widget)
             break;
         end
     end
-    widget.parent.showOnMap:setVisible(hasFilter and widget.parent.totalResult > 0);
     if not hasFilter then
         EtherItemSearch.clear();
     end

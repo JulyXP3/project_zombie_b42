@@ -145,14 +145,16 @@ function UIMap:render()
 		end
 	end
 
-	-- Отрисовка найденных предметов (поиск по миру)
+	-- Отрисовка найденных предметов (поиск по миру); 每帧顺便驱动自动刷新
 	if EtherItemSearch.results ~= nil then
+		EtherItemSearch.tick();
 		for _, p in pairs(EtherItemSearch.results) do
 			local x = self.mapAPI:worldToUIX(p.x, p.y);
 			local y = self.mapAPI:worldToUIY(p.x, p.y);
 
+			-- 与玩家/僵尸标记同尺寸
 			local size = 125 / self.mapAPI:getWorldScale()
-			size = clamp(size, 3, 8)
+			size = clamp(size, 2, 5)
 
 			self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, 1.0, 0.75, 0.75, 0.75);
 			self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);

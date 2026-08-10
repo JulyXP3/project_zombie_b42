@@ -1,5 +1,8 @@
--- EtherItemSearch.scan 逻辑冒烟测试 (桩模拟游戏 API)
+-- EtherItemSearch.scan / tick 逻辑冒烟测试 (桩模拟游戏 API)
 -- 运行: lua5.1.exe run_scan_test.lua <路径>/EtherItemSearch.lua
+local fakeClock = { now = 100000 }
+getTimestampMs = function() return fakeClock.now end
+
 local function fakeList(...)
     local arr = { ... }
     return {
@@ -71,14 +74,34 @@ local squares = {
     },
 }
 
--- 车辆: 暂不扫描 (getVehicles 返回 Set, 无 get()/pairs 可用, 见模块注释)
-local vehicles = { size = function() return 0 end }
+-- 车辆: 后备箱容器内命中; getVehicles 返回 Set, 用 :toArray() 转数组 (官方同款)
+local vehicle = {
+    getX = function() return 148 end, getY = function() return 248 end,
+    getParts = function()
+        return {
+            getPartCount = function() return 2 end,
+            getPartByIndex = function(_, i)
+                if i ~= 0 then
+                    return { getItemContainer = function() return nil end, getX = function() return 149 end, getY = function() return 249 end }
+                end
+                local part = {
+                    isContainer = function() return true end,
+                    getItemContainer = function() return fakeContainer(fakeItem("Base.Axe", "Axe")) end,
+                    getX = function() return 149 end, getY = function() return 249 end,
+                }
+                return part
+            end,
+        }
+    end,
+}
 
--- 桩全局环境 (在加载被测模块前定义)
+-- 统计 getGridSquare 调用次数, 验证 tick 触发了重扫
+local squareCalls = 0
 getCell = function()
     return {
-        getVehicles = function() return vehicles end,
+        getVehicles = function() return { toArray = function() return { vehicle } end } end,
         getGridSquare = function(_, x, y, z)
+            squareCalls = squareCalls + 1
             if z ~= 0 then return nil end
             return squares[x * 100000 + y]
         end,
@@ -92,8 +115,8 @@ dofile(arg[1])  -- EtherItemSearch.lua
 local target = { ["Base.Axe"] = true }
 local n = EtherItemSearch.scan(target)
 
-assert(n == 3, "expected 3 locations, got " .. n)
-assert(#EtherItemSearch.results == 3, "expected 3 results entries")
+assert(n == 4, "expected 4 locations, got " .. n)
+assert(#EtherItemSearch.results == 4, "expected 4 results entries")
 
 local byKey = {}
 for _, p in ipairs(EtherItemSearch.results) do
@@ -102,22 +125,34 @@ end
 assert(byKey["110,210"] == 1, "110,210 (furniture, full name only for Axe) should have count 1")
 assert(byKey["120,220"] == 2, "120,220 (ground bag) should have count 2")
 assert(byKey["130,230"] == 1, "130,230 (floor item) should have count 1")
+assert(byKey["149,249"] == 1, "149,249 (vehicle trunk) should have count 1")
 
 -- 用例 2: 短名匹配 (按钮侧 getFullName 返回短名时的回退)
 EtherItemSearch.clear()
 local n3 = EtherItemSearch.scan({ ["Axe"] = true })
-assert(n3 == 3, "expected 3 locations with short name, got " .. n3)
+assert(n3 == 4, "expected 4 locations with short name, got " .. n3)
 local byKey3 = {}
 for _, p in ipairs(EtherItemSearch.results) do
     byKey3[p.x .. "," .. p.y] = p.count
 end
 assert(byKey3["110,210"] == 2, "110,210 (full+short) should have count 2 with short-name target")
 
--- 用例 3: 无匹配 -> n==0 且 results 清空 (诊断行仅在真实环境下可看)
+-- 用例 3: 自动刷新 tick —— 3 秒内不重扫, 超时后静默重扫
+local callsBefore = squareCalls
+EtherItemSearch.tick()
+assert(squareCalls == callsBefore, "tick within 3s must not rescan")
+
+fakeClock.now = fakeClock.now + 3100
+EtherItemSearch.tick()
+assert(squareCalls > callsBefore, "tick after 3s must rescan")
+assert(EtherItemSearch.results ~= nil and #EtherItemSearch.results == 4, "silent rescan keeps results")
+
+-- 用例 4: 无匹配 -> n==0 且 results 清空 (手动扫描才打印诊断)
 local n2 = EtherItemSearch.scan({ ["Base.Nope"] = true })
 assert(n2 == 0, "expected 0 locations for unmatched target")
 
 EtherItemSearch.clear()
 assert(EtherItemSearch.results == nil, "clear() should reset results")
+assert(EtherItemSearch.lastTargets == nil, "clear() should reset lastTargets")
 
 print("PASS: scan logic smoke test")
