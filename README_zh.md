@@ -14,23 +14,25 @@
 - 以玩家为中心扫描半径 48 格、玩家所在楼层 ±1 的**已加载区块**:
   - 家具/容器内容 (`IsoObject` 容器)
   - 地面散落物品、地上的包(含包内物品)
+  - 尸体身上的物品 (尸体容器, `getDeadBodys()` → `getContainer()`)
   - 车辆部件容器(后备箱、座位等)
 - 命中位置在小地图上以**灰色方块**显示, 与玩家/僵尸标记同尺寸; 同格多件显示数量。
 - 标记跟随角色: 走出 5 格(冷却 2 秒)、背包物品数变化(防抖 1 秒)、库存窗口容器变化时自动重扫。
 - **小地图快捷开关栏**(可移动小地图窗口顶部): `我 / 玩家 / 载具 / 僵尸 / 物品` —— 白字=开, 灰字=关。关闭「物品」后立即清除标记并停止全部逐帧开销; 重新开启会自动按上次搜索目标静默重扫。
+- 主面板「地图」页的 **显示本机玩家 / 显示其他玩家 / 显示载具 / 显示僵尸 / 显示物品** 勾选框与小地图快捷开关栏**双向同步**(任意一侧切换, 另一侧即时跟随, 并持久化到配置)。
 - 关闭小地图: 点击窗口右上角 **X** 按钮。
 
 ### 其他改动 / 修复
 
 - **事件驱动刷新**取代定时器: 标记隐藏期间零开销。
-- **Kahlua 兼容性加固** — 替换了 B42 Lua 虚拟机 (Kahlua) 中不存在的 API: `next()`、`ISUIElement.getVisible()`、`VehicleParts.getParts()`、`ItemContainer.size()`。并新增静态检查脚本 (`tests/check_kahlua_compat.lua`) 在构建前拦截这些禁用写法。
+- **Kahlua 兼容性加固** — 替换了 B42 Lua 虚拟机 (Kahlua) 中不存在的 API: `next()`、`ISUIElement.getVisible()`、`VehicleParts.getParts()`、`ItemContainer.size()`; 并避免表构造字面量直接取下标 (`{...}[k]`, Kahlua 解析器不支持)。新增静态检查脚本 (`tests/check_kahlua_compat.lua`) 在构建前拦截这些禁用写法。
 - 小地图默认尺寸改为 300×300。
 - 更新了致谢文案(见 `Info.java`)。
 
 ## 安装
 
 1. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
-2. 从 `build` 目录中拿到 `EtherHack-3.1.2-B42.jar`。
+2. 从 `build` 目录中拿到 `EtherHack-3.1.3-B42.jar`。
 3. 将 jar 和 `etherhack-src/install.bat` 一起复制到游戏根目录。
 4. 运行 `install.bat` 完成安装(需要系统装有 JDK)。
 
@@ -45,7 +47,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-产物在 `etherhack-src/build/EtherHack-3.1.2-B42.jar`。Lua 源码嵌入在 `src/main/resources/EtherHack/lua/` 中, 构建时自动打包。
+产物在 `etherhack-src/build/EtherHack-3.1.3-B42.jar`。Lua 源码嵌入在 `src/main/resources/EtherHack/lua/` 中, 构建时自动打包。
 
 ## 测试
 
@@ -63,7 +65,7 @@ temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main
 
 | 路径 | 说明 |
 |---|---|
-| `EtherHack-3.1.2-B42.jar` | 可直接使用的构建产物(当前版本) |
+| `EtherHack-3.1.3-B42.jar` | 可直接使用的构建产物(当前版本) |
 | `etherhack-src/` | 完整源码 (Gradle 工程, 含 `build.bat` / `install.bat`) |
 | `tests/` | Lua 冒烟测试 + Kahlua 兼容性检查脚本 |
 | `分析报告.md` | 分析报告: 可行性研究、反编译取证、扫描方案设计与限制 |

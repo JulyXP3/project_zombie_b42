@@ -3,6 +3,7 @@
 --* 数据源: getCell():getGridSquare(x,y,z) -> square:getObjects()/getWorldObjects()
 --*   IsoObject 容器(getContainerCount/getContainerByIndex)
 --*   IsoWorldInventoryObject 地面物品(getItem + 背包getInventory)
+--*   尸体: square:getDeadBodys() -> body:getContainer() (尸体不在 getObjects 里)
 --*   车辆: cell:getVehicles():toArray() -> 部件容器
 --* 坐标: 一律使用物件自身 getX()/getY() (比方格中心精确)
 --* 原因: 客户端 processItems 注册表恒为空 (IsoCell.addToProcessItems
@@ -128,6 +129,22 @@ function EtherItemSearch.scan(targetTypes, silent)
                 local w = wobs:get(i - 1);
                 if w ~= nil then
                     scanFloor(w);
+                end
+            end
+        end
+
+        -- 尸体 (IsoDeadBody 不在 getObjects 里, 在 getDeadBodys 独立列表;
+        -- 物品在其 getContainer() 容器中, 需单独遍历)
+        local bodies = sq:getDeadBodys();
+        if bodies ~= nil then
+            for i = 0, bodies:size() - 1 do
+                local body = bodies:get(i);
+                if body ~= nil then
+                    local c = body:getContainer();
+                    if c ~= nil then
+                        stats.containers = stats.containers + 1;
+                        scanItems(c:getItems(), body:getX(), body:getY());
+                    end
                 end
             end
         end

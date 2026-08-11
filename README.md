@@ -14,23 +14,25 @@ The main addition over the original mod is an **Item Search + Minimap Marker** f
 - The mod scans loaded world tiles within a radius of 48 tiles (player floor ±1) for matching items:
   - Furniture/container contents (`IsoObject` containers)
   - Floor items and bags on the ground (including bag contents)
+  - Items on corpses (corpse container via `getDeadBodys()` → `getContainer()`)
   - Vehicle part containers (trunk, seats, etc.)
 - Matches are drawn on the movable minimap as **gray squares**, same size as player/zombie markers; multiple items on one tile show a count.
 - Markers follow the player: re-scan triggers when you walk 5+ tiles (cooldown 2s), when your inventory count changes (debounced 1s), or when the inventory window container set changes.
 - **Minimap quick-toggle bar** (top of the movable minimap window): `Me / Players / Vehicles / Zombies / Items` — white = on, gray = off. Turning "Items" off clears the markers and drops all per-tick cost; turning it back on silently re-scans the last search target.
+- The **Map** tab checkboxes (Show local player / Show other players / Show vehicles / Show zombies / Show items) are **two-way synced** with the minimap quick-toggle bar (toggling either side updates the other immediately, and the state is persisted to config).
 - Close the minimap: click the **X** button on the window.
 
 ### Other changes / fixes
 
 - **Event-driven refresh** instead of a timer: zero idle cost while markers are hidden.
-- **Kahlua compatibility hardening** — replaced APIs that do not exist in the B42 Lua VM (Kahlua): `next()`, `ISUIElement.getVisible()`, `VehicleParts.getParts()`, `ItemContainer.size()`. A static checker (`tests/check_kahlua_compat.lua`) blocks these patterns at build time.
+- **Kahlua compatibility hardening** — replaced APIs that do not exist in the B42 Lua VM (Kahlua): `next()`, `ISUIElement.getVisible()`, `VehicleParts.getParts()`, `ItemContainer.size()`; also avoids indexing a table constructor literal directly (`{...}[k]`, which the Kahlua parser rejects). A static checker (`tests/check_kahlua_compat.lua`) blocks these patterns at build time.
 - Minimap default size changed to 300×300.
 - Credits string updated (see `Info.java`).
 
 ## Installation
 
 1. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-2. Take `EtherHack-3.1.2-B42.jar` from the `build` directory.
+2. Take `EtherHack-3.1.3-B42.jar` from the `build` directory.
 3. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
 4. Run `install.bat` to install the mod (requires a JDK on the system).
 
@@ -45,7 +47,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/EtherHack-3.1.2-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
+The output jar is at `etherhack-src/build/EtherHack-3.1.3-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
 
 ## Testing
 
@@ -63,7 +65,7 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `EtherHack-3.1.2-B42.jar` | Ready-to-use build (current release) |
+| `EtherHack-3.1.3-B42.jar` | Ready-to-use build (current release) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `分析报告.md` | Analysis report (Chinese): feasibility study, decompilation evidence, scanning design and limitations |
