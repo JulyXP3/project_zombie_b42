@@ -26,7 +26,7 @@ public class Info {
             throw new ExceptionInInitializerError("Unable to load version from DeiClient.properties");
         }
         CHEAT_GUI_TITLE = "EtherHack (" + CHEAT_VERSION + ")";
-        CHEAT_CREDITS_TITLE = "Author: Quzile Updated By: dei0 Updated2 By: july (" + CHEAT_VERSION + ")";
+        CHEAT_CREDITS_TITLE = "Author: Quzile Updated By: dei0, july  (" + CHEAT_VERSION + ")";
         CHEAT_WINDOW_TITLE_SUFFIX = " by EtherHack  (" + CHEAT_VERSION + ")";
     }
 }
