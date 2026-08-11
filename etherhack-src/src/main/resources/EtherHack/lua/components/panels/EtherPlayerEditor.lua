@@ -92,7 +92,9 @@ function EtherPlayerEditor:tryCreatePlayerUI()
     local avatarOk, avatarErr = pcall(function()
         self.avatarPanel = ISUI3DModel:new(20, 20, 128, 270)
         self.avatarPanel:setVisible(true)
-        -- Don't use setOutfitName as it can cause NPE with baseVisual
+        -- 必须设置角色, 否则 modelInstance 为 null, UI3DModel 渲染时每帧 NPE
+        -- (原生 CharacterCreationAvatar 同款用法; 不要用 setOutfitName, 无 baseVisual 时也会 NPE)
+        self.avatarPanel:setCharacter(self.localPlayer)
         self.avatarPanel:setState("idle")
         self.avatarPanel:setDirection(IsoDirections.S)
         self.avatarPanel:setIsometric(false)

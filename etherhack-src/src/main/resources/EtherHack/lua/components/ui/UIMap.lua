@@ -68,7 +68,7 @@ function UIMap.ensureDrawFlags()
     UIMap.drawVehicles = isMapDrawVehicles();
     UIMap.drawAllPlayers = isMapDrawAllPlayers();
     UIMap.drawLocalPlayer = isMapDrawLocalPlayer();
-    UIMap.drawItems = true;
+    UIMap.drawItems = false;
 end
 
 function UIMap:render() 
