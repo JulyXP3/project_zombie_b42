@@ -26,6 +26,14 @@ function UIMovableMiniMap:createChildren()
     for _, d in ipairs(defs) do
         local b = ISButton:new(bx, 20, 48, 18, getTranslate(d[1]), self, function(self, button)
             UIMap[button.toggleKey] = not UIMap[button.toggleKey];
+            local toggles = {
+                drawLocalPlayer = toggleMapDrawLocalPlayer,
+                drawAllPlayers = toggleMapDrawAllPlayers,
+                drawVehicles = toggleMapDrawVehicles,
+                drawZombies = toggleMapDrawZombies,
+            };
+            local mirror = toggles[button.toggleKey];
+            if mirror ~= nil then mirror(UIMap[button.toggleKey]) end
             button.textColor = UIMap[button.toggleKey] and { r = 1, g = 1, b = 1, a = 1 } or { r = 0.35, g = 0.35, b = 0.35, a = 1 };
             if button.toggleKey == "drawItems" then
                 EtherItemSearch.setEnabled(UIMap.drawItems);
@@ -79,7 +87,13 @@ end
 --************************************************************************--
 function UIMovableMiniMap:render()
     ISPanel.render(self)
-	
+
+    if self.toggleButtons ~= nil then
+        for _, b in ipairs(self.toggleButtons) do
+            b.textColor = UIMap[b.toggleKey] and { r = 1, g = 1, b = 1, a = 1 } or { r = 0.35, g = 0.35, b = 0.35, a = 1 }
+        end
+    end
+
     self:drawTexture(self.resizeimage, self.width-10, self.height - 10, 1, 1, 1, 1);
 end
 

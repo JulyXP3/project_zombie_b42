@@ -6,6 +6,7 @@ local BANNED = {
     [":getVisible()"] = "ISUIElement Lua 类没有 getVisible (只有 setVisible/getIsVisible), 用 getIsVisible()",
     [":getParts()"] = "getParts() 返回的 VehicleParts java 对象未暴露给 Lua (non-table), 用 vehicle:getPartCount()/getPartByIndex()",
     [":getInventory():size()"] = "ItemContainer 未直接暴露 size(), 用 getInventory():getItems():size()",
+    ["}["] = "Kahlua 解析器不支持表构造字面量直接取下标 (报错: unexpected symbol near '['), 先赋值给变量再取下标",
 }
 
 local n = 0

@@ -192,6 +192,7 @@
 	UI_Map_DrawOtherPlayers = "Show other players",
 	UI_Map_DrawZombies = "Show zombies",
 	UI_Map_DrawVehicles = "Show vehicle",
+	UI_Map_DrawItems = "Show items",
 	UI_Map_MiniMapTitle = "Minimap",
 	UI_Map_MiniMapOpenLabel = "Open a movable minimap",
 	UI_Map_MiniMapOpenButton = "Open",

@@ -17,6 +17,11 @@ end
 --* 琚ㄦ枩瑜夐偑鏂滆姱瑜屾郴閭?render
 --*********************************************************
 function EtherMapPanel:render()
+    if self.mapCheckboxes ~= nil then
+        for _, cb in ipairs(self.mapCheckboxes) do
+            cb:setCheked(UIMap[cb.mapFlag] == true)
+        end
+    end
     ISPanel.render(self);
     self:clearStencilRect();
 
@@ -40,7 +45,7 @@ end
 --*********************************************************
 --* 琚涜姱鏂滈偑鑳佽阿姊拌柂鎳堟 瑜旀娉绘枩鑺郴瑜嬭姱鑳?
 --*********************************************************
-function EtherMapPanel:addCheckBox(title, method, isSelected)
+function EtherMapPanel:addCheckBox(title, method, isSelected, flagName)
     local rows = self.rows;
     local checkboxX = 10;
     local checkboxY = self.map.y + self.map.height + 20 + rows * 40;
@@ -52,6 +57,10 @@ function EtherMapPanel:addCheckBox(title, method, isSelected)
     checkbox:setAnchorRight(false);
     checkbox:setAnchorTop(false);
     checkbox:setAnchorBottom(true);
+    if flagName ~= nil then
+        checkbox.mapFlag = flagName;
+        table.insert(self.mapCheckboxes, checkbox);
+    end
     self:addChild(checkbox);
 
     self:setScrollHeight(self:getScrollHeight() + checkbox.height + 40);
@@ -114,6 +123,8 @@ function EtherMapPanel:createChildren()
 
     if self.localPlayer == nil then return end;
 
+    UIMap.ensureDrawFlags();
+
     self.map = UIMap:new(20, 20, self.width - 40, self.height - 400)
     self.map:initialise()
     self.map:instantiate()
@@ -128,19 +139,28 @@ function EtherMapPanel:createChildren()
 
     self:addCheckBox(getTranslate("UI_Map_DrawLocalPlayer"), function (isChecked)
         toggleMapDrawLocalPlayer(isChecked)
-    end, isMapDrawLocalPlayer())
+        UIMap.drawLocalPlayer = isChecked
+    end, isMapDrawLocalPlayer(), "drawLocalPlayer")
 
     self:addCheckBox(getTranslate("UI_Map_DrawOtherPlayers"), function (isChecked)
         toggleMapDrawAllPlayers(isChecked)
-    end, isMapDrawAllPlayers())
+        UIMap.drawAllPlayers = isChecked
+    end, isMapDrawAllPlayers(), "drawAllPlayers")
 
     self:addCheckBox(getTranslate("UI_Map_DrawVehicles"), function (isChecked)
         toggleMapDrawVehicles(isChecked)
-    end, isMapDrawVehicles())
+        UIMap.drawVehicles = isChecked
+    end, isMapDrawVehicles(), "drawVehicles")
 
     self:addCheckBox(getTranslate("UI_Map_DrawZombies"), function (isChecked)
         toggleMapDrawZombies(isChecked)
-    end, isMapDrawZombies())
+        UIMap.drawZombies = isChecked
+    end, isMapDrawZombies(), "drawZombies")
+
+    self:addCheckBox(getTranslate("UI_Map_DrawItems"), function (isChecked)
+        UIMap.drawItems = isChecked;
+        EtherItemSearch.setEnabled(isChecked);
+    end, UIMap.drawItems, "drawItems")
 
 end
 --*********************************************************
@@ -161,6 +181,7 @@ function EtherMapPanel:new(posX, posY, width, height)
 
     self.uiElements = {};
     self.rows = 0;
+    self.mapCheckboxes = {};
 
     return menuTableData;
 end

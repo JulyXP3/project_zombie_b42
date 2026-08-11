@@ -192,6 +192,7 @@
 	UI_Map_DrawOtherPlayers = "显示其他玩家",
 	UI_Map_DrawZombies = "显示僵尸",
 	UI_Map_DrawVehicles = "显示载具",
+	UI_Map_DrawItems = "显示物品",
 	UI_Map_MiniMapTitle = "小地图",
 	UI_Map_MiniMapOpenLabel = "打开可移动小地图",
 	UI_Map_MiniMapOpenButton = "打开",

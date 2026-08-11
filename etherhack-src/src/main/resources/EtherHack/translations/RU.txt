@@ -192,6 +192,7 @@
 	UI_Map_DrawOtherPlayers = "Показывать других игроков",
 	UI_Map_DrawZombies = "Показывать зомби",
 	UI_Map_DrawVehicles = "Показывать транспорт",
+	UI_Map_DrawItems = "Показывать предметы",
 	UI_Map_MiniMapTitle = "Миникарта",
 	UI_Map_MiniMapOpenLabel = "Открыть перемещаемую миникарту",
 	UI_Map_MiniMapOpenButton = "Открыть",
