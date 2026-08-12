@@ -143,4 +143,18 @@ print("[EtherHack] CONFIRMED WORKING: Item Spawner, Radar/ESP")
 print("[EtherHack] EXPERIMENTAL: God Mode, Invisible, Cheats")
 print("=======================================================")
 
+--*********************************************************
+--* 自动恢复上次状态: 读取 startup 配置(小地图开关/图层/视觉效果等),
+--* 若上次关闭游戏时小地图处于打开状态则重新打开
+--*********************************************************
+local function onGameStart()
+    UIMovableMiniMap.instance = nil; -- 上一场游戏的旧实例已失效, 避免 openPanel 误判为已打开
+    loadConfig("startup");
+    if isMinimapOpen() and getPlayer() ~= nil then
+        UIMovableMiniMap.openPanel();
+    end
+end
+
+Events.OnGameStart.Add(onGameStart);
+
 Events.OnKeyPressed.Add(EtherMain.OnOpenPanel);

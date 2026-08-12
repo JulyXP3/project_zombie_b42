@@ -448,6 +448,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleInvisible", global=true)
     public static void toggleInvisible(boolean var0) {
         EtherMain.getInstance().etherAPI.isEnableInvisible = var0;
+        saveConfig("startup");
         IsoPlayer player = IsoPlayer.getInstance();
         if (player != null) {
             EtherLuaMethods.setPlayerCheat(player, "INVISIBLE", var0);
@@ -462,6 +463,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleZombieDontAttack", global=true)
     public static void toggleZombieDontAttack(boolean var0) {
         EtherMain.getInstance().etherAPI.isZombieDontAttack = var0;
+        saveConfig("startup");
         IsoPlayer player = IsoPlayer.getInstance();
         if (player != null) {
             EtherLuaMethods.setPlayerCheat(player, "ZOMBIES_DONT_ATTACK", var0);
@@ -476,6 +478,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleNoclip", global=true)
     public static void toggleNoclip(boolean var0) {
         EtherMain.getInstance().etherAPI.isEnableNoclip = var0;
+        saveConfig("startup");
         IsoPlayer player = IsoPlayer.getInstance();
         if (player != null) {
             EtherLuaMethods.setPlayerCheat(player, "NO_CLIP", var0);
@@ -490,6 +493,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleGodMode", global=true)
     public static void toggleGodMode(boolean var0) {
         EtherMain.getInstance().etherAPI.isEnableGodMode = var0;
+        saveConfig("startup");
         IsoPlayer player = IsoPlayer.getInstance();
         if (player != null) {
             EtherLuaMethods.setPlayerCheat(player, "GOD_MODE", var0);
@@ -504,6 +508,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleNightVision", global=true)
     public static void toggleNightVision(boolean var0) {
         EtherMain.getInstance().etherAPI.isEnableNightVision = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isNoRecoil", global=true)
@@ -514,6 +519,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleNoRecoil", global=true)
     public static void toggleNoRecoil(boolean var0) {
         EtherMain.getInstance().etherAPI.isNoRecoil = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isAutoRepairItems", global=true)
@@ -524,6 +530,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleAutoRepairItems", global=true)
     public static void toggleAutoRepairItems(boolean var0) {
         EtherMain.getInstance().etherAPI.isAutoRepairItems = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="resetWeaponsStats", global=true)
@@ -539,6 +546,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleExtraDamage", global=true)
     public static void toggleExtraDamage(boolean var0) {
         EtherMain.getInstance().etherAPI.isExtraDamage = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isTimedActionCheat", global=true)
@@ -549,6 +557,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleTimedActionCheat", global=true)
     public static void toggleTimedActionCheat(boolean var0) {
         EtherMain.getInstance().etherAPI.isTimedActionCheat = var0;
+        saveConfig("startup");
         IsoPlayer player = IsoPlayer.getInstance();
         if (player != null) {
             EtherLuaMethods.setPlayerCheat(player, "TIMED_ACTION_INSTANT", var0);
@@ -563,6 +572,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleMultiHitZombies", global=true)
     public static void toggleMultiHitZombies(boolean var0) {
         EtherMain.getInstance().etherAPI.isMultiHitZombies = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isUnlimitedCondition", global=true)
@@ -573,6 +583,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleUnlimitedCondition", global=true)
     public static void toggleUnlimitedCondition(boolean var0) {
         EtherMain.getInstance().etherAPI.isUnlimitedCondition = var0;
+        saveConfig("startup");
         IsoPlayer player = IsoPlayer.getInstance();
         if (player != null) {
             EtherLuaMethods.setPlayerCheat(player, "UNLIMITED_ENDURANCE", var0);
@@ -587,6 +598,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualEnable360Vision", global=true)
     public static void toggleVisualEnable360Vision(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualEnable360Vision = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualDrawLineToPlayers", global=true)
@@ -597,6 +609,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualDrawLineToPlayers", global=true)
     public static void toggleVisualDrawLineToPlayers(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualDrawLineToPlayers = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualDrawLineToVehicle", global=true)
@@ -607,6 +620,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualDrawLineToVehicle", global=true)
     public static void toggleVisualDrawLineToVehicle(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualDrawLineToVehicle = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isMapDrawZombies", global=true)
@@ -617,6 +631,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleMapDrawZombies", global=true)
     public static void toggleMapDrawZombies(boolean var0) {
         EtherMain.getInstance().etherAPI.isMapDrawZombies = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isMapDrawVehicles", global=true)
@@ -627,6 +642,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleMapDrawVehicles", global=true)
     public static void toggleMapDrawVehicles(boolean var0) {
         EtherMain.getInstance().etherAPI.isMapDrawVehicles = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isMapDrawAllPlayers", global=true)
@@ -637,6 +653,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleMapDrawAllPlayers", global=true)
     public static void toggleMapDrawAllPlayers(boolean var0) {
         EtherMain.getInstance().etherAPI.isMapDrawAllPlayers = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isMapDrawLocalPlayer", global=true)
@@ -647,6 +664,29 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleMapDrawLocalPlayer", global=true)
     public static void toggleMapDrawLocalPlayer(boolean var0) {
         EtherMain.getInstance().etherAPI.isMapDrawLocalPlayer = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isMapDrawItems", global=true)
+    public static boolean isMapDrawItems() {
+        return EtherMain.getInstance().etherAPI.isMapDrawItems;
+    }
+
+    @LuaMethod(name="setMapDrawItems", global=true)
+    public static void setMapDrawItems(boolean var0) {
+        EtherMain.getInstance().etherAPI.isMapDrawItems = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isMinimapOpen", global=true)
+    public static boolean isMinimapOpen() {
+        return EtherMain.getInstance().etherAPI.isMinimapOpen;
+    }
+
+    @LuaMethod(name="setMinimapOpen", global=true)
+    public static void setMinimapOpen(boolean var0) {
+        EtherMain.getInstance().etherAPI.isMinimapOpen = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualDrawPlayerInfo", global=true)
@@ -657,6 +697,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualDrawPlayerInfo", global=true)
     public static void toggleVisualDrawPlayerInfo(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualDrawPlayerInfo = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualsZombiesEnable", global=true)
@@ -667,6 +708,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualsZombiesEnable", global=true)
     public static void toggleVisualsZombiesEnable(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualsZombiesEnable = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualsVehiclesEnable", global=true)
@@ -677,6 +719,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualsVehiclesEnable", global=true)
     public static void toggleVisualsVehiclesEnable(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualsVehiclesEnable = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualsPlayersEnable", global=true)
@@ -687,6 +730,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualsPlayersEnable", global=true)
     public static void toggleVisualsPlayersEnable(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualsPlayersEnable = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualDrawCredits", global=true)
@@ -697,6 +741,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualDrawCredits", global=true)
     public static void toggleVisualDrawCredits(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualDrawCredits = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualDrawPlayerNickname", global=true)
@@ -707,6 +752,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualDrawPlayerNickname", global=true)
     public static void toggleVisualDrawPlayerNickname(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualDrawPlayerNickname = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualDrawToLocalPlayer", global=true)
@@ -717,6 +763,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualDrawToLocalPlayer", global=true)
     public static void toggleVisualDrawToLocalPlayer(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualDrawToLocalPlayer = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isVisualsEnable", global=true)
@@ -727,6 +774,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleVisualsEnable", global=true)
     public static void toggleVisualsEnable(boolean var0) {
         EtherMain.getInstance().etherAPI.isVisualsEnable = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isBypassDebugMode", global=true)
@@ -737,11 +785,13 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleBypassDebugMode", global=true)
     public static void toggleBypassDebugMode(boolean var0) {
         EtherMain.getInstance().etherAPI.isBypassDebugMode = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="toggleUnlimitedEndurance", global=true)
     public static void toggleUnlimitedEndurance(boolean var0) {
         EtherMain.getInstance().etherAPI.isUnlimitedEndurance = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isUnlimitedEndurance", global=true)
@@ -752,6 +802,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleUnlimitedAmmo", global=true)
     public static void toggleUnlimitedAmmo(boolean var0) {
         EtherMain.getInstance().etherAPI.isUnlimitedAmmo = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isUnlimitedAmmo", global=true)
@@ -762,6 +813,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableFatigue", global=true)
     public static void toggleDisableFatigue(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableFatigue = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableFatigue", global=true)
@@ -772,6 +824,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableHunger", global=true)
     public static void toggleDisableHunger(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableHunger = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableHunger", global=true)
@@ -782,6 +835,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableThirst", global=true)
     public static void toggleDisableThirst(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableThirst = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableThirst", global=true)
@@ -792,6 +846,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableDrunkenness", global=true)
     public static void toggleDisableDrunkenness(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableDrunkenness = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableDrunkenness", global=true)
@@ -802,6 +857,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableAnger", global=true)
     public static void toggleDisableAnger(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableAnger = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableAnger", global=true)
@@ -812,6 +868,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableFear", global=true)
     public static void toggleDisableFear(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableFear = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableFear", global=true)
@@ -822,6 +879,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisablePain", global=true)
     public static void toggleDisablePain(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisablePain = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisablePain", global=true)
@@ -832,6 +890,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisablePanic", global=true)
     public static void toggleDisablePanic(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisablePanic = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisablePanic", global=true)
@@ -842,6 +901,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableMorale", global=true)
     public static void toggleDisableMorale(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableMorale = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableMorale", global=true)
@@ -852,6 +912,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableStress", global=true)
     public static void toggleDisableStress(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableStress = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableStress", global=true)
@@ -862,6 +923,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableSickness", global=true)
     public static void toggleDisableSickness(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableSickness = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableSickness", global=true)
@@ -872,6 +934,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableStressFromCigarettes", global=true)
     public static void toggleDisableStressFromCigarettes(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableStressFromCigarettes = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableStressFromCigarettes", global=true)
@@ -882,6 +945,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableSanity", global=true)
     public static void toggleDisableSanity(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableSanity = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableSanity", global=true)
@@ -892,6 +956,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableBoredomLevel", global=true)
     public static void toggleDisableBoredomLevel(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableBoredomLevel = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableBoredomLevel", global=true)
@@ -902,6 +967,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableUnhappynessLevel", global=true)
     public static void toggleDisableUnhappynessLevel(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableUnhappynessLevel = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableUnhappynessLevel", global=true)
@@ -932,6 +998,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleDisableFakeInfectionLevel", global=true)
     public static void toggleDisableFakeInfectionLevel(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableFakeInfectionLevel = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isDisableFakeInfectionLevel", global=true)

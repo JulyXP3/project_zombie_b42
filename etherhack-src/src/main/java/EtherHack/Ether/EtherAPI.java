@@ -47,6 +47,7 @@ import EtherHack.utils.PlayerUtils;
 import EtherHack.utils.Rendering;
 import EtherHack.utils.VehicleUtils;
 import EtherHack.utils.ZombieUtils;
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -144,6 +145,8 @@ public class EtherAPI {
     public boolean isMapDrawAllPlayers;
     public boolean isMapDrawVehicles;
     public boolean isMapDrawZombies;
+    public boolean isMapDrawItems;
+    public boolean isMinimapOpen;
 
     public void saveConfig(String var1) {
         String var2 = "EtherHack/config/" + var1 + ".properties";
@@ -205,6 +208,9 @@ public class EtherAPI {
         var3.setProperty("isMapDrawAllPlayers", Boolean.toString(this.isMapDrawAllPlayers));
         var3.setProperty("isMapDrawVehicles", Boolean.toString(this.isMapDrawVehicles));
         var3.setProperty("isMapDrawZombies", Boolean.toString(this.isMapDrawZombies));
+        var3.setProperty("isMapDrawItems", Boolean.toString(this.isMapDrawItems));
+        var3.setProperty("isMinimapOpen", Boolean.toString(this.isMinimapOpen));
+        new File("EtherHack/config").mkdirs();
         try (FileOutputStream var4 = new FileOutputStream(var2);){
             var3.store(var4, (String)null);
         }
@@ -278,9 +284,18 @@ public class EtherAPI {
         this.isMapDrawAllPlayers = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawAllPlayers", false);
         this.isMapDrawVehicles = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawVehicles", false);
         this.isMapDrawZombies = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawZombies", false);
+        this.isMapDrawItems = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawItems", false);
+        this.isMinimapOpen = ConfigUtils.getBooleanFromConfig(var3, "isMinimapOpen", false);
     }
 
     private void initStartupConfig() {
+        if (!new File("EtherHack/config/startup.properties").exists()) {
+            this.mainUIAccentColor = new Color(56, 239, 125);
+            this.vehiclesUIColor = new Color(150, 150, 200);
+            this.zombiesUIColor = new Color(255, 150, 100);
+            this.playersUIColor = new Color(255, 50, 100);
+            this.saveConfig("startup");
+        }
         Properties var1 = new Properties();
         try (FileInputStream var2 = new FileInputStream("EtherHack/config/startup.properties");){
             var1.load(var2);
@@ -343,6 +358,8 @@ public class EtherAPI {
         this.isMapDrawAllPlayers = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawAllPlayers", false);
         this.isMapDrawVehicles = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawVehicles", false);
         this.isMapDrawZombies = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawZombies", false);
+        this.isMapDrawItems = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawItems", false);
+        this.isMinimapOpen = ConfigUtils.getBooleanFromConfig(var1, "isMinimapOpen", false);
     }
 
     public EtherAPI() {

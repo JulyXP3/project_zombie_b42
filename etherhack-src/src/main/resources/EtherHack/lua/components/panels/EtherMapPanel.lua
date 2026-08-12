@@ -160,6 +160,7 @@ function EtherMapPanel:createChildren()
     self:addCheckBox(getTranslate("UI_Map_DrawItems"), function (isChecked)
         UIMap.drawItems = isChecked;
         EtherItemSearch.setEnabled(isChecked);
+        setMapDrawItems(isChecked);
     end, UIMap.drawItems, "drawItems")
 
 end

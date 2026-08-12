@@ -37,6 +37,7 @@ function UIMovableMiniMap:createChildren()
             button.textColor = UIMap[button.toggleKey] and { r = 1, g = 1, b = 1, a = 1 } or { r = 0.35, g = 0.35, b = 0.35, a = 1 };
             if button.toggleKey == "drawItems" then
                 EtherItemSearch.setEnabled(UIMap.drawItems);
+                setMapDrawItems(UIMap.drawItems);
             end
         end);
         b:initialise();
@@ -104,6 +105,7 @@ function UIMovableMiniMap:close()
     UIMovableMiniMap.instance:setVisible(false);
     UIMovableMiniMap.instance:removeFromUIManager();
     UIMovableMiniMap.instance = nil;
+    setMinimapOpen(false);
 end
 
 --*********************************************************
@@ -115,6 +117,7 @@ function UIMovableMiniMap.openPanel()
         UIMovableMiniMap.instance:setVisible(false);
         UIMovableMiniMap.instance:removeFromUIManager();
         UIMovableMiniMap.instance = nil;
+        setMinimapOpen(false);
         return
     end
 
@@ -125,6 +128,7 @@ function UIMovableMiniMap.openPanel()
     UIMovableMiniMap.instance:addToUIManager();
     UIMovableMiniMap.instance:setVisible(true);
     UIMovableMiniMap.instance:setAlwaysOnTop(false);
+    setMinimapOpen(true);
 end
 
 --*********************************************************
@@ -133,8 +137,8 @@ end
 function UIMovableMiniMap:new()
     local menuTableData = {};
 
-    local width = 300;
-    local height = 300;
+    local width = 400;
+    local height = 400;
 
     local positionX = getCore():getScreenWidth() - width - 15;
     local positionY = getCore():getScreenHeight() - height - 15;
