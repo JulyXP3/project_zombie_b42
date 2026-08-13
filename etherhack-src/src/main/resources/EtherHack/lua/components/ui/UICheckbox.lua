@@ -28,12 +28,12 @@ end
 --************************************************************************--
 function UICheckbox:render()
 	if not self.isChecked then
-		self:drawTextureScaled(self.uncheckedTexture, 0, 0, self.textureWidth, self.textureHeight, 1.0, 1.0, 1.0, 1.0);
+		self:drawTextureScaled(self.uncheckedTexture, 0, 0, self.textureWidth, self.textureHeight, 1.0, 1.0, 1.0, 0.8);
 	else
 		self:drawTextureScaled(self.checkedTexture, 0, 0, self.textureWidth, self.textureHeight, 1.0, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b);
 	end
 
-	self:drawText(self.title, self.textureWidth + self.marginTexture, self.textureHeight / 2 - 8, 1.0, 1.0, 1.0, 1.0, self.font);
+	self:drawText(self.title, self.textureWidth + self.marginTexture, (self.textureHeight - self.fontHeight) / 2, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1.0, self.font);
 end
 
 --************************************************************************--

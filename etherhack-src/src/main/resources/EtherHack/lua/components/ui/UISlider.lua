@@ -80,9 +80,11 @@ function UISlider:render()
         self.sliderThumbColor = {r = 0.3, g = 0.3, b = 0.3, a = 1.0};
     end
 
-    self:drawRect(0, self.sliderBarByThumbOffset / 2, self.sliderBarSize.width, self.sliderBarSize.height, self.sliderBarColor.a, self.sliderBarColor.r, self.sliderBarColor.g, self.sliderBarColor.b);
+    local barY = self.sliderBarByThumbOffset / 2;
+    self:drawRect(0, barY, self.sliderBarSize.width, self.sliderBarSize.height, self.sliderBarColor.a, self.sliderBarColor.r, self.sliderBarColor.g, self.sliderBarColor.b);
+    self:drawRectBorder(0, barY, self.sliderBarSize.width, self.sliderBarSize.height, 0.5, EtherTheme.bloodDim.r, EtherTheme.bloodDim.g, EtherTheme.bloodDim.b);
     self:drawRect(thumbPosX, 0, self.sliderThumbSize.width, self.sliderThumbSize.height, self.sliderThumbColor.a, self.sliderThumbColor.r, self.sliderThumbColor.g, self.sliderThumbColor.b);
-    
+    self:drawRectBorder(thumbPosX, 0, self.sliderThumbSize.width, self.sliderThumbSize.height, 0.8, EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b);
     
     self:drawTextRight(tostring(self.minValue), - 5, self.sliderThumbSize.height / 2 - 7, 1.0, 1.0, 1.0, 0.3, UIFont.Small);
     self:drawText(tostring(self.maxValue),self.sliderBarSize.width + 5, self.sliderThumbSize.height / 2 - 7, 1.0, 1.0, 1.0, 0.3, UIFont.Small);

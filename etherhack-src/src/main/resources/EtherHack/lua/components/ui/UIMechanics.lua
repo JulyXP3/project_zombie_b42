@@ -19,7 +19,7 @@ function UIMechanics:createChildren()
 	self.closeButton.borderColor.a = 0.0;
 	self.closeButton.backgroundColor.a = 0;
 	self.closeButton.backgroundColorMouseOver.a = 0;
-	self.closeButton:setImage(self.closeTexture);
+	self.closeButton:setImage(EtherTheme.getCloseTexture());
 	self:addChild(self.closeButton);
 
     self.datas = ISScrollingListBox:new(10, 130, self.width - 20, self.height - 200);
@@ -31,7 +31,7 @@ function UIMechanics:createChildren()
     self.datas.font = UIFont.NewSmall;
     self.datas.doDrawItem = self.drawDatas;
     self.datas.drawBorder = true;
-    self.datas.backgroundColor = {r=0, g=0, b=0, a=1.0};
+    EtherTheme.styleList(self.datas);
     self.datas:addColumn(getTranslate("UI_Mechanics_PartsTableName"), 0);
     self.datas:addColumn(getTranslate("UI_Mechanics_PartsTableCondition"), 150)
     self.datas:addColumn(getTranslate("UI_Mechanics_PartsTableAmount"), 250)
@@ -132,15 +132,8 @@ function UIMechanics:drawDatas(y, item, alt)
         return y + self.itemheight
     end
 
-    if self.selected == item.index then
-        self:drawRect(0, y, self:getWidth(), self.itemheight, 0.3, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b);
-    end
-
-    if alt then
-        self:drawRect(0, y, self:getWidth(), self.itemheight, 0.3, 0.3, 0.3, 0.3);
-    end
-    self:drawRectBorder(0, y, self:getWidth(), self.itemheight, 0.5, 1, 1, 1);
-    self:drawRectBorder(self.columns[1].size, y, self.columns[2].size, self.itemheight, 0.5, 1, 1, 1);
+    EtherTheme.drawRowUnderlay(self, y, self.selected == item.index, alt, self.itemheight)
+    EtherTheme.drawColumnLines(self, y, self.itemheight)
   
     local condition = item.item:getCondition() / 100
     local textPartColor = {r = 1 - condition, g = condition, b = 0, a = 1}
@@ -180,9 +173,11 @@ end
 function UIMechanics:prerender()
     ISPanel.prerender(self)
 
-	self:drawRect( 0, 0, self.width, 20, 1.0, 0, 0, 0, 0.5)
-	self:drawTextCentre(self.title, self:getWidth() / 2, 1, 1, 1, 1, 1, UIFont.Small);
-	
+    if self.background then
+        EtherTheme.drawGlass(self);
+    end
+
+	EtherTheme.drawTitleBar(self, self.title, UIFont.Small)
 end
 
 --************************************************************************--
@@ -321,8 +316,8 @@ function UIMechanics:new()
 
     menuTableData = ISPanel:new(positionX, positionY, width, height);
     setmetatable(menuTableData, self);
-	menuTableData.borderColor = {r=0.0, g=0.0, b=0.0, a=0.0};
-	menuTableData.backgroundColor = {r=0.0, g=0.0, b=0.0, a=0.8};
+	menuTableData.borderColor = {r=0.55, g=0.08, b=0.08, a=0.6};
+	menuTableData.backgroundColor = {r=0.02, g=0.02, b=0.02, a=0.85};
     menuTableData.title = getTranslate("UI_Mechanics_Title");
     menuTableData.moveWithMouse = true;
     menuTableData.isPartsLoaded = false;

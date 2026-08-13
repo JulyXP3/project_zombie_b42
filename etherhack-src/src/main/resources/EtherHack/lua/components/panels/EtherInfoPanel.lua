@@ -17,12 +17,16 @@ end
 --* Отрисовка текста
 --*********************************************************
 function EtherInfoPanel:render()
-    local y = 30
-    local marginTitle = 25;
-    local marginText = 15;
-    self:drawTextCentered(getTranslate("UI_InformationPanel_General_Title"), y, 1, 1, 1, 1, UIFont.Medium)
+    local th = EtherTheme;
+    local fhS = th.fontHgtSmall;
+    local fhM = th.fontHgtMedium;
+    local y = fhM + 10
+    local mTitle = fhM + 10;
+    local mText = fhS + 8;
 
-    y = y + marginTitle
+    self:drawTextCentered(getTranslate("UI_InformationPanel_General_Title"), y, th.blood.r, th.blood.g, th.blood.b, 1, UIFont.Medium)
+
+    y = y + mTitle
 
     local generalTexts = {
         "UI_InformationPanel_General_Text1",
@@ -32,15 +36,15 @@ function EtherInfoPanel:render()
         "UI_InformationPanel_General_Text5",
     }
     for i, textKey in ipairs(generalTexts) do
-        self:drawTextCentered(getTranslate(textKey), y, 1, 1, 1, 1, UIFont.Small)
-        y = y + marginText
+        self:drawTextCentered(getTranslate(textKey), y, th.text.r, th.text.g, th.text.b, 1, UIFont.Small)
+        y = y + mText
     end
 
-    y = y + marginText
+    y = y + mText
 
-    self:drawTextCentered(getTranslate("UI_InformationPanel_Disclaimer_Title"), y, 1, 1, 1, 1, UIFont.Medium)
+    self:drawTextCentered(getTranslate("UI_InformationPanel_Disclaimer_Title"), y, th.blood.r, th.blood.g, th.blood.b, 1, UIFont.Medium)
 
-    y = y + marginTitle
+    y = y + mTitle
 
     local disclaimerTexts = {
         "UI_InformationPanel_Disclaimer_Text1",
@@ -50,15 +54,15 @@ function EtherInfoPanel:render()
         "UI_InformationPanel_Disclaimer_Text5",
     }
     for i, textKey in ipairs(disclaimerTexts) do
-        self:drawTextCentered(getTranslate(textKey), y, 1, 1, 1, 1, UIFont.Small)
-        y = y + marginText
+        self:drawTextCentered(getTranslate(textKey), y, th.textDim.r, th.textDim.g, th.textDim.b, 1, UIFont.Small)
+        y = y + mText
     end
 
-    y = y + marginText
+    y = y + mText
 
-    self:drawTextCentered(getTranslate("UI_InformationPanel_AntiCheatStatus_Title"), y, 1, 1, 1, 1, UIFont.Medium)
+    self:drawTextCentered(getTranslate("UI_InformationPanel_AntiCheatStatus_Title"), y, th.blood.r, th.blood.g, th.blood.b, 1, UIFont.Medium)
 
-    y = y + marginTitle
+    y = y + mTitle
 
     local antiCheatStatusTexts = {
         "UI_InformationPanel_AntiCheatStatus_Text1",
@@ -78,22 +82,30 @@ function EtherInfoPanel:render()
     }
 
     for i, textKey in ipairs(antiCheatStatusTexts) do
-        local statusText = antiCheatStatus[i] 
+        local statusEnabled = antiCheatStatus[i];
+        if self.localPlayer == nil then statusEnabled = false end
+
+        local statusText = statusEnabled
                         and getTranslate("UI_InformationPanel_AntiCheatStatus_Enable")
                         or getTranslate("UI_InformationPanel_AntiCheatStatus_Disable")
+        local baseText = getTranslate(textKey)
 
-        if self.localPlayer == nil then statusText = getTranslate("UI_InformationPanel_AntiCheatStatus_Disable") end
-        
-        self:drawTextCentered(getTranslate(textKey) .. statusText, y, 1, 1, 1, 1, UIFont.Small)
-        y = y + marginText
+        if statusEnabled then
+            self:drawTextCentered(baseText, y, th.text.r, th.text.g, th.text.b, 1, UIFont.Small)
+            self:drawTextCentered(statusText, y + fhS, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b, 1, UIFont.Small)
+        else
+            self:drawTextCentered(baseText, y, th.text.r, th.text.g, th.text.b, 0.55, UIFont.Small)
+            self:drawTextCentered(statusText, y + fhS, 0.8, 0.2, 0.2, 0.8, UIFont.Small)
+        end
+        y = y + fhS * 2 + 4
     end
 
 
-    y = y + marginText
-    
-    self:drawTextCentered(getTranslate("UI_InformationPanel_Contacts_Title"), y, 1, 1, 1, 1, UIFont.Medium)
+    y = y + mText
 
-    y = y + marginTitle
+    self:drawTextCentered(getTranslate("UI_InformationPanel_Contacts_Title"), y, th.blood.r, th.blood.g, th.blood.b, 1, UIFont.Medium)
+
+    y = y + mTitle
 
     local contactTexts = {
         "GitHub: None",
@@ -102,8 +114,8 @@ function EtherInfoPanel:render()
         getTranslate("UI_InformationPanel_Contacts_Donation") .. "Contact me for details.",
     }
     for i, text in ipairs(contactTexts) do
-        self:drawTextCentered(text, y, 1, 1, 1, 1, UIFont.Small)
-        y = y + marginText
+        self:drawTextCentered(text, y, th.textDim.r, th.textDim.g, th.textDim.b, 1, UIFont.Small)
+        y = y + mText
     end
 end
 

@@ -1,6 +1,18 @@
 # Changelog
 
-## [3.1.5] - Current
+## [3.1.6] - Current
+
+- UI: entire panel restyled in **RE2 Remake + simulated glassmorphism** (Resident Evil style) — new `EtherTheme.lua` theme module (palette / glass backdrop / blood-red title bars / unified list & table styling), new `noise.png` grain texture and blood-red `close_re.png` icon:
+  - Main window: near-black glass background + blood-red border + blood-red title bar (`E T H E R  H A C K  //  B42`) with a new red X close button; content area shifted down below the title bar.
+  - Left tab rail: dark glass, active tab = blood-red 5px bar + accent-tinted icon, red hover glow.
+  - Buttons / checkboxes / sliders: glass buttons + blood-red outline + accent left bar; checkbox labels light-ivory and vertically centered on the icon; slider track outlined in blood red.
+  - Tables (skills / items / traits / trap / vehicle / medic): alternating glass rows, accent selection, blood-red column dividers, dark-red headers.
+  - Floating windows (minimap / mechanics / medic) and modals: glass background + blood-red title bar + new close icon.
+- Fixed: skill table column widths and alignment — level/XP/boost columns are fixed-width and centered; XP text no longer overflows into the boost column.
+- Fixed: info page text overlap — line spacing is now computed from actual font heights and status lines (enabled/disabled) are split into two rows with color coding.
+- Visual-only change; no functionality or logic touched.
+
+## [3.1.5]
 
 - Feature: new "Trap" tab (custom `trap.png` icon, next to the Item Creator page) — search box + list of all spawnable foods (auto-filtered by `hungerChange < 0`); select and click "Spawn" to run the trap chain (stand next to a placed trap).
 - Feature: **F10** hotkey triggers "Reset loot" (same entry point as the button, multiplayer only).

@@ -14,6 +14,7 @@ require "EtherHack/lua/fixes/ServerSyncBlocker"
 --* Подключение модулей
 --*********************************************************
 local etherModules = {
+    "EtherHack/lua/components/ui/EtherTheme.lua",
     "EtherHack/lua/components/override/EtherAdminMenu.lua",
     "EtherHack/lua/components/override/EtherDebugMenu.lua",
     "EtherHack/lua/components/override/EtherEditInventoryItem.lua",
@@ -74,7 +75,7 @@ end
 function EtherMain:createChildren()
     ISPanel.createChildren(self);
 
-    self.buttonsPanel = UIButtonsPanel:new(0, 0, 50, self.height, self, EtherMain.accentColor);
+    self.buttonsPanel = UIButtonsPanel:new(0, EtherTheme.titleH, 50, self.height - EtherTheme.titleH, self, EtherMain.accentColor);
     self.buttonsPanel:initialise();
     self.buttonsPanel:instantiate();
     self.buttonsPanel:setVisible(true);
@@ -91,6 +92,28 @@ function EtherMain:createChildren()
     self.buttonsPanel:addButton("EtherHack/media/ui/settings.png", EtherSettingsPanel);
 
     self.buttonsPanel:openPanel(EtherMain.currentTabID);
+
+    self.closeButton = ISButton:new(self.width - 23, 2, 20, 20, "", self, function(self2, button) EtherMain:close() end);
+    self.closeButton:initialise();
+    self.closeButton.borderColor.a = 0.0;
+    self.closeButton.backgroundColor.a = 0;
+    self.closeButton.backgroundColorMouseOver.a = 0;
+    self.closeButton:setImage(EtherTheme.getCloseTexture());
+    self:addChild(self.closeButton);
+end
+
+--*********************************************************
+--* 玻璃底 + 红标题条 (纯外观)
+--*********************************************************
+function EtherMain:render()
+    ISPanel.render(self);
+    if self.background then
+        EtherTheme.drawGlass(self);
+    end
+    local b = EtherTheme.blood;
+    self:drawRect(0, 0, self.width, EtherTheme.titleH, 0.92, b.r, b.g, b.b);
+    self:drawRect(0, EtherTheme.titleH, self.width, 1, 0.5, 0.12, 0.015, 0.015);
+    self:drawText("E T H E R   H A C K  //  B42", 60, EtherTheme.titleH / 2 - EtherTheme.fontHgtSmall / 2, 1, 1, 1, 1, UIFont.Small);
 end
 
 --*********************************************************

@@ -15,7 +15,7 @@ function UIButtonsPanel:prerender()
         local button = self.buttons[id]
         if (button.id == self.currentTabID) then
             local buttonHighlightPosY = (id - 1) * 50;
-            self:drawRect(0, buttonHighlightPosY, 5, 50, 1.0, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b);
+            self:drawRect(0, buttonHighlightPosY, 5, 50, 1.0, EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b);
             button:setTextureRGBA(EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b, 1.0)
         else
             button:setTextureRGBA(1.0, 1.0, 1.0, 1.0)
@@ -38,7 +38,7 @@ function UIButtonsPanel:openPanel(id)
         EtherMain.instance:removeChild(self.currentPanel)
     end
 
-    local panel = panelById:new(self.width, 0, self.parent.width - self.width, self.parent.height);
+    local panel = panelById:new(self.width, EtherTheme.titleH, self.parent.width - self.width, self.parent.height - EtherTheme.titleH);
     panel:initialise();
     panel:instantiate();
     panel:setVisible(true);
@@ -71,7 +71,7 @@ function UIButtonsPanel:addButton(iconPath, panelTag)
     button:initialise();
     button.borderColor.a = 0.0;
     button.backgroundColor.a = 0;
-    button.backgroundColorMouseOver.a = 0;
+    button.backgroundColorMouseOver = { r = 0.5, g = 0.07, b = 0.07, a = 0.35 };
     button.id = id;
     button.panelTag = panelTag;
     button:setImage(getExtraTexture(iconPath));
@@ -90,8 +90,8 @@ function UIButtonsPanel:new(posX, posY, width, height, parent, accentColor)
     menuTableData = ISPanel:new(posX, posY, width, height);
     setmetatable(menuTableData, self);
     menuTableData.background = true;
-	menuTableData.backgroundColor = {r=0.1, g=0.1, b=0.1, a=1.0};
-	menuTableData.borderColor = {r=0, g=0, b=0, a=0};
+	menuTableData.backgroundColor = EtherTheme.railBG;
+	menuTableData.borderColor = EtherTheme.bloodDim;
     menuTableData.moveWithMouse = true;
     self.__index = self;
 

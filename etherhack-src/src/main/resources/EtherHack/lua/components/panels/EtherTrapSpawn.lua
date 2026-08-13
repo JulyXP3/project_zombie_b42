@@ -33,7 +33,7 @@ function EtherTrapSpawn:render()
     if EtherTrapPOC.armed then
         status = tostring(EtherTrapPOC.target) .. " x" .. tostring(EtherTrapPOC.count) .. " [" .. tostring(EtherTrapPOC.phase) .. "]";
     end
-    self:drawText("[TrapPOC] " .. status, 15, self.height - 22, 0.8, 0.8, 0.8, 1, UIFont.Small);
+    self:drawText("[TrapPOC] " .. status, 15, self.height - 22, EtherTheme.textDim.r, EtherTheme.textDim.g, EtherTheme.textDim.b, 1, UIFont.Small);
 end
 
 --*********************************************************
@@ -62,19 +62,12 @@ function EtherTrapSpawn:drawDatas(y, item, alt)
     end
 
     local a = 0.9;
+    local th = EtherTheme;
 
-    if self.selected == item.index then
-        self:drawRect(0, y, self:getWidth(), self.itemheight, 0.3, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b);
-    end
-
-    if alt then
-        self:drawRect(0, y, self:getWidth(), self.itemheight, 0.3, 0.3, 0.3, 0.3);
-    end
-
-    self:drawRectBorder(0, y, self:getWidth(), self.itemheight, a, self.borderColor.r, self.borderColor.g, self.borderColor.b);
+    EtherTheme.drawRowUnderlay(self, y, self.selected == item.index, alt, self.itemheight)
 
     local iconSize = fontHeightSmall;
-    self:drawText(item.item:getDisplayName(), 25, y + 4, 1, 1, 1, a, self.font);
+    self:drawText(item.item:getDisplayName(), 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
 
     local icon = item.item:getIcon()
     if item.item:getIconsForTexture() and not item.item:getIconsForTexture():isEmpty() then
@@ -145,6 +138,7 @@ function EtherTrapSpawn:createChildren()
     self.datas.font = UIFont.NewSmall;
     self.datas.doDrawItem = self.drawDatas;
     self.datas.drawBorder = true;
+    EtherTheme.styleList(self.datas);
     self.datas:addColumn("", self.width - 30);
     self:addChild(self.datas);
 

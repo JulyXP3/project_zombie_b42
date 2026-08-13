@@ -29,7 +29,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full change history.
 ## Installation
 
 1. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-2. Take `EtherHack-3.1.5-B42.jar` from the `build` directory.
+2. Take `EtherHack-3.1.6-B42.jar` from the `build` directory.
 3. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
 4. Run `install.bat` to install the mod (requires a JDK on the system).
 
@@ -44,7 +44,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/EtherHack-3.1.5-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
+The output jar is at `etherhack-src/build/EtherHack-3.1.6-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
 
 ## Testing
 
@@ -62,7 +62,7 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `EtherHack-3.1.5-B42.jar` | Ready-to-use build (current release) |
+| `EtherHack-3.1.6-B42.jar` | Ready-to-use build (current release) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `鍒嗘瀽鎶ュ憡.md` | Analysis report (Chinese): feasibility study, decompilation evidence, scanning design and limitations |

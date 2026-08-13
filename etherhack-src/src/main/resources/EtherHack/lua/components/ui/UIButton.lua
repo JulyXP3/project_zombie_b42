@@ -60,14 +60,19 @@ end
 function UIButton:render()
 	if self.isEnable then
 		if not self.onPressed then
-			self:drawRect( 0, 0, self.width, self.height, 1.0, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b)
+			self:drawRect(0, 0, self.width, self.height, 0.16, EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b)
+			self:drawRectBorder(0, 0, self.width, self.height, 0.85, EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b)
+			self:drawRect(0, 0, 3, self.height, 0.9, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b)
+			self:drawTextCentre(self.title, self.width / 2 + 1, self.height / 2 - 8, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1.0, self.font);
 		else
-			self:drawRect( 0, 0, self.width, self.height, 0.8, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b)
+			self:drawRect(0, 0, self.width, self.height, 0.9, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b)
+			self:drawRectBorder(0, 0, self.width, self.height, 1.0, 0.0, 0.0, 0.0)
+			self:drawTextCentre(self.title, self.width / 2 + 1, self.height / 2 - 8, 0.05, 0.05, 0.05, 1.0, self.font);
 		end
-		self:drawTextCentre(self.title, self.width / 2, self.height / 2 - 8, 1.0, 1.0, 1.0, 1.0, self.font);
 	else
-		self:drawRect( 0, 0, self.width, self.height, 1.0, 0.1, 0.1, 0.1)
-		self:drawTextCentre(self.title, self.width / 2, self.height / 2 - 8, 1.0, 1.0, 1.0, 0.3, self.font);
+		self:drawRect(0, 0, self.width, self.height, 0.08, 0.12, 0.11, 0.11)
+		self:drawRectBorder(0, 0, self.width, self.height, 0.3, EtherTheme.bloodDim.r, EtherTheme.bloodDim.g, EtherTheme.bloodDim.b)
+		self:drawTextCentre(self.title, self.width / 2 + 1, self.height / 2 - 8, 1.0, 1.0, 1.0, 0.25, self.font);
 	end
 end
 

@@ -201,15 +201,8 @@ function UITraitsTable:drawDatas(y, item, alt)
     self:suspendStencil()
     self:clampStencilRectToParent(0, clipY, self:getWidth() - scrollBarOffset, clipY2 - clipY)
     
-    if self.selected == item.index then
-        self:drawRect(0, y, self:getWidth(), self.itemheight, 0.3, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b);
-    end
-
-    if alt then
-        self:drawRect(0, y, self:getWidth(), self.itemheight, 0.3, 0.3, 0.3, 0.3);
-    end
-    self:drawRectBorder(0, y, self:getWidth(), self.itemheight, 0.5, self.borderColor.r, self.borderColor.g, self.borderColor.b);
-    self:drawRectBorder(self.columns[1].size, y, self.columns[2].size, self.itemheight, 0.5, self.borderColor.r, self.borderColor.g, self.borderColor.b);
+    EtherTheme.drawRowUnderlay(self, y, self.selected == item.index, alt, self.itemheight)
+    EtherTheme.drawColumnLines(self, y, self.itemheight)
     
     self:clearStencilRect()
     self:resumeStencil()
@@ -268,7 +261,7 @@ end
 function UITraitsTable:new (x, y, width, height)
     local menuTableData = ISPanel:new(x, y, width, height);
     setmetatable(menuTableData, self);
-    menuTableData.borderColor = {r=0.4, g=0.4, b=0.4, a=0};
+    menuTableData.borderColor = EtherTheme.bloodDim;
     menuTableData.backgroundColor = {r=0, g=0, b=0, a=0};
     menuTableData.localPlayer = getPlayer();
     menuTableData.lastSelectedIndex = 0;

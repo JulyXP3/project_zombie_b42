@@ -79,10 +79,11 @@ function UISkillTable:createChildren()
     self.datas.doDrawItem = self.drawDatas;
     self.datas.drawBorder = true;
     self.datas.backgroundColor = {r=0, g=0, b=0, a=0.0};
+    EtherTheme.styleList(self.datas);
     self.datas:addColumn(getText("IGUI_PlayerStats_Perk"), 0);
-    self.datas:addColumn(getText("IGUI_PlayerStats_Level"), 150);
-    self.datas:addColumn(getText("IGUI_PlayerStats_XP"), 220);
-    self.datas:addColumn(getText("IGUI_PlayerStats_Boost"),350)
+    self.datas:addColumn(getText("IGUI_PlayerStats_Level"), 140);
+    self.datas:addColumn(getText("IGUI_PlayerStats_XP"), 230);
+    self.datas:addColumn(getText("IGUI_PlayerStats_Boost"),370)
     self:addChild(self.datas);
 
     self.addXP = UIButton:new(0, self.height - 80, 100, 24, getTranslate("UI_PlayerEditor_PlayerSkills_AddXP"), 
@@ -236,19 +237,9 @@ function UISkillTable:drawDatas(y, item, alt)
         return y + self.itemheight
     end
 
-    if self.selected == item.index then
-        self:drawRect(0, y, self:getWidth(), self.itemheight, 0.3, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b);
-    end
+    EtherTheme.drawRowUnderlay(self, y, self.selected == item.index, alt, self.itemheight)
+    EtherTheme.drawColumnLines(self, y, self.itemheight)
 
-    if alt then
-        self:drawRect(0, y, self:getWidth(), self.itemheight, 0.3, 0.3, 0.3, 0.3);
-    end
-
-    self:drawRectBorder(0, y, self:getWidth(), self.itemheight, 0.5, self.borderColor.r, self.borderColor.g, self.borderColor.b);
-    self:drawRectBorder(self.columns[1].size, y, self.columns[2].size, self.itemheight, 0.5, self.borderColor.r, self.borderColor.g, self.borderColor.b);
-    self:drawRectBorder(self.columns[1].size, y, self.columns[3].size, self.itemheight, 0.5, self.borderColor.r, self.borderColor.g, self.borderColor.b);
-    self:drawRectBorder(self.columns[1].size, y, self.columns[4].size, self.itemheight, 0.5, self.borderColor.r, self.borderColor.g, self.borderColor.b);
-    
     local yoff = 2;
     local clipX = self.columns[1].size
     local clipX2 = self.columns[2].size
@@ -258,53 +249,21 @@ function UISkillTable:drawDatas(y, item, alt)
     self:suspendStencil()
     self:clampStencilRectToParent(clipX, clipY, clipX2 - clipX, clipY2 - clipY)
 
-    self:drawText(item.item.name, 5, y + yoff, 1, 1, 1, 1, UIFont.Small);
+    self:drawText(item.item.name, 25, y + yoff, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1, UIFont.Small);
 
     self:clearStencilRect()
     self:resumeStencil()
 
-   
-    local yoff = 2;
-    local clipX = self.columns[2].size
-    local clipX2 = self.columns[3].size
-    local clipY = math.max(0, y + self:getYScroll())
-    local clipY2 = math.min(self.height, y + self:getYScroll() + self.itemheight)
-    self:suspendStencil()
-    self:clampStencilRectToParent(clipX, clipY, clipX2 - clipX, clipY2 - clipY)
+    self:drawTextCentre(tostring(item.item.level), (self.columns[2].size + self.columns[3].size) / 2, y + yoff, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1, UIFont.Small)
 
-    self:drawText(tostring(item.item.level), 5 + self.columns[2].size, y + yoff, 1, 1, 1, 1, UIFont.Small);
-
-    self:clearStencilRect()
-    self:resumeStencil()
-    
-    local yoff = 2;
-    local clipX = self.columns[3].size
-    local clipX2 = self.columns[4].size
-    local clipY = math.max(0, y + self:getYScroll())
-    local clipY2 = math.min(self.height, y + self:getYScroll() + self.itemheight)
-    self:suspendStencil()
-    self:clampStencilRectToParent(clipX, clipY, clipX2 - clipX, clipY2 - clipY)
     if item.item.xpToLevel == -1 then
-        self:drawText("MAX", 5 + self.columns[3].size, y + yoff, 1, 1, 1, 1, UIFont.Small);
+        self:drawTextCentre("MAX", (self.columns[3].size + self.columns[4].size) / 2, y + yoff, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1, UIFont.Small);
     else
-        self:drawText(tostring(item.item.xp) .. "/" .. tostring(item.item.xpToLevel), 5 + self.columns[3].size, y + yoff, 1, 1, 1, 1, UIFont.Small);
+        self:drawTextCentre(tostring(item.item.xp) .. "/" .. tostring(item.item.xpToLevel), (self.columns[3].size + self.columns[4].size) / 2, y + yoff, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1, UIFont.Small);
     end
 
-    self:clearStencilRect()
-    self:resumeStencil()
+    self:drawTextCentre(tostring(item.item.boost), (self.columns[4].size + self:getWidth()) / 2, y + yoff, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b, 1, UIFont.Small);
 
-    local yoff = 2;
-    local clipX = self.columns[4].size
-    local clipY = math.max(0, y + self:getYScroll())
-    local clipY2 = math.min(self.height, y + self:getYScroll() + self.itemheight)
-    self:suspendStencil()
-    self:clampStencilRectToParent(clipX, clipY, self.width - self.columns[4].size - 20, clipY2 - clipY)
-
-    self:drawText(tostring(item.item.boost), 5 + self.columns[4].size, y + yoff, 1, 1, 1, 1, UIFont.Small);
-
-    self:clearStencilRect()
-    self:resumeStencil()
-    
     return y + self.itemheight;
 end
 
@@ -314,7 +273,7 @@ end
 function UISkillTable:new (x, y, width, height)
     local menuTableData = ISPanel:new(x, y, width, height);
     setmetatable(menuTableData, self);
-    menuTableData.borderColor = {r=0.4, g=0.4, b=0.4, a=0};
+    menuTableData.borderColor = EtherTheme.bloodDim;
     menuTableData.backgroundColor = {r=0, g=0, b=0, a=0};
     menuTableData.localPlayer = getPlayer();
     menuTableData.lastSelectedIndex = 0;

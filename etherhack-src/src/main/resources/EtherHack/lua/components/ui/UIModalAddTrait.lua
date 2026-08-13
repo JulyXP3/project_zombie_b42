@@ -205,8 +205,8 @@ function UIModalAddTrait:new()
     setmetatable(menuTableData, self);
     self.__index = self;
     menuTableData.variableColor={r=0.9, g=0.55, b=0.1, a=1};
-    menuTableData.borderColor = {r=0.4, g=0.4, b=0.4, a=1};
-    menuTableData.backgroundColor = {r=0, g=0, b=0, a=0.8};
+    menuTableData.borderColor = {r=0.55, g=0.08, b=0.08, a=0.6};
+    menuTableData.backgroundColor = {r=0.02, g=0.02, b=0.02, a=0.85};
     menuTableData.localPlayer = getPlayer();
     menuTableData.comboList = {};
     menuTableData.goodTraits = {};

@@ -62,7 +62,7 @@ function UIMovableMiniMap:createChildren()
 	self.closeButton.borderColor.a = 0.0;
 	self.closeButton.backgroundColor.a = 0;
 	self.closeButton.backgroundColorMouseOver.a = 0;
-	self.closeButton:setImage(self.closeTexture);
+	self.closeButton:setImage(EtherTheme.getCloseTexture());
 	self:addChild(self.closeButton);
 
     self.resizeWidgetCorner = ISResizeWidget:new(self.width-10, self.height-10, 10, 10, self);
@@ -78,9 +78,11 @@ end
 function UIMovableMiniMap:prerender()
     ISPanel.prerender(self)
 
-	self:drawRect( 0, 0, self.width, 20, 1.0, 0, 0, 0, 0.5)
-	self:drawTextCentre(self.title, self:getWidth() / 2, 1, 1, 1, 1, 1, UIFont.Small);
-	
+    if self.background then
+        EtherTheme.drawGlass(self);
+    end
+
+	EtherTheme.drawTitleBar(self, self.title, UIFont.Small)
 end
 
 --************************************************************************--
@@ -145,7 +147,9 @@ function UIMovableMiniMap:new()
 
     menuTableData = ISPanel:new(positionX, positionY, width, height);
     setmetatable(menuTableData, self);
-	menuTableData.borderColor = {r=0.0, g=0.0, b=0.0, a=0.0};
+	menuTableData.borderColor = {r=0.55, g=0.08, b=0.08, a=0.6};
+    menuTableData.background = true;
+	menuTableData.backgroundColor = {r=0.02, g=0.02, b=0.02, a=0.85};
     menuTableData.title = getTranslate("UI_Map_MiniMapTitle");
     menuTableData.moveWithMouse = true;
     menuTableData.localPlayer = getPlayer();
