@@ -106,9 +106,6 @@ end
 --* 玻璃底 + 红标题条 (纯外观)
 --*********************************************************
 function EtherMain:render()
-    if self.background then
-        EtherTheme.drawGlass(self);
-    end
     ISPanel.render(self);
     local b = EtherTheme.blood;
     self:drawRect(0, 0, self.width, EtherTheme.titleH, 0.92, b.r, b.g, b.b);
