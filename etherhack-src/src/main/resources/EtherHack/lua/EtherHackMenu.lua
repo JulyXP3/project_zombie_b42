@@ -150,8 +150,8 @@ function EtherMain:new()
 
     menuTableData = ISPanel:new(positionX, positionY, EtherMain.defaultWidth, EtherMain.defaultHeight);
     setmetatable(menuTableData, self);
-    menuTableData.background = false;
-	menuTableData.backgroundColor = {r=0.05, g=0.05, b=0.05, a=1};
+    menuTableData.background = true;
+	menuTableData.backgroundColor = {r=0.02, g=0.02, b=0.02, a=1};
 	menuTableData.borderColor = {r=0, g=0, b=0, a=0};
 	menuTableData.moveWithMouse = true;
     self.__index = self;
