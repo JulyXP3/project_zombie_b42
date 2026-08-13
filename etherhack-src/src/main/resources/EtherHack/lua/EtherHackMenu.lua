@@ -113,7 +113,7 @@ function EtherMain:render()
     local b = EtherTheme.blood;
     self:drawRect(0, 0, self.width, EtherTheme.titleH, 0.92, b.r, b.g, b.b);
     self:drawRect(0, EtherTheme.titleH, self.width, 1, 0.5, 0.03, 0.18, 0.08);
-    self:drawText("E T H E R   H A C K  //  B42", 60, EtherTheme.titleH / 2 - EtherTheme.fontHgtSmall / 2, 1, 1, 1, 1, UIFont.Small);
+    self:drawTextCentre("E T H E R  H A C K -  B 4 2", self.width / 2, EtherTheme.titleH / 2 - EtherTheme.fontHgtSmall / 2, 1, 1, 1, 1, UIFont.Small);
 end
 
 --*********************************************************
