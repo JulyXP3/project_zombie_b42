@@ -5,13 +5,13 @@
 EtherTheme = {}
 
 -- 调色板 (生化危机绿: 深绿铬色, 用户可配置的 accentColor 保持为高亮)
-EtherTheme.glassBG       = { r = 0.02, g = 0.02, b = 0.02, a = 0.78 }  -- 窗口玻璃底
-EtherTheme.railBG        = { r = 0.03, g = 0.05, b = 0.035, a = 0.88 } -- 导航条底(暗绿)
-EtherTheme.blood         = { r = 0.10, g = 0.52, b = 0.22, a = 1 }     -- 生化危机绿(标题条/激活条)
-EtherTheme.bloodDim      = { r = 0.10, g = 0.52, b = 0.22, a = 0.35 }  -- 淡化绿(网格/边框)
-EtherTheme.edge          = { r = 0.75, g = 0.92, b = 0.82, a = 0.16 }  -- 顶部高光(微绿)
-EtherTheme.text          = { r = 0.93, g = 0.92, b = 0.88, a = 1 }     -- 米白正文(提亮)
-EtherTheme.textDim       = { r = 0.75, g = 0.74, b = 0.71, a = 1 }     -- 次要文字(提亮)
+EtherTheme.glassBG       = { r = 0.09, g = 0.10, b = 0.09, a = 0.90 }  -- 窗口玻璃底(深灰绿, 提亮)
+EtherTheme.railBG        = { r = 0.11, g = 0.15, b = 0.11, a = 0.92 } -- 导航条底(暗绿, 提亮)
+EtherTheme.blood         = { r = 0.12, g = 0.56, b = 0.25, a = 1 }     -- 生化危机绿(标题条/激活条, 提亮)
+EtherTheme.bloodDim      = { r = 0.12, g = 0.56, b = 0.25, a = 0.40 }  -- 淡化绿(网格/边框)
+EtherTheme.edge          = { r = 0.80, g = 0.95, b = 0.85, a = 0.22 }  -- 顶部高光(微绿, 提亮)
+EtherTheme.text          = { r = 0.97, g = 0.97, b = 0.95, a = 1 }     -- 正文(接近纯白)
+EtherTheme.textDim       = { r = 0.85, g = 0.85, b = 0.83, a = 1 }     -- 次要文字(提亮)
 EtherTheme.titleH        = 20                                           -- 标题条高
 
 EtherTheme.noise         = nil
