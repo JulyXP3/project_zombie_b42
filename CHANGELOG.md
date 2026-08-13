@@ -2,6 +2,7 @@
 
 ## [3.1.6] - Current
 
+- Fixed: "Server Sync Protection" toggle was a no-op — `exposeServerSyncBlocker` misused Kahlua's `exposeMethod` (attaches to the class metatable only, never became a Lua global); switched to `exposeGlobalClassFunction`, and `ServerSyncBlocker.lua` now resolves globals at call time instead of caching them at load.
 - UI: entire panel restyled in **RE2 Remake + simulated glassmorphism** (Resident Evil style) — new `EtherTheme.lua` theme module (palette / glass backdrop / blood-red title bars / unified list & table styling), new `noise.png` grain texture and blood-red `close_re.png` icon:
   - Main window: near-black glass background + blood-red border + blood-red title bar (`E T H E R  H A C K  //  B42`) with a new red X close button; content area shifted down below the title bar.
   - Left tab rail: dark glass, active tab = blood-red 5px bar + accent-tinted icon, red hover glow.

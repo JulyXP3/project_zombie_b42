@@ -2,6 +2,7 @@
 
 ## [3.1.6] - 当前版本
 
+- 修复: 「服务器同步保护」开关一直失效 —— `exposeServerSyncBlocker` 误用 Kahlua `exposeMethod`(只挂类 metatable, 从未成为 Lua 全局), 改用 `exposeGlobalClassFunction`; `ServerSyncBlocker.lua` 的加载时缓存改为调用时解析, 消除加载顺序依赖。
 - 界面: 全面板美化为 **RE2 重制风 + 模拟毛玻璃**(生化危机风格, 铬色取生化危机绿) —— 新增 `EtherTheme.lua` 主题模块(调色板/玻璃底/绿色标题条/列表与表格样式统一), 新增噪点纹理 `noise.png` 与绿色关闭图标 `close_re.png`:
   - 主窗: 近黑玻璃底 + 绿色描边 + 顶部绿色标题条(`E T H E R  H A C K  //  B42`), 新增 X 关闭按钮, 内容区随标题条下移。
   - 左侧导航条: 深色玻璃底, 激活标签 = 绿色 5px 竖条 + accent 染色图标, 悬停绿晕。

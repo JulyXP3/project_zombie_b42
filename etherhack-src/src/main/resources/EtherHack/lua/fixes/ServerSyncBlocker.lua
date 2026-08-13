@@ -31,19 +31,8 @@ if not ServerSyncBlocker then
     ServerSyncBlocker._initialized = false
 end
 
--- Cache for Java methods (may be nil if not yet exposed)
-local _enableFullProtection = enableFullProtection
-local _disableFullProtection = disableFullProtection
-local _enableStatsProtection = enableStatsProtection
-local _disableStatsProtection = disableStatsProtection
-local _enableSkillsProtection = enableSkillsProtection
-local _disableSkillsProtection = disableSkillsProtection
-local _protectStat = protectStat
-local _unprotectStat = unprotectStat
-local _protectSkill = protectSkill
-local _isProtectionActive = isProtectionActive
-local _reapplyProtectedValues = reapplyProtectedValues
-local _filterIncomingSyncPackets = filterIncomingSyncPackets
+-- Java methods are resolved at call time (EtherAPI.loadAPI exposes them as globals).
+-- Resolving lazily keeps this robust even if this file happens to load before exposure.
 
 -- Initialize protection state (only if not already initialized)
 function ServerSyncBlocker.init()
@@ -56,8 +45,8 @@ end
 
 -- Enable full protection mode
 function ServerSyncBlocker.enableFull()
-    if _enableFullProtection then
-        _enableFullProtection()
+    if enableFullProtection then
+        enableFullProtection()
     end
     ServerSyncBlocker.isEnabled = true
     print("[EtherHack] Full server sync protection enabled")
@@ -66,8 +55,8 @@ end
 
 -- Disable all protection
 function ServerSyncBlocker.disableFull()
-    if _disableFullProtection then
-        _disableFullProtection()
+    if disableFullProtection then
+        disableFullProtection()
     end
     ServerSyncBlocker.isEnabled = false
     ServerSyncBlocker.statsProtected = {}
@@ -78,8 +67,8 @@ end
 
 -- Enable stats-only protection
 function ServerSyncBlocker.enableStats()
-    if _enableStatsProtection then
-        _enableStatsProtection()
+    if enableStatsProtection then
+        enableStatsProtection()
         return true
     end
     return false
@@ -87,8 +76,8 @@ end
 
 -- Disable stats protection
 function ServerSyncBlocker.disableStats()
-    if _disableStatsProtection then
-        _disableStatsProtection()
+    if disableStatsProtection then
+        disableStatsProtection()
         return true
     end
     return false
@@ -96,8 +85,8 @@ end
 
 -- Enable skills protection
 function ServerSyncBlocker.enableSkills()
-    if _enableSkillsProtection then
-        _enableSkillsProtection()
+    if enableSkillsProtection then
+        enableSkillsProtection()
         return true
     end
     return false
@@ -105,8 +94,8 @@ end
 
 -- Disable skills protection
 function ServerSyncBlocker.disableSkills()
-    if _disableSkillsProtection then
-        _disableSkillsProtection()
+    if disableSkillsProtection then
+        disableSkillsProtection()
         return true
     end
     return false
@@ -116,8 +105,8 @@ end
 -- statName: ENDURANCE, HUNGER, THIRST, FATIGUE, etc.
 -- value: the value to maintain (usually 0.0 or 1.0)
 function ServerSyncBlocker.protectStatValue(statName, value)
-    if _protectStat then
-        _protectStat(statName, value)
+    if protectStat then
+        protectStat(statName, value)
         ServerSyncBlocker.statsProtected[statName] = value
         return true
     end
@@ -126,8 +115,8 @@ end
 
 -- Remove protection from a stat
 function ServerSyncBlocker.unprotectStatValue(statName)
-    if _unprotectStat then
-        _unprotectStat(statName)
+    if unprotectStat then
+        unprotectStat(statName)
         ServerSyncBlocker.statsProtected[statName] = nil
         return true
     end
@@ -137,8 +126,8 @@ end
 -- Protect a skill at a specific level and XP
 function ServerSyncBlocker.protectSkillLevel(perkName, level, xp)
     xp = xp or 0
-    if _protectSkill then
-        _protectSkill(perkName, level, xp)
+    if protectSkill then
+        protectSkill(perkName, level, xp)
         ServerSyncBlocker.skillsProtected[perkName] = {level = level, xp = xp}
         return true
     end
@@ -152,15 +141,15 @@ end
 
 -- Manually trigger reapply of protected values
 function ServerSyncBlocker.reapply()
-    if _reapplyProtectedValues then
-        _reapplyProtectedValues()
+    if reapplyProtectedValues then
+        reapplyProtectedValues()
     end
 end
 
 -- Manually trigger packet filtering
 function ServerSyncBlocker.filterPackets()
-    if _filterIncomingSyncPackets then
-        _filterIncomingSyncPackets()
+    if filterIncomingSyncPackets then
+        filterIncomingSyncPackets()
     end
 end
 

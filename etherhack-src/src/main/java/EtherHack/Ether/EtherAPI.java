@@ -864,7 +864,9 @@ public class EtherAPI {
                 if (name == null || name.isEmpty()) {
                     name = method.getName();
                 }
-                this.exposeGlobalFunction(method, name);
+                // static method -> global function (was exposeMethod, which only
+                // attaches to the class metatable and never became a Lua global)
+                this.exposeGlobalClassFunction(LuaManager.env, ServerSyncBlocker.class, method, name);
                 Logger.printLog("Exposed ServerSyncBlocker method: " + name);
             }
         }
