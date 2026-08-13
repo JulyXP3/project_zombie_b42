@@ -5,7 +5,7 @@
 EtherTheme = {}
 
 -- 调色板 (生化危机绿: 深绿铬色, 用户可配置的 accentColor 保持为高亮)
-EtherTheme.glassBG       = { r = 0.09, g = 0.10, b = 0.09, a = 0.90 }  -- 窗口玻璃底(深灰绿, 提亮)
+EtherTheme.glassBG       = { r = 0.09, g = 0.10, b = 0.09, a = 0.0 }  -- 窗口玻璃底(临时置 0 排查, 原值 a=0.90)
 EtherTheme.railBG        = { r = 0.11, g = 0.15, b = 0.11, a = 0.92 } -- 导航条底(暗绿, 提亮)
 EtherTheme.blood         = { r = 0.12, g = 0.56, b = 0.25, a = 1 }     -- 生化危机绿(标题条/激活条, 提亮)
 EtherTheme.bloodDim      = { r = 0.12, g = 0.56, b = 0.25, a = 0.40 }  -- 淡化绿(网格/边框)
