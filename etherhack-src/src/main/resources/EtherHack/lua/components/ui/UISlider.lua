@@ -87,7 +87,7 @@ function UISlider:render()
     self:drawRectBorder(thumbPosX, 0, self.sliderThumbSize.width, self.sliderThumbSize.height, 0.8, EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b);
     
     self:drawTextRight(tostring(self.minValue), - 5, self.sliderThumbSize.height / 2 - 7, 1.0, 1.0, 1.0, 0.3, UIFont.Small);
-    self:drawText(tostring(self.maxValue),self.sliderBarSize.width + 5, self.sliderThumbSize.height / 2 - 7, 1.0, 1.0, 1.0, 0.3, UIFont.Small);
+    self:drawText(tostring(self.maxValue),self.sliderBarSize.width + 5, self.sliderThumbSize.height / 2 - 7, 1.0, 1.0, 1.0, 0.6, UIFont.Small);
 	
     self:drawTextCentre(tostring(self.currentValue), thumbPosX + 3, self.sliderThumbSize.height + 5, self.sliderThumbColor.r, self.sliderThumbColor.g, self.sliderThumbColor.b, self.sliderThumbColor.a, UIFont.Small);
 end

@@ -20,9 +20,9 @@ function EtherInfoPanel:render()
     local th = EtherTheme;
     local fhS = th.fontHgtSmall;
     local fhM = th.fontHgtMedium;
-    local y = fhM + 10
-    local mTitle = fhM + 10;
-    local mText = fhS + 8;
+    local y = fhM + 4
+    local mTitle = fhM + 5;
+    local mText = fhS + 4;
 
     self:drawTextCentered(getTranslate("UI_InformationPanel_General_Title"), y, th.blood.r, th.blood.g, th.blood.b, 1, UIFont.Medium)
 
@@ -40,7 +40,7 @@ function EtherInfoPanel:render()
         y = y + mText
     end
 
-    y = y + mText
+    y = y + mTitle
 
     self:drawTextCentered(getTranslate("UI_InformationPanel_Disclaimer_Title"), y, th.blood.r, th.blood.g, th.blood.b, 1, UIFont.Medium)
 
@@ -58,7 +58,7 @@ function EtherInfoPanel:render()
         y = y + mText
     end
 
-    y = y + mText
+    y = y + mTitle
 
     self:drawTextCentered(getTranslate("UI_InformationPanel_AntiCheatStatus_Title"), y, th.blood.r, th.blood.g, th.blood.b, 1, UIFont.Medium)
 
@@ -89,19 +89,17 @@ function EtherInfoPanel:render()
                         and getTranslate("UI_InformationPanel_AntiCheatStatus_Enable")
                         or getTranslate("UI_InformationPanel_AntiCheatStatus_Disable")
         local baseText = getTranslate(textKey)
+        local fullText = baseText .. "   [" .. statusText .. "]"
 
         if statusEnabled then
-            self:drawTextCentered(baseText, y, th.text.r, th.text.g, th.text.b, 1, UIFont.Small)
-            self:drawTextCentered(statusText, y + fhS, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b, 1, UIFont.Small)
+            self:drawTextCentered(fullText, y, th.text.r, th.text.g, th.text.b, 1, UIFont.Small)
         else
-            self:drawTextCentered(baseText, y, th.text.r, th.text.g, th.text.b, 0.55, UIFont.Small)
-            self:drawTextCentered(statusText, y + fhS, 0.8, 0.2, 0.2, 0.8, UIFont.Small)
+            self:drawTextCentered(fullText, y, 0.8, 0.2, 0.2, 0.8, UIFont.Small)
         end
-        y = y + fhS * 2 + 4
+        y = y + mText
     end
 
-
-    y = y + mText
+    y = y + mTitle
 
     self:drawTextCentered(getTranslate("UI_InformationPanel_Contacts_Title"), y, th.blood.r, th.blood.g, th.blood.b, 1, UIFont.Medium)
 

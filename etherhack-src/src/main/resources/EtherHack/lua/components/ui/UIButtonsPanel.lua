@@ -71,7 +71,7 @@ function UIButtonsPanel:addButton(iconPath, panelTag)
     button:initialise();
     button.borderColor.a = 0.0;
     button.backgroundColor.a = 0;
-    button.backgroundColorMouseOver = { r = 0.5, g = 0.07, b = 0.07, a = 0.35 };
+    button.backgroundColorMouseOver = { r = 0.08, g = 0.35, b = 0.16, a = 0.4 };
     button.id = id;
     button.panelTag = panelTag;
     button:setImage(getExtraTexture(iconPath));

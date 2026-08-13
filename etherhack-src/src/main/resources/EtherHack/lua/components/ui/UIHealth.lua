@@ -364,7 +364,7 @@ function UIHealth:new()
 
     menuTableData = ISPanel:new(positionX, positionY, width, height);
     setmetatable(menuTableData, self);
-	menuTableData.borderColor = {r=0.55, g=0.08, b=0.08, a=0.6};
+	menuTableData.borderColor = {r=0.10, g=0.52, b=0.22, a=0.6};
 	menuTableData.backgroundColor = {r=0.02, g=0.02, b=0.02, a=0.85};
     menuTableData.title = getTranslate("UI_Medic_Title");
     menuTableData.moveWithMouse = true;

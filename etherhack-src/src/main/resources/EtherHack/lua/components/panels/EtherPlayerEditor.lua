@@ -14,7 +14,7 @@ function EtherPlayerEditor:prerender()
 
     if self.localPlayer == nil then return end
     local x, y, w, h = self.avatarPanel.x, self.avatarPanel.y, self.avatarPanel.width, self.avatarPanel.height
-    self:drawRectBorder(x - 2, y - 2, w + 4, h + 4, 1, 0.55, 0.08, 0.08);
+    self:drawRectBorder(x - 2, y - 2, w + 4, h + 4, 1, 0.10, 0.52, 0.22);
 	self:drawTextureScaled(self.avatarBackgroundTexture, x, y, w, h, 1, 1, 1, 1);
 end
 

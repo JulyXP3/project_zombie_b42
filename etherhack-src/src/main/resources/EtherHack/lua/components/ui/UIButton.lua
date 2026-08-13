@@ -72,7 +72,7 @@ function UIButton:render()
 	else
 		self:drawRect(0, 0, self.width, self.height, 0.08, 0.12, 0.11, 0.11)
 		self:drawRectBorder(0, 0, self.width, self.height, 0.3, EtherTheme.bloodDim.r, EtherTheme.bloodDim.g, EtherTheme.bloodDim.b)
-		self:drawTextCentre(self.title, self.width / 2 + 1, self.height / 2 - 8, 1.0, 1.0, 1.0, 0.25, self.font);
+		self:drawTextCentre(self.title, self.width / 2 + 1, self.height / 2 - 8, 1.0, 1.0, 1.0, 0.5, self.font);
 	end
 end
 

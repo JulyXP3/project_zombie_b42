@@ -4,14 +4,14 @@
 
 EtherTheme = {}
 
--- 调色板
+-- 调色板 (生化危机绿: 深绿铬色, 用户可配置的 accentColor 保持为高亮)
 EtherTheme.glassBG       = { r = 0.02, g = 0.02, b = 0.02, a = 0.78 }  -- 窗口玻璃底
-EtherTheme.railBG        = { r = 0.05, g = 0.035, b = 0.035, a = 0.88 } -- 导航条底
-EtherTheme.blood         = { r = 0.55, g = 0.08, b = 0.08, a = 1 }     -- 血红
-EtherTheme.bloodDim      = { r = 0.55, g = 0.08, b = 0.08, a = 0.35 }  -- 淡化血红(网格/边框)
-EtherTheme.edge          = { r = 0.9, g = 0.88, b = 0.84, a = 0.12 }   -- 顶部高光
-EtherTheme.text          = { r = 0.85, g = 0.83, b = 0.78, a = 1 }     -- 米白正文
-EtherTheme.textDim       = { r = 0.6, g = 0.58, b = 0.55, a = 1 }      -- 次要文字
+EtherTheme.railBG        = { r = 0.03, g = 0.05, b = 0.035, a = 0.88 } -- 导航条底(暗绿)
+EtherTheme.blood         = { r = 0.10, g = 0.52, b = 0.22, a = 1 }     -- 生化危机绿(标题条/激活条)
+EtherTheme.bloodDim      = { r = 0.10, g = 0.52, b = 0.22, a = 0.35 }  -- 淡化绿(网格/边框)
+EtherTheme.edge          = { r = 0.75, g = 0.92, b = 0.82, a = 0.16 }  -- 顶部高光(微绿)
+EtherTheme.text          = { r = 0.93, g = 0.92, b = 0.88, a = 1 }     -- 米白正文(提亮)
+EtherTheme.textDim       = { r = 0.75, g = 0.74, b = 0.71, a = 1 }     -- 次要文字(提亮)
 EtherTheme.titleH        = 20                                           -- 标题条高
 
 EtherTheme.noise         = nil
@@ -56,7 +56,7 @@ function EtherTheme.drawTitleBar(parent, title, font)
     local f = font or UIFont.Small;
     local fh = f == UIFont.Medium and EtherTheme.fontHgtMedium or EtherTheme.fontHgtSmall;
     parent:drawRect(0, 0, parent.width, EtherTheme.titleH, 0.92, b.r, b.g, b.b);
-    parent:drawRect(0, EtherTheme.titleH, parent.width, 1, 0.5, 0.12, 0.015, 0.015);
+    parent:drawRect(0, EtherTheme.titleH, parent.width, 1, 0.5, 0.03, 0.18, 0.08);
     parent:drawTextCentre(title, parent.width / 2, EtherTheme.titleH / 2 - fh / 2, 1, 1, 1, 1, f);
 end
 
