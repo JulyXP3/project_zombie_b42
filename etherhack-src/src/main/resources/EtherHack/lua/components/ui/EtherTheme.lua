@@ -45,8 +45,7 @@ function EtherTheme.drawGlass(parent)
     parent:drawRect(0, 0, parent.width, parent.height, g.a, g.r, g.g, g.b);
     parent:drawTextureScaled(EtherTheme.getNoise(), 0, 0, parent.width, parent.height, 1, 1, 1, 1);
     parent:drawRect(0, 0, parent.width, 1, EtherTheme.edge.a, EtherTheme.edge.r, EtherTheme.edge.g, EtherTheme.edge.b);
-    local b = EtherTheme.blood;
-    parent:drawRect(0, 0, parent.width, parent.height, 0.9, b.r, b.g, b.b, true);
+    parent:drawRectBorder(0, 0, parent.width, parent.height, 0.8, EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b);
 end
 
 --*********************************************************
