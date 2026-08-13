@@ -2,6 +2,12 @@
 temp/
 *.tmp
 
+# opencode project-local config (agents/skills, contains private prompt)
+.opencode/
+
+# POC 测试文档 (本地使用, 不入仓库)
+/tests/刷物品测试指南.md
+
 # IDE
 .idea/
 .vscode/

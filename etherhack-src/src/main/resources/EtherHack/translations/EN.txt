@@ -198,6 +198,7 @@
 	UI_Map_MiniMapOpenButton = "Open",
 	UI_Map_TeleportContext = "Teleport here",
 	UI_ItemSearch_ShowOnMap = "Show on map",
+	UI_ItemSearch_ResetLoot = "Reset loot (F10)",
 	UI_Map_Toggle_LocalPlayer = "Me",
 	UI_Map_Toggle_OtherPlayers = "Plyr",
 	UI_Map_Toggle_Vehicles = "Veh",
@@ -220,4 +221,8 @@
     UI_Settings_VehicleColor = "Color for rendering vehicle UI elements",
     UI_Settings_PlayersColor = "Color for rendering players UI elements",
     UI_Settings_ZombiesColor = "Color for rendering zombies UI elements",
+    UI_TrapSpawn_SearchLabel = "Search food",
+    UI_TrapSpawn_Button = "Spawn",
+    UI_TrapSpawn_Hint = "Multiplayer: stand next to a placed trap, then spawn",
+    UI_TrapSpawn_WorkInGame = "Trap spawn is only available in game",
 }

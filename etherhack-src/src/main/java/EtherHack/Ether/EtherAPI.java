@@ -95,7 +95,7 @@ public class EtherAPI {
     public Color zombiesUIColor;
     public Color playersUIColor;
     public boolean isPlayerInSafeTeleported;
-    public boolean isMultiHitZombies;
+    public boolean isMultiHitZombies = true;
     public boolean isExtraDamage;
     public boolean isTimedActionCheat;
     public boolean isEnableGodMode;
@@ -140,8 +140,8 @@ public class EtherAPI {
     public boolean isVisualDrawPlayerInfo;
     public boolean isVisualDrawLineToVehicle;
     public boolean isVisualDrawLineToPlayers;
-    public boolean isVisualEnable360Vision;
-    public boolean isMapDrawLocalPlayer;
+    public boolean isVisualEnable360Vision = true;
+    public boolean isMapDrawLocalPlayer = true;
     public boolean isMapDrawAllPlayers;
     public boolean isMapDrawVehicles;
     public boolean isMapDrawZombies;
@@ -234,7 +234,7 @@ public class EtherAPI {
         this.zombiesUIColor = ConfigUtils.getColorFromConfig(var3, "zombiesUIColor", new Color(255, 150, 100));
         this.playersUIColor = ConfigUtils.getColorFromConfig(var3, "playersUIColor", new Color(255, 50, 100));
         this.isPlayerInSafeTeleported = ConfigUtils.getBooleanFromConfig(var3, "isPlayerInSafeTeleported", false);
-        this.isMultiHitZombies = ConfigUtils.getBooleanFromConfig(var3, "isMultiHitZombies", false);
+        this.isMultiHitZombies = ConfigUtils.getBooleanFromConfig(var3, "isMultiHitZombies", true);
         this.isExtraDamage = ConfigUtils.getBooleanFromConfig(var3, "isExtraDamage", false);
         this.isTimedActionCheat = ConfigUtils.getBooleanFromConfig(var3, "isTimedActionCheat", false);
         this.isEnableGodMode = ConfigUtils.getBooleanFromConfig(var3, "isEnableGodMode", false);
@@ -279,7 +279,7 @@ public class EtherAPI {
         this.isVisualDrawPlayerInfo = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawPlayerInfo", false);
         this.isVisualDrawLineToVehicle = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToVehicle", false);
         this.isVisualDrawLineToPlayers = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToPlayers", false);
-        this.isVisualEnable360Vision = ConfigUtils.getBooleanFromConfig(var3, "isVisualEnable360Vision", false);
+        this.isVisualEnable360Vision = ConfigUtils.getBooleanFromConfig(var3, "isVisualEnable360Vision", true);
         this.isMapDrawLocalPlayer = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawLocalPlayer", true);
         this.isMapDrawAllPlayers = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawAllPlayers", false);
         this.isMapDrawVehicles = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawVehicles", false);
@@ -308,7 +308,7 @@ public class EtherAPI {
         this.zombiesUIColor = ConfigUtils.getColorFromConfig(var1, "zombiesUIColor", new Color(255, 150, 100));
         this.playersUIColor = ConfigUtils.getColorFromConfig(var1, "playersUIColor", new Color(255, 50, 100));
         this.isPlayerInSafeTeleported = ConfigUtils.getBooleanFromConfig(var1, "isPlayerInSafeTeleported", false);
-        this.isMultiHitZombies = ConfigUtils.getBooleanFromConfig(var1, "isMultiHitZombies", false);
+        this.isMultiHitZombies = ConfigUtils.getBooleanFromConfig(var1, "isMultiHitZombies", true);
         this.isExtraDamage = ConfigUtils.getBooleanFromConfig(var1, "isExtraDamage", false);
         this.isTimedActionCheat = ConfigUtils.getBooleanFromConfig(var1, "isTimedActionCheat", false);
         this.isEnableGodMode = ConfigUtils.getBooleanFromConfig(var1, "isEnableGodMode", false);
@@ -353,7 +353,7 @@ public class EtherAPI {
         this.isVisualDrawPlayerInfo = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawPlayerInfo", false);
         this.isVisualDrawLineToVehicle = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawLineToVehicle", false);
         this.isVisualDrawLineToPlayers = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawLineToPlayers", false);
-        this.isVisualEnable360Vision = ConfigUtils.getBooleanFromConfig(var1, "isVisualEnable360Vision", false);
+        this.isVisualEnable360Vision = ConfigUtils.getBooleanFromConfig(var1, "isVisualEnable360Vision", true);
         this.isMapDrawLocalPlayer = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawLocalPlayer", true);
         this.isMapDrawAllPlayers = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawAllPlayers", false);
         this.isMapDrawVehicles = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawVehicles", false);

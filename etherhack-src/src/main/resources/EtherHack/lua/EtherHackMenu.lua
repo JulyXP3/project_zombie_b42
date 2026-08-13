@@ -29,12 +29,14 @@ local etherModules = {
     "EtherHack/lua/components/ui/UIHealth.lua",
     "EtherHack/lua/components/ui/UIItemTables.lua",
     "EtherHack/lua/components/ui/EtherItemSearch.lua",
+    "EtherHack/lua/components/ui/EtherTrapPOC.lua",
     "EtherHack/lua/components/ui/UIMap.lua",
     "EtherHack/lua/components/ui/UISkillTable.lua",
     "EtherHack/lua/components/ui/UITraitsTable.lua",
     "EtherHack/lua/components/panels/EtherInfoPanel.lua",
     "EtherHack/lua/components/panels/EtherCharacterPanel.lua",
     "EtherHack/lua/components/panels/EtherItemCreator.lua",
+    "EtherHack/lua/components/panels/EtherTrapSpawn.lua",
     "EtherHack/lua/components/panels/EtherPlayerEditor.lua",
     "EtherHack/lua/components/panels/EtherVisualsPanel.lua",
     "EtherHack/lua/components/panels/EtherMapPanel.lua",
@@ -81,6 +83,7 @@ function EtherMain:createChildren()
     self.buttonsPanel:addButton("EtherHack/media/ui/info.png", EtherInfoPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/character.png", EtherCharacterPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/itemCreator.png", EtherItemCreator);
+    self.buttonsPanel:addButton("EtherHack/media/ui/trap.png", EtherTrapSpawn);
     self.buttonsPanel:addButton("EtherHack/media/ui/playerEditor.png", EtherPlayerEditor);
     self.buttonsPanel:addButton("EtherHack/media/ui/visuals.png", EtherVisualsPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/teleport.png", EtherMapPanel);
@@ -157,4 +160,14 @@ end
 
 Events.OnGameStart.Add(onGameStart);
 
+--*********************************************************
+--* F10: 重置附近容器战利品 (与物品页「重置容器」按钮同入口)
+--*********************************************************
+function EtherMain.OnKeyPressed(key)
+    if key == Keyboard.KEY_F10 and getPlayer() ~= nil and isMultiplayer() then
+        EtherContainerPOC.reset();
+    end
+end
+
+Events.OnKeyPressed.Add(EtherMain.OnKeyPressed);
 Events.OnKeyPressed.Add(EtherMain.OnOpenPanel);

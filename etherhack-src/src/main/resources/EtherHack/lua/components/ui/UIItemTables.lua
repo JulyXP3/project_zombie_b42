@@ -48,6 +48,56 @@ end
 --*********************************************************
 --* Создание дочерних элементов
 --*********************************************************
+EtherContainerPOC = EtherContainerPOC or { radius = 20, typeFilter = nil }
+-- EtherContainerPOC.typeFilter = "sidetable" 只重置床头柜(民房手枪来源)
+-- 其他常见类型: wardrobe(衣柜) counter(厨房柜) crate(板条箱) desk locker metal_shelves
+-- 也可按 getType() 实际值过滤, 不设 = 全部
+-- F10 快捷键与「重置容器」按钮共用此入口
+
+-- 重置附近容器战利品: 服务端 clearContainerExplore 无校验地
+-- 清空 explored 标记 + 房间程序化生成记录 -> 再次搜索重新 roll 战利品
+-- 半径可调: ` 键 Lua 控制台(需 -debug 启动) EtherContainerPOC.radius = 2
+function EtherContainerPOC.reset()
+    local player = getPlayer();
+    if player == nil then return end
+    local R = EtherContainerPOC.radius or 20;
+    local filter = EtherContainerPOC.typeFilter;
+    local ok, err = pcall(function()
+        local px, py, pz = math.floor(player:getX()), math.floor(player:getY()), math.floor(player:getZ());
+        local count = 0;
+        for dy = -R, R do
+            for dx = -R, R do
+                local sq = getCell():getGridSquare(px + dx, py + dy, pz);
+                if sq ~= nil then
+                    local objects = sq:getObjects();
+                    for i = 0, objects:size() - 1 do
+                        local obj = objects:get(i);
+                        if obj ~= nil then
+                            local nCont = obj:getContainerCount();
+                            for ci = 0, nCont - 1 do
+                                local c = obj:getContainerByIndex(ci);
+                                if c ~= nil and c:getSourceGrid() ~= nil and c:getSourceGrid():getRoom() ~= nil
+                                   and (filter == nil or c:getType() == filter) then
+                                    c:setExplored(false); -- 客户端本地标记也要清, 否则打开时跳过向服务端请求, 只显示旧缓存
+                                    sendClientCommand(player, "object", "clearContainerExplore", {
+                                        x = sq:getX(), y = sq:getY(), z = sq:getZ(),
+                                        index = i, containerIndex = ci,
+                                    });
+                                    count = count + 1;
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        print("[ContainerPOC] reset " .. tostring(count) .. " containers nearby, search them for fresh loot");
+    end)
+    if not ok then
+        print("[ContainerPOC] failed: " .. tostring(err));
+    end
+end
+
 function UIItemTables:createChildren()
     ISPanel.createChildren(self);
 
@@ -199,6 +249,21 @@ function UIItemTables:createChildren()
     self.showOnMap.isOnlyInGame = true;
     self:addChild(self.showOnMap);
     table.insert(self.buttonList, self.showOnMap);
+
+    self.resetLoot = UIButton:new(self.showOnMap:getX() + self.showOnMap.width + 10, self.height - 80, 130, 24, getTranslate("UI_ItemSearch_ResetLoot"), 
+    function() 
+        if not isMultiplayer() then
+            print("[ContainerPOC] multiplayer only (use your own dedicated server)")
+            return
+        end
+        EtherContainerPOC.reset();
+    end)
+    self.resetLoot:initialise();
+    self.resetLoot:instantiate();
+    self.resetLoot:setVisible(true);
+    self.resetLoot.isOnlyInGame = true;
+    self:addChild(self.resetLoot);
+    table.insert(self.buttonList, self.resetLoot);
 
     self:updatePanel();
 end

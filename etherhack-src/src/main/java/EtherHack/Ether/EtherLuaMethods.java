@@ -56,8 +56,10 @@ import zombie.core.textures.Texture;
 import zombie.inventory.InventoryItem;
 import zombie.inventory.InventoryItemFactory;
 import zombie.inventory.types.HandWeapon;
+import zombie.inventory.types.Food;
 import zombie.iso.IsoGridSquare;
 import zombie.network.GameClient;
+import zombie.network.PacketTypes;
 import zombie.network.ServerOptions;
 import zombie.scripting.ScriptManager;
 import zombie.scripting.objects.Recipe;
@@ -344,6 +346,19 @@ public class EtherLuaMethods {
         }
         catch (Exception e) {
             Logger.printLog("Error in spawnItem: " + e.getMessage());
+        }
+    }
+
+    @LuaMethod(name="itemBaseHunger", global=true)
+    public static float itemBaseHunger(InventoryItem item) {
+        try {
+            if (item != null && item instanceof Food) {
+                return ((Food)item).getBaseHunger();
+            }
+            return 0.0f;
+        }
+        catch (Exception e) {
+            return 0.0f;
         }
     }
 

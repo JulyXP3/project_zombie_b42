@@ -1,6 +1,23 @@
 # Changelog
 
-## [3.1.4] - Current
+## [3.1.5] - Current
+
+- Feature: new "Trap" tab (custom `trap.png` icon, next to the Item Creator page) — search box + list of all spawnable foods (auto-filtered by `hungerChange < 0`); select and click "Spawn" to run the trap chain (stand next to a placed trap).
+- Feature: **F10** hotkey triggers "Reset loot" (same entry point as the button, multiplayer only).
+- Changed: removed the "Trap-spawn item" button from the Item Creator page; "Reset loot" moved into its slot (label now shows F10).
+- Changed: "Multi-Hit on zombies" and "360-degree vision" now default to **on** (field initializers and config defaults).
+- Changed: the three anti-detection toggles now default to **on** — block default loggers, block files mentioning cheats, block files with suspicious words.
+- Removed: the item swap feature — verified `AddItemInInventoryPacket` only has `processClient` (server→client direction), so client sends are silently ignored by the server, while `RemoveInventoryItemFromContainerPacket.processServer` genuinely deletes items and writes a server-side "item" log (username + coordinates + item); no viable swap channel exists, so the whole feature (incl. translations and icon) was removed.
+
+### Planned / Not yet implemented
+
+- Deep dive on container-item / corpse-container loot re-roll (static analysis done, not implemented):
+  - Confirmed open-box mechanic: `RequestItemsForContainerPacket` → server runs `ItemPickerJava.fillContainer` on unexplored containers, rolls per container-type table, then pushes items; container items such as gun cases / military bags roll weapon tables.
+  - To test 1: leave container items (sewing kits, gun cases, etc.) **inside** room containers un-emptied, repeatedly reset the room container, and check whether `fillContainerInternal` keeps topping up nested containers via `fillRand`.
+  - To test 2: reset `explored` on indoor corpse containers (`inventorymale/female`) and search corpses repeatedly to re-roll zombie loot tables (weapons/ammo/clothing); outdoor corpses fail server-side (`getRoom()` nil deref in the command) and are out of scope.
+  - Extension point: add a corpse-object branch to the `EtherContainerPOC` reset loop and document the "don't empty" usage.
+
+## [3.1.4]
 
 - Fixed: Player Editor 3D avatar had no character set, causing a per-frame `UI3DModel` NPE in render (now uses the vanilla `setCharacter` approach).
 - Changed: the minimap "Items" layer toggle now defaults to **off** (was on).

@@ -17,7 +17,7 @@
 瀹屾暣鏇存柊鍘嗗彶瑙?[CHANGELOG_zh.md](CHANGELOG_zh.md)銆?
 ## 瀹夎
 
-1. 鎵撳紑 `etherhack-src/build.bat`, 濉啓濂?`JAVA_HOME`, 淇濆瓨涔嬪悗杩愯 `build.bat`銆?2. 浠?`build` 鐩綍涓嬁鍒?`EtherHack-3.1.4-B42.jar`銆?3. 灏?jar 鍜?`etherhack-src/install.bat` 涓€璧峰鍒跺埌娓告垙鏍圭洰褰曘€?4. 杩愯 `install.bat` 瀹屾垚瀹夎(闇€瑕佺郴缁熻鏈?JDK)銆?
+1. 鎵撳紑 `etherhack-src/build.bat`, 濉啓濂?`JAVA_HOME`, 淇濆瓨涔嬪悗杩愯 `build.bat`銆?2. 浠?`build` 鐩綍涓嬁鍒?`EtherHack-3.1.5-B42.jar`銆?3. 灏?jar 鍜?`etherhack-src/install.bat` 涓€璧峰鍒跺埌娓告垙鏍圭洰褰曘€?4. 杩愯 `install.bat` 瀹屾垚瀹夎(闇€瑕佺郴缁熻鏈?JDK)銆?
 娓告垙涓寜 **Insert** 鎵撳紑 EtherHack 闈㈡澘銆?
 ## 浠庢簮鐮佹瀯寤?
 鐜瑕佹眰: JDK 17+, 宸插寘鍚?Gradle wrapper銆?
@@ -26,7 +26,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-浜х墿鍦?`etherhack-src/build/EtherHack-3.1.4-B42.jar`銆侺ua 婧愮爜宓屽叆鍦?`src/main/resources/EtherHack/lua/` 涓? 鏋勫缓鏃惰嚜鍔ㄦ墦鍖呫€?
+浜х墿鍦?`etherhack-src/build/EtherHack-3.1.5-B42.jar`銆侺ua 婧愮爜宓屽叆鍦?`src/main/resources/EtherHack/lua/` 涓? 鏋勫缓鏃惰嚜鍔ㄦ墦鍖呫€?
 ## 娴嬭瘯
 
 ```bat
@@ -42,7 +42,7 @@ temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main
 
 | 璺緞 | 璇存槑 |
 |---|---|
-| `EtherHack-3.1.4-B42.jar` | 鍙洿鎺ヤ娇鐢ㄧ殑鏋勫缓浜х墿(褰撳墠鐗堟湰) |
+| `EtherHack-3.1.5-B42.jar` | 鍙洿鎺ヤ娇鐢ㄧ殑鏋勫缓浜х墿(褰撳墠鐗堟湰) |
 | `etherhack-src/` | 瀹屾暣婧愮爜 (Gradle 宸ョ▼, 鍚?`build.bat` / `install.bat`) |
 | `tests/` | Lua 鍐掔儫娴嬭瘯 + Kahlua 鍏煎鎬ф鏌ヨ剼鏈?|
 | `鍒嗘瀽鎶ュ憡.md` | 鍒嗘瀽鎶ュ憡: 鍙鎬х爺绌躲€佸弽缂栬瘧鍙栬瘉銆佹壂鎻忔柟妗堣璁′笌闄愬埗 |

@@ -11,9 +11,9 @@ import java.util.ArrayList;
 
 public class EtherLuaCompiler {
     private static EtherLuaCompiler instance;
-    public boolean isBlockCompileDefaultLua = false;
-    public boolean isBlockCompileLuaAboutEtherHack = false;
-    public boolean isBlockCompileLuaWithBadWords = false;
+    public boolean isBlockCompileDefaultLua = true;
+    public boolean isBlockCompileLuaAboutEtherHack = true;
+    public boolean isBlockCompileLuaWithBadWords = true;
     public ArrayList<String> whiteListPathCompiler = new ArrayList();
     public ArrayList<String> blackListWordsEtherUICompiler = new ArrayList();
     public String[] blackListWordsCompiler = new String[]{"logExploit", "LogExtender", "ISLogSystem", "writeLog", "sendLog", "PARP", "Bikinitools", "AVCS", "BTSE", "AntiCheat", "ISPerkLog", "getCore():quitToDesktop()", "KickPlayer", "kickPlayer", "playerKick", "PlayerKick", "banPlayer", "PlayerBan", "playerBan", "AnTiCheat"};
