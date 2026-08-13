@@ -198,7 +198,6 @@
 	UI_Map_MiniMapOpenButton = "Открыть",
 	UI_Map_TeleportContext = "Телепортироваться сюда",
 	UI_ItemSearch_ShowOnMap = "Показать на карте",
-	UI_ItemSearch_ResetLoot = "Сброс лута (F10)",
 	UI_Map_Toggle_LocalPlayer = "Я",
 	UI_Map_Toggle_OtherPlayers = "Люди",
 	UI_Map_Toggle_Vehicles = "ТС",
@@ -225,4 +224,8 @@
     UI_TrapSpawn_Button = "Создать",
     UI_TrapSpawn_Hint = "Мультиплеер: встаньте рядом с ловушкой, затем создайте",
     UI_TrapSpawn_WorkInGame = "Спавн из ловушки доступен только в игре",
+    UI_LootRoll_RadiusLabel = "Радиус сброса:",
+    UI_LootRoll_Button = "Сбросить лут",
+    UI_LootRoll_Hint = "Повторное открытие после сброса перебрасывает лут (фарм шкафчиков/патронов)",
+    UI_LootRoll_WorkInGame = "Переброс лута доступен только в игре",
 }

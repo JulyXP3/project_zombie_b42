@@ -198,7 +198,6 @@
 	UI_Map_MiniMapOpenButton = "Open",
 	UI_Map_TeleportContext = "Teleport here",
 	UI_ItemSearch_ShowOnMap = "Show on map",
-	UI_ItemSearch_ResetLoot = "Reset loot (F10)",
 	UI_Map_Toggle_LocalPlayer = "Me",
 	UI_Map_Toggle_OtherPlayers = "Plyr",
 	UI_Map_Toggle_Vehicles = "Veh",
@@ -225,4 +224,8 @@
     UI_TrapSpawn_Button = "Spawn",
     UI_TrapSpawn_Hint = "Multiplayer: stand next to a placed trap, then spawn",
     UI_TrapSpawn_WorkInGame = "Trap spawn is only available in game",
+    UI_LootRoll_RadiusLabel = "Reset radius:",
+    UI_LootRoll_Button = "Reset loot",
+    UI_LootRoll_Hint = "Reopening containers after a reset re-rolls their loot (farm lockers/ammo)",
+    UI_LootRoll_WorkInGame = "Loot re-roll is only available in game",
 }

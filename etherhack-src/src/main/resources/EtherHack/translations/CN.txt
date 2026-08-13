@@ -198,7 +198,6 @@
 	UI_Map_MiniMapOpenButton = "打开",
 	UI_Map_TeleportContext = "传送到这里",
 	UI_ItemSearch_ShowOnMap = "在地图上显示",
-	UI_ItemSearch_ResetLoot = "重置容器(F10)",
 	UI_Map_Toggle_LocalPlayer = "我",
 	UI_Map_Toggle_OtherPlayers = "玩家",
 	UI_Map_Toggle_Vehicles = "载具",
@@ -226,4 +225,8 @@
 	UI_TrapSpawn_Button = "生成",
 	UI_TrapSpawn_Hint = "多人服务器: 站在已放置的陷阱旁后点击生成",
 	UI_TrapSpawn_WorkInGame = "陷阱刷物品仅在游戏中可用",
+	UI_LootRoll_RadiusLabel = "重置半径:",
+	UI_LootRoll_Button = "重置战利品",
+	UI_LootRoll_Hint = "重置后打开容器将重新生成战利品(可反复刷枪柜/弹药箱)",
+	UI_LootRoll_WorkInGame = "战利品重掷仅在游戏中可用",
 }

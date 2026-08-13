@@ -42,6 +42,7 @@ local etherModules = {
     "EtherHack/lua/components/panels/EtherVisualsPanel.lua",
     "EtherHack/lua/components/panels/EtherMapPanel.lua",
     "EtherHack/lua/components/panels/EtherExploitPanel.lua",
+    "EtherHack/lua/components/panels/EtherLootRollPanel.lua",
     "EtherHack/lua/components/panels/EtherSettingsPanel.lua"
 }
 
@@ -89,6 +90,7 @@ function EtherMain:createChildren()
     self.buttonsPanel:addButton("EtherHack/media/ui/visuals.png", EtherVisualsPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/teleport.png", EtherMapPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/exploit.png", EtherExploitPanel);
+    self.buttonsPanel:addButton("EtherHack/media/ui/loot.png", EtherLootRollPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/settings.png", EtherSettingsPanel);
 
     self.buttonsPanel:openPanel(EtherMain.currentTabID);
@@ -181,10 +183,10 @@ end
 Events.OnGameStart.Add(onGameStart);
 
 --*********************************************************
---* F10: 重置附近容器战利品 (与物品页「重置容器」按钮同入口)
+--* F9: 重置附近容器战利品 (与「战利品重掷」选项卡同入口)
 --*********************************************************
 function EtherMain.OnKeyPressed(key)
-    if key == Keyboard.KEY_F10 and getPlayer() ~= nil and isMultiplayer() then
+    if key == Keyboard.KEY_F9 and getPlayer() ~= nil and isMultiplayer() then
         EtherContainerPOC.reset();
     end
 end
