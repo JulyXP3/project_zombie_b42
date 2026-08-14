@@ -28,7 +28,7 @@ See [CHANGELOG.md](CHANGELOG.md) for the full change history.
 
 ## Installation
 
-Requirements: **JDK 17+** and **Gradle**. The build runs through the included Gradle wrapper (`gradlew.bat`), which downloads Gradle automatically on first run — or you can use a locally installed Gradle.
+Requirements: **JDK 17+** and **Gradle 9.1.0**. The build runs through the included Gradle wrapper (`gradlew.bat`), which downloads Gradle automatically on first run — or you can use a locally installed Gradle.
 
 1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, renamed to `zombie.jar` (it is only read at compile time and never modified).
 2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.

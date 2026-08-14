@@ -28,7 +28,7 @@
 
 ## 安装
 
-环境要求: **JDK 17+** 与 **Gradle**。构建通过内置的 Gradle wrapper(`gradlew.bat`)执行, 首次运行会自动下载 Gradle; 也可使用本机已安装的 Gradle。
+环境要求: **JDK 17+** 与 **Gradle 9.1.0**。构建通过内置的 Gradle wrapper(`gradlew.bat`)执行, 首次运行会自动下载 Gradle; 也可使用本机已安装的 Gradle。
 
 1. 准备编译依赖: 将游戏根目录下的 `projectzomboid.jar` 复制到 `etherhack-src/lib/` 目录下, 并改名为 `zombie.jar`(该文件仅用于编译, 不会被修改)。
 2. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
