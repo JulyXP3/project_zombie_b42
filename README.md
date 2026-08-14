@@ -1,4 +1,4 @@
-﻿# Project Zomboid B42 - EtherHack Community Build
+# Project Zomboid B42 - EtherHack Community Build
 
 A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) for Project Zomboid Build 42.
 
@@ -28,10 +28,11 @@ See [CHANGELOG.md](CHANGELOG.md) for the full change history.
 
 ## Installation
 
-1. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-2. Take `EtherHack-3.1.6-B42.jar` from the `build` directory.
-3. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
-4. Run `install.bat` to install the mod (requires a JDK on the system).
+1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, renamed to `zombie.jar` (it is only read at compile time and never modified).
+2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
+3. Take `EtherHack-3.1.6-B42.jar` from the `build` directory.
+4. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
+5. Run `install.bat` to install the mod (requires a JDK on the system).
 
 In-game: press **Insert** to open the EtherHack panel.
 

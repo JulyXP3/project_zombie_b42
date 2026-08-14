@@ -28,10 +28,11 @@
 
 ## 安装
 
-1. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
-2. 从 `build` 目录中拿到 `EtherHack-3.1.6-B42.jar`。
-3. 将 jar 和 `etherhack-src/install.bat` 一起复制到游戏根目录。
-4. 运行 `install.bat` 完成安装(需要系统装有 JDK)。
+1. 准备编译依赖: 将游戏根目录下的 `projectzomboid.jar` 复制到 `etherhack-src/lib/` 目录下, 并改名为 `zombie.jar`(该文件仅用于编译, 不会被修改)。
+2. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
+3. 从 `build` 目录中拿到 `EtherHack-3.1.6-B42.jar`。
+4. 将 jar 和 `etherhack-src/install.bat` 一起复制到游戏根目录。
+5. 运行 `install.bat` 完成安装(需要系统装有 JDK)。
 
 游戏中按 **Insert** 打开 EtherHack 面板。
 

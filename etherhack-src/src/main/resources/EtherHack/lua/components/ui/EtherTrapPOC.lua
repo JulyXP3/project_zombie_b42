@@ -85,13 +85,16 @@ local function animalTableFor(target)
     if not ok then
         print("[TrapPOC] probe " .. target .. ": instanceItem failed, using default size")
     else
-        if hg ~= nil and hg > 0 then
-            local t = math.floor(hg)
-            if t > 0 then
-                mn, mx = t, t + 1
+        -- 服务端 removeAnimalItem 用 statsModifier = size / (baseHunger * -100)
+        -- 缩放饥饿/卡路里/重量。为让 statsModifier == 1 (保持原版饥饿值),
+        -- 注入 size = |baseHunger| * 100。itemBaseHunger 返回负值 baseHunger。
+        if hg ~= nil and hg < 0 then
+            local typical = math.floor(math.abs(hg) * 100)
+            if typical > 0 then
+                mn, mx = typical, typical
             end
         end
-        if hg == nil or hg <= 0 then
+        if hg == nil or hg >= 0 then
             print("[TrapPOC] warning: " .. target .. " has no HungerChange, spawned weight will be NaN")
         end
         print("[TrapPOC] probe " .. target .. ": baseHunger=" .. tostring(hg) .. " size=[" .. tostring(mn) .. "," .. tostring(mx) .. "]")

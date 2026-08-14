@@ -20,6 +20,10 @@ temp/
 *.jar.bak
 *.jar
 !etherhack-src/gradle/wrapper/gradle-wrapper.jar
+!etherhack-src/lib/Kahlua.jar
+!etherhack-src/lib/fmod.jar
+!etherhack-src/lib/org.jar
+# zombie.jar 不入 git: 由用户从游戏目录复制 projectzomboid.jar 并改名(见 README 安装步骤)
 analysis/pz_jar/projectzomboid.jarluac.out
 # stale jar xf extraction (junk)
 /EtherHack/
