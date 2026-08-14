@@ -80,16 +80,11 @@ function EtherLootRollPanel:createChildren()
     self:addChild(self.hintLabel)
 
     -- === 刷弹药 (ammo farming) — 紧贴"重置容器"下方, 单行: 自动刷(开) 自动刷(关) 设置弹药数 [N] ===
-    local farmY = y + 100;
+    local farmY = y + 110;
+    local farmX = 15;   -- 与"重置战利品(F9)"左对齐
+    local farmGap = 12;
 
-    self.ammoFarmBox = ISTextEntryBox:new(tostring(getAmmoFarmCount()), 450, farmY + 2, 80, 20);
-    self.ammoFarmBox.font = UIFont.Small;
-    self.ammoFarmBox:initialise();
-    self.ammoFarmBox:instantiate();
-    self.ammoFarmBox:setClearButton(false)
-    self:addChild(self.ammoFarmBox);
-
-    self.farmAutoBtn = UIButton:new(30, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmAuto"),
+    self.farmAutoBtn = UIButton:new(farmX, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmAuto"),
     function()
         local n = tonumber(self.ammoFarmBox:getInternalText());
         if n and n > 0 then setAmmoFarmCount(n) end
@@ -99,16 +94,18 @@ function EtherLootRollPanel:createChildren()
     self.farmAutoBtn:initialise();
     self.farmAutoBtn:instantiate();
     self:addChild(self.farmAutoBtn);
+    farmX = farmX + self.farmAutoBtn.width + farmGap;
 
-    self.farmStopBtn = UIButton:new(170, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmStop"),
+    self.farmStopBtn = UIButton:new(farmX, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmStop"),
     function()
         EtherAmmoFarm.enabled = false;
     end);
     self.farmStopBtn:initialise();
     self.farmStopBtn:instantiate();
     self:addChild(self.farmStopBtn);
+    farmX = farmX + self.farmStopBtn.width + farmGap;
 
-    self.farmSetBtn = UIButton:new(310, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmSet"),
+    self.farmSetBtn = UIButton:new(farmX, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmSet"),
     function()
         local n = tonumber(self.ammoFarmBox:getInternalText());
         if n and n > 0 then setAmmoFarmCount(n) end
@@ -117,6 +114,14 @@ function EtherLootRollPanel:createChildren()
     self.farmSetBtn:initialise();
     self.farmSetBtn:instantiate();
     self:addChild(self.farmSetBtn);
+    farmX = farmX + self.farmSetBtn.width + farmGap;
+
+    self.ammoFarmBox = ISTextEntryBox:new(tostring(getAmmoFarmCount()), farmX, farmY + 2, 80, 20);
+    self.ammoFarmBox.font = UIFont.Small;
+    self.ammoFarmBox:initialise();
+    self.ammoFarmBox:instantiate();
+    self.ammoFarmBox:setClearButton(false)
+    self:addChild(self.ammoFarmBox);
 end
 
 --*********************************************************
