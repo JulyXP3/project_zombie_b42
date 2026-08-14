@@ -91,3 +91,10 @@ function EtherTheme.drawColumnLines(self, y, height)
         self:drawRectBorder(self.columns[i].size, y, 1, height, 0.5, EtherTheme.bloodDim.r, EtherTheme.bloodDim.g, EtherTheme.bloodDim.b)
     end
 end
+
+--*********************************************************
+--* 布局常量 (所有面板共用, 保证行高一致)
+--*********************************************************
+EtherTheme.rowH       = 50   -- 列表/表单项统一行高
+EtherTheme.btnH       = 24   -- 按钮高度
+EtherTheme.labelPadY  = 3    -- label 相对行顶的 Y 偏移

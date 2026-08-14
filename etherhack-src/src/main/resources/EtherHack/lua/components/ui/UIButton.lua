@@ -58,21 +58,22 @@ end
 --** Отрисовка кнопки
 --************************************************************************--
 function UIButton:render()
+	local fontH = getTextManager():getFontHeight(self.font);
 	if self.isEnable then
 		if not self.onPressed then
 			self:drawRect(0, 0, self.width, self.height, 0.16, EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b)
 			self:drawRectBorder(0, 0, self.width, self.height, 0.85, EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b)
 			self:drawRect(0, 0, 3, self.height, 0.9, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b)
-			self:drawTextCentre(self.title, self.width / 2 + 1, self.height / 2 - 8, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1.0, self.font);
+			self:drawTextCentre(self.title, self.width / 2 + 1, (self.height - fontH) / 2, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1.0, self.font);
 		else
 			self:drawRect(0, 0, self.width, self.height, 0.9, EtherMain.accentColor.r, EtherMain.accentColor.g, EtherMain.accentColor.b)
 			self:drawRectBorder(0, 0, self.width, self.height, 1.0, 0.0, 0.0, 0.0)
-			self:drawTextCentre(self.title, self.width / 2 + 1, self.height / 2 - 8, 0.05, 0.05, 0.05, 1.0, self.font);
+			self:drawTextCentre(self.title, self.width / 2 + 1, (self.height - fontH) / 2, 0.05, 0.05, 0.05, 1.0, self.font);
 		end
 	else
 		self:drawRect(0, 0, self.width, self.height, 0.08, 0.12, 0.11, 0.11)
 		self:drawRectBorder(0, 0, self.width, self.height, 0.3, EtherTheme.bloodDim.r, EtherTheme.bloodDim.g, EtherTheme.bloodDim.b)
-		self:drawTextCentre(self.title, self.width / 2 + 1, self.height / 2 - 8, 1.0, 1.0, 1.0, 0.5, self.font);
+		self:drawTextCentre(self.title, self.width / 2 + 1, (self.height - fontH) / 2, 1.0, 1.0, 1.0, 0.5, self.font);
 	end
 end
 
