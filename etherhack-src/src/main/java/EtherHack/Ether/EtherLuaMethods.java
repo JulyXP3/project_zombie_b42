@@ -825,6 +825,24 @@ public class EtherLuaMethods {
         return EtherMain.getInstance().etherAPI.isUnlimitedAmmo;
     }
 
+    @LuaMethod(name="getAmmoFarmCount", global=true)
+    public static int getAmmoFarmCount() {
+        return EtherMain.getInstance().etherAPI.ammoFarmCount;
+    }
+
+    @LuaMethod(name="setAmmoFarmCount", global=true)
+    public static void setAmmoFarmCount(int var0) {
+        if (var0 > 0) {
+            EtherMain.getInstance().etherAPI.ammoFarmCount = var0;
+            saveConfig("startup");
+        }
+    }
+
+    @LuaMethod(name="farmSetAmmo", global=true)
+    public static void farmSetAmmo() {
+        EtherMain.getInstance().etherAPI.farmSetWeaponAmmo();
+    }
+
     @LuaMethod(name="toggleDisableFatigue", global=true)
     public static void toggleDisableFatigue(boolean var0) {
         EtherMain.getInstance().etherAPI.isDisableFatigue = var0;

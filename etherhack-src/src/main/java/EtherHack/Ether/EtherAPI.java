@@ -79,7 +79,9 @@ import zombie.inventory.types.HandWeapon;
 import zombie.iso.IsoWorld;
 import zombie.network.GameClient;
 import zombie.network.GameServer;
+import zombie.network.PacketTypes;
 import zombie.network.ServerOptions;
+import zombie.network.packets.INetworkPacket;
 import zombie.network.ZomboidNetData;
 import zombie.ui.UIFont;
 import zombie.vehicles.BaseVehicle;
@@ -109,6 +111,7 @@ public class EtherAPI {
     public boolean isUnlimitedCondition;
     public boolean isUnlimitedEndurance;
     public boolean isUnlimitedAmmo;
+    public int ammoFarmCount = 30;
     public boolean isAutoRepairItems;
     public boolean isDisableFatigue;
     public boolean isDisableHunger;
@@ -172,6 +175,7 @@ public class EtherAPI {
         var3.setProperty("isUnlimitedCondition", Boolean.toString(this.isUnlimitedCondition));
         var3.setProperty("isUnlimitedEndurance", Boolean.toString(this.isUnlimitedEndurance));
         var3.setProperty("isUnlimitedAmmo", Boolean.toString(this.isUnlimitedAmmo));
+        var3.setProperty("ammoFarmCount", Integer.toString(this.ammoFarmCount));
         var3.setProperty("isAutoRepairItems", Boolean.toString(this.isAutoRepairItems));
         var3.setProperty("isDisableFatigue", Boolean.toString(this.isDisableFatigue));
         var3.setProperty("isDisableHunger", Boolean.toString(this.isDisableHunger));
@@ -248,6 +252,7 @@ public class EtherAPI {
         this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCondition", false);
         this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedEndurance", false);
         this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedAmmo", false);
+        this.ammoFarmCount = ConfigUtils.getIntFromConfig(var3, "ammoFarmCount", 30);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var3, "isAutoRepairItems", false);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var3, "isDisableFatigue", false);
         this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var3, "isDisableHunger", false);
@@ -459,6 +464,41 @@ public class EtherAPI {
         }
     }
 
+    private void applyUnlimitedAmmo(IsoPlayer player, InventoryItem item) {
+        if (item == null || !item.getStringItemType().equals("RangedWeapon") || item.getContainer() == null || item.getMaxAmmo() <= 0) {
+            return;
+        }
+        if (item.getCurrentAmmoCount() != item.getMaxAmmo()) {
+            item.setCurrentAmmoCount(item.getMaxAmmo());
+            INetworkPacket.send(PacketTypes.PacketType.SyncItemFields, player, item);
+        }
+    }
+
+    public void farmSetWeaponAmmo() {
+        IsoPlayer player = IsoPlayer.getInstance();
+        if (player == null) {
+            return;
+        }
+        this.farmSetHandWeapon(player, player.getPrimaryHandItem());
+        this.farmSetHandWeapon(player, player.getSecondaryHandItem());
+    }
+
+    private void farmSetHandWeapon(IsoPlayer player, InventoryItem item) {
+        if (!(item instanceof HandWeapon)) {
+            return;
+        }
+        HandWeapon weapon = (HandWeapon)item;
+        if (!weapon.getStringItemType().equals("RangedWeapon") || weapon.getContainer() == null) {
+            return;
+        }
+        weapon.setCurrentAmmoCount(this.ammoFarmCount);
+        String magazineType = weapon.getMagazineType();
+        if (magazineType != null && !magazineType.isEmpty()) {
+            weapon.setContainsClip(true);
+        }
+        INetworkPacket.send(PacketTypes.PacketType.SyncHandWeaponFields, player, weapon);
+    }
+
     private void updateLocalPlayerFeatures() {
         ArrayList<InventoryItem> var7;
         HandWeapon var3;
@@ -509,8 +549,9 @@ public class EtherAPI {
             var3.setAlwaysKnockdown(true);
             var3.setAimingTime(0);
         }
-        if (this.isUnlimitedAmmo && var2 != null && var2.getStringItemType().equals("RangedWeapon")) {
-            var2.setCurrentAmmoCount(var2.getMaxAmmo());
+        if (this.isUnlimitedAmmo) {
+            this.applyUnlimitedAmmo(var1, var1.getPrimaryHandItem());
+            this.applyUnlimitedAmmo(var1, var1.getSecondaryHandItem());
         }
         if (this.isUnlimitedCondition && var2 != null) {
             if (var2.getHaveBeenRepaired() > 1) {

@@ -139,6 +139,7 @@ function EtherTrapSpawn:createChildren()
     self.datas.doDrawItem = self.drawDatas;
     self.datas.drawBorder = true;
     EtherTheme.styleList(self.datas);
+    self.datas.listHeaderColor = { r = 0.12, g = 0.05, b = 0.05, a = 0 }; -- 空标题列表头透明化, 去掉顶部暗红色块
     self.datas:addColumn("", self.width - 30);
     self:addChild(self.datas);
 

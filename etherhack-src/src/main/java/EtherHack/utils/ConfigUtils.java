@@ -20,4 +20,17 @@ public class ConfigUtils {
         String var3 = var0.getProperty(var1);
         return var3 != null ? ColorUtils.stringToColor(var3) : var2;
     }
+
+    public static int getIntFromConfig(Properties var0, String var1, int var2) {
+        String var3 = var0.getProperty(var1);
+        if (var3 == null) {
+            return var2;
+        }
+        try {
+            return Integer.parseInt(var3.trim());
+        }
+        catch (NumberFormatException var5) {
+            return var2;
+        }
+    }
 }

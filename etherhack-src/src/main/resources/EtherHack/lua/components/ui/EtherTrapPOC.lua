@@ -1,5 +1,5 @@
 --*********************************************************
---* Red team POC: trap-spawn arbitrary items (multiplayer)
+--* Red team POC: trap-spawn FOOD items only (multiplayer)
 --* Chain: client sends "addAnimalDebug" (no whitelist/auth)
 --*   -> server setAnimal() trusts the client animal table
 --*   -> ISCheckTrapAction (vanilla timed action) -> server
@@ -7,9 +7,10 @@
 --* Usage (self-hosted dedicated server only):
 --*   place any trap -> stand next to it -> Item Creator ->
 --*   select item -> "Trap-spawn item" button
---* Note: ANY item type spawns. Food items get clean stats;
---*   weapons/ammo/junk spawn with NaN weight (server divides
---*   by baseHunger=0) but the item itself is real and usable.
+--* Note: ONLY Food items spawn. Non-food (weapons/ammo/junk)
+--*   makes the server error at item:getBaseHunger() (Food-only
+--*   method) so nothing is added. Food baseHunger<0 = clean stats
+--*   (size=|baseHunger|*100); food baseHunger=0 = NaN weight.
 --*   count=N loops automatically (a few seconds per item).
 --*********************************************************
 EtherTrapPOC = EtherTrapPOC or {}

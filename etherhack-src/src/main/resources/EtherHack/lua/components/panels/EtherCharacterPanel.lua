@@ -204,7 +204,46 @@ function EtherCharacterPanel:createChildren()
     self:addCheckBox(getTranslate("UI_CharacterPanel_OptimalWeight"), function(isChecked)
         toggleOptimalWeight(isChecked);
     end, isOptimalWeight(), false);
-    
+
+    -- 刷弹药 (ammo farming) — 紧贴"维持最佳体重"下方, 单行: 自动刷(开) 自动刷(关) 设置弹药数 [N]
+    local farmY = 20 + #self.checkBoxList * 40;
+
+    self.ammoFarmBox = ISTextEntryBox:new(tostring(getAmmoFarmCount()), 450, farmY + 2, 80, 20);
+    self.ammoFarmBox:initialise();
+    self.ammoFarmBox:instantiate();
+    self:addChild(self.ammoFarmBox);
+
+    self.farmAutoBtn = UIButton:new(30, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmAuto"),
+    function()
+        local n = tonumber(self.ammoFarmBox:getInternalText());
+        if n and n > 0 then setAmmoFarmCount(n) end
+        farmSetAmmo();
+        EtherAmmoFarm.enabled = true;
+    end);
+    self.farmAutoBtn:initialise();
+    self.farmAutoBtn:instantiate();
+    self:addChild(self.farmAutoBtn);
+
+    self.farmStopBtn = UIButton:new(170, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmStop"),
+    function()
+        EtherAmmoFarm.enabled = false;
+    end);
+    self.farmStopBtn:initialise();
+    self.farmStopBtn:instantiate();
+    self:addChild(self.farmStopBtn);
+
+    self.farmSetBtn = UIButton:new(310, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmSet"),
+    function()
+        local n = tonumber(self.ammoFarmBox:getInternalText());
+        if n and n > 0 then setAmmoFarmCount(n) end
+        farmSetAmmo();
+    end);
+    self.farmSetBtn:initialise();
+    self.farmSetBtn:instantiate();
+    self:addChild(self.farmSetBtn);
+
+    self:setScrollHeight(farmY + 40);
+
     self:updatePanel();
 end
 
