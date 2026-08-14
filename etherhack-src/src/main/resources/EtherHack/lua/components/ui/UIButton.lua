@@ -89,14 +89,17 @@ end
 --************************************************************************--
 function UIButton:new (x, y, width, height, title, onClickMethod)
 
+	-- 自动按文本实际宽度扩展按钮, 防止切换语言后文字溢出
+	-- (必须在 ISPanel:new 之前算好宽度, 否则 Java 元素不会跟着变宽)
+	local textWidth = getTextManager():MeasureStringX(UIFont.Small, title or "");
+	if width < textWidth + 20 then
+        width = textWidth + 20;
+    end
+
 	local uiTableData = {}
 	uiTableData = ISPanel:new(x, y, width, height);
 	setmetatable(uiTableData, self)
     self.__index = self
-
-	if width < (getTextManager():MeasureStringX(UIFont.Small, title) + 20) then
-        width = getTextManager():MeasureStringX(UIFont.Small, title) + 20;
-    end
 	uiTableData.x = x;
 	uiTableData.y = y;
 	uiTableData.font = UIFont.Small;
