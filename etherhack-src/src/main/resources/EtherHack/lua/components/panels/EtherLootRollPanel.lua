@@ -1,7 +1,7 @@
 require "ISUI/ISPanel"
 
 --*********************************************************
---* 战利品重掷面板 (clearContainerExplore POC, multiplayer)
+--* 战利品重掷 + 刷弹药 面板 (clearContainerExplore POC, multiplayer)
 --* 服务端 object.clearContainerExplore 无权限/距离校验:
 --* 任意客户端可清空容器「已探索」标记 + 房间程序化生成记录,
 --* 之后打开容器由服务端按容器类型表重新 roll 战利品
@@ -78,6 +78,45 @@ function EtherLootRollPanel:createChildren()
     self.hintLabel:initialise()
     self.hintLabel:instantiate()
     self:addChild(self.hintLabel)
+
+    -- === 刷弹药 (ammo farming) — 紧贴"重置容器"下方, 单行: 自动刷(开) 自动刷(关) 设置弹药数 [N] ===
+    local farmY = y + 100;
+
+    self.ammoFarmBox = ISTextEntryBox:new(tostring(getAmmoFarmCount()), 450, farmY + 2, 80, 20);
+    self.ammoFarmBox.font = UIFont.Small;
+    self.ammoFarmBox:initialise();
+    self.ammoFarmBox:instantiate();
+    self.ammoFarmBox:setClearButton(false)
+    self:addChild(self.ammoFarmBox);
+
+    self.farmAutoBtn = UIButton:new(30, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmAuto"),
+    function()
+        local n = tonumber(self.ammoFarmBox:getInternalText());
+        if n and n > 0 then setAmmoFarmCount(n) end
+        farmSetAmmo();
+        EtherAmmoFarm.enabled = true;
+    end);
+    self.farmAutoBtn:initialise();
+    self.farmAutoBtn:instantiate();
+    self:addChild(self.farmAutoBtn);
+
+    self.farmStopBtn = UIButton:new(170, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmStop"),
+    function()
+        EtherAmmoFarm.enabled = false;
+    end);
+    self.farmStopBtn:initialise();
+    self.farmStopBtn:instantiate();
+    self:addChild(self.farmStopBtn);
+
+    self.farmSetBtn = UIButton:new(310, farmY, 130, 24, getTranslate("UI_CharacterPanel_AmmoFarmSet"),
+    function()
+        local n = tonumber(self.ammoFarmBox:getInternalText());
+        if n and n > 0 then setAmmoFarmCount(n) end
+        farmSetAmmo();
+    end);
+    self.farmSetBtn:initialise();
+    self.farmSetBtn:instantiate();
+    self:addChild(self.farmSetBtn);
 end
 
 --*********************************************************
