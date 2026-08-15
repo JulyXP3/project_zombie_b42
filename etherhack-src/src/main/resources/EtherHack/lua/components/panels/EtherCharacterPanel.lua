@@ -233,10 +233,6 @@ function EtherCharacterPanel:createChildren()
         toggleCritMax(isChecked);
     end, isCritMax(), false);
 
-    self:addTextEntryBox(getTranslate("UI_Exploit_CritDamageMultiplierTitle"), getCritDamageMultiplier(), 2, 200, function(value)
-        setCritDamageMultiplier(value);
-    end);
-
     self:addTextEntryBox(getTranslate("UI_Exploit_CombatSpeedMultiplierTitle"), getCombatSpeedMultiplier(), 1.0, 3.0, function(value)
         setCombatSpeedMultiplier(value);
     end);
