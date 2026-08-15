@@ -1,6 +1,17 @@
 # 更新日志
 
-## [3.1.6] - 当前版本
+## [3.1.7] - 当前版本
+
+- 功能: 无限弹药同步服务端 + 刷弹药 —— 弹药耗尽自动补满并触发退弹/退匣(弹匣武器按弹匣生成), 同步服务端字段。
+- 功能: 暴击Max —— 主手武器必暴击(`CriticalChance=100`)+ 必击倒(`AlwaysKnockdown=true`), 每帧 `OnRenderTick` 应用, 关闭时按缓存恢复原值。
+- 功能: 攻速倍率自定义 —— `IsoGameCharacter.calculateCombatSpeed()` 返回值注入 `FMUL` 乘以倍率(1.0-3.0, >2.0 有服务端踢出风险)。
+- 移除: 暴击伤害倍率自定义 —— 多人下伤害由服务端权威计算, 客户端倍率无效; 字段/Lua 方法/config 持久化/每帧缓存全链删除, 暴击Max 仅保留必暴击 + 必击倒。
+- 界面: 布局常量统一(`EtherTheme.rowH/btnH/labelPadY`), 复选框/滑块/按钮行高一致; 按钮文字按字体高度垂直居中, 按文本实际宽度自动撑宽(切换语言不再溢出)。
+- 界面: 战利品页分区间距拉大, 刷弹药行与重置按钮左对齐并动态堆叠(宽度不足时换行)。
+- 修复: `install.bat` 先删除游戏残留 `zombie/EtherHack` 再安装, 避免打包版游戏卸载残留导致安装被拒。
+- 构建: lib 精简 —— 移除 `zombie.jar` 与 LFS 标记, 仅上传 3 个小依赖 jar; README 补充 JDK17+ 与 Gradle 9.1.0 版本要求, 安装步骤补 `projectzomboid.jar → lib/zombie.jar` 复制说明。
+
+## [3.1.6]
 
 - 修复: 「服务器同步保护」开关一直失效 —— `exposeServerSyncBlocker` 误用 Kahlua `exposeMethod`(只挂类 metatable, 从未成为 Lua 全局), 改用 `exposeGlobalClassFunction`; `ServerSyncBlocker.lua` 的加载时缓存改为调用时解析, 消除加载顺序依赖。
 - 界面: 全面板美化为 **RE2 重制风 + 模拟毛玻璃**(生化危机风格, 铬色取生化危机绿) —— 新增 `EtherTheme.lua` 主题模块(调色板/玻璃底/绿色标题条/列表与表格样式统一), 新增噪点纹理 `noise.png` 与绿色关闭图标 `close_re.png`:

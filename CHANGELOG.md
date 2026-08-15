@@ -1,6 +1,17 @@
 # Changelog
 
-## [3.1.6] - Current
+## [3.1.7] - Current
+
+- Feature: unlimited ammo synced to server + ammo farming — refills ammo and triggers unload/eject (magazine weapons spawn magazines) when depleted, synced to server-side fields.
+- Feature: CritMax — primary weapon always crits (`CriticalChance=100`) and always knocks down (`AlwaysKnockdown=true`), applied every frame on `OnRenderTick`, restored from cache when toggled off.
+- Feature: attack speed multiplier — `IsoGameCharacter.calculateCombatSpeed()` return value is `FMUL`-multiplied by the multiplier (1.0-3.0, >2.0 carries a server kick risk).
+- Removed: critical damage multiplier customization — damage is server-authoritative in multiplayer so the client-side multiplier was ineffective; field/Lua methods/config persistence/per-frame cache fully removed; CritMax now only keeps always-crit + always-knockdown.
+- UI: unified layout constants (`EtherTheme.rowH/btnH/labelPadY`) giving checkboxes/sliders/buttons consistent row heights; button text vertically centered by font height and buttons auto-widen to their text (no more overflow on language switch).
+- UI: loot page got larger section spacing; ammo farm row and reset button are left-aligned and stack dynamically when width is tight.
+- Fixed: `install.bat` now deletes leftover `zombie/EtherHack` before installing, preventing install rejection caused by leftovers from the packaged-game uninstaller.
+- Build: slimmed lib — removed `zombie.jar` and LFS markers, only 3 small dependency jars are tracked; README documents JDK17+ and Gradle 9.1.0 and adds the `projectzomboid.jar → lib/zombie.jar` copy step.
+
+## [3.1.6]
 
 - Fixed: "Server Sync Protection" toggle was a no-op — `exposeServerSyncBlocker` misused Kahlua's `exposeMethod` (attaches to the class metatable only, never became a Lua global); switched to `exposeGlobalClassFunction`, and `ServerSyncBlocker.lua` now resolves globals at call time instead of caching them at load.
 - UI: entire panel restyled in **RE2 Remake + simulated glassmorphism** (Resident Evil style) — new `EtherTheme.lua` theme module (palette / glass backdrop / blood-red title bars / unified list & table styling), new `noise.png` grain texture and blood-red `close_re.png` icon:
