@@ -93,7 +93,6 @@ public class EtherAPI {
     private final SafeAPI safeAPI = SafeAPI.getInstance();
     private final ConcurrentHashMap<String, float[]> originalWeaponStats = new ConcurrentHashMap();
     private final ConcurrentHashMap<String, Boolean> critMaxAlwaysKnockdown = new ConcurrentHashMap();
-    private final ConcurrentHashMap<String, Float> critMaxDamageMultiplier = new ConcurrentHashMap();
     public Color mainUIAccentColor;
     public Color vehiclesUIColor;
     public Color zombiesUIColor;
@@ -115,7 +114,6 @@ public class EtherAPI {
     public boolean isUnlimitedAmmo;
     public int ammoFarmCount = 30;
     public boolean isCritMax;
-    public float critDamageMultiplier = 100.0f;
     public float combatSpeedMultiplier = 1.0f;
     public boolean isAutoRepairItems;
     public boolean isDisableFatigue;
@@ -182,7 +180,6 @@ public class EtherAPI {
         var3.setProperty("isUnlimitedAmmo", Boolean.toString(this.isUnlimitedAmmo));
         var3.setProperty("ammoFarmCount", Integer.toString(this.ammoFarmCount));
         var3.setProperty("isCritMax", Boolean.toString(this.isCritMax));
-        var3.setProperty("critDamageMultiplier", Float.toString(this.critDamageMultiplier));
         var3.setProperty("combatSpeedMultiplier", Float.toString(this.combatSpeedMultiplier));
         var3.setProperty("isAutoRepairItems", Boolean.toString(this.isAutoRepairItems));
         var3.setProperty("isDisableFatigue", Boolean.toString(this.isDisableFatigue));
@@ -262,7 +259,6 @@ public class EtherAPI {
         this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedAmmo", false);
         this.ammoFarmCount = ConfigUtils.getIntFromConfig(var3, "ammoFarmCount", 30);
         this.isCritMax = ConfigUtils.getBooleanFromConfig(var3, "isCritMax", false);
-        this.critDamageMultiplier = ConfigUtils.getFloatFromConfig(var3, "critDamageMultiplier", 100.0f);
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var3, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var3, "isAutoRepairItems", false);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var3, "isDisableFatigue", false);
@@ -339,7 +335,6 @@ public class EtherAPI {
         this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedEndurance", false);
         this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedAmmo", false);
         this.isCritMax = ConfigUtils.getBooleanFromConfig(var1, "isCritMax", false);
-        this.critDamageMultiplier = ConfigUtils.getFloatFromConfig(var1, "critDamageMultiplier", 100.0f);
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var1, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var1, "isAutoRepairItems", false);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var1, "isDisableFatigue", false);
@@ -492,14 +487,10 @@ public class EtherAPI {
                     if (this.critMaxAlwaysKnockdown.containsKey(weaponType)) {
                         weapon.setAlwaysKnockdown(this.critMaxAlwaysKnockdown.get(weaponType));
                     }
-                    if (this.critMaxDamageMultiplier.containsKey(weaponType)) {
-                        weapon.setCriticalDamageMultiplier(this.critMaxDamageMultiplier.get(weaponType));
-                    }
                 }
             }
         }
         this.critMaxAlwaysKnockdown.clear();
-        this.critMaxDamageMultiplier.clear();
     }
 
     private void applyUnlimitedAmmo(IsoPlayer player, InventoryItem item) {
@@ -565,12 +556,8 @@ public class EtherAPI {
             if (!this.critMaxAlwaysKnockdown.containsKey(critWeaponType)) {
                 this.critMaxAlwaysKnockdown.put(critWeaponType, var3.isAlwaysKnockdown());
             }
-            if (!this.critMaxDamageMultiplier.containsKey(critWeaponType)) {
-                this.critMaxDamageMultiplier.put(critWeaponType, var3.getCriticalDamageMultiplier());
-            }
             var3.setAlwaysKnockdown(true);
             var3.setCriticalChance(100.0f);
-            var3.setCriticalDamageMultiplier(this.critDamageMultiplier);
         }
         if ((Boolean)SandboxOptions.instance.getOptionByName("MultiHitZombies").asConfigOption().getValueAsObject() != this.isMultiHitZombies) {
             SandboxOptions.instance.set("MultiHitZombies", (Object)this.isMultiHitZombies);

@@ -66,7 +66,6 @@
 	UI_Exploit_BlockCompileLuaWithBadWords = "禁止执行含可疑词的文件",
 	UI_Exploit_DebugBypass = "绕过调试模式禁令 (12 型)",
 	UI_Exploit_TraitPointTitle = "角色特性点数",
-	UI_Exploit_CritDamageMultiplierTitle = "暴击伤害倍率 (2-200)",
 	UI_Exploit_CombatSpeedMultiplierTitle = "攻速倍率 (1.0-3.0; >2.0有踢出风险)",
 	UI_Exploit_AdminAccessTitle = "尝试获取管理员权限 (12 型)",
 	UI_Exploit_AdminAccessButton = "破解",

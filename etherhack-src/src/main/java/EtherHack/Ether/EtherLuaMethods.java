@@ -604,17 +604,6 @@ public class EtherLuaMethods {
         return EtherMain.getInstance().etherAPI.isCritMax;
     }
 
-    @LuaMethod(name="getCritDamageMultiplier", global=true)
-    public static float getCritDamageMultiplier() {
-        return EtherMain.getInstance().etherAPI.critDamageMultiplier;
-    }
-
-    @LuaMethod(name="setCritDamageMultiplier", global=true)
-    public static void setCritDamageMultiplier(float var0) {
-        EtherMain.getInstance().etherAPI.critDamageMultiplier = var0;
-        saveConfig("startup");
-    }
-
     @LuaMethod(name="getCombatSpeedMultiplier", global=true)
     public static float getCombatSpeedMultiplier() {
         return EtherMain.getInstance().etherAPI.combatSpeedMultiplier;
