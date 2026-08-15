@@ -67,6 +67,8 @@
 	UI_Exploit_DebugBypass = "Обход запрета дебаг режима (Тип 12)",
 	UI_Exploit_TraitPointTitle = "Очки черт персонажа",
 	UI_Exploit_CombatSpeedMultiplierTitle = "Скорость атаки (1.0-3.0; >2.0 риск кика)",
+	UI_CharacterPanel_ResetButton = "Сброс",
+	UI_CharacterPanel_ApplyButton = "Применить",
 	UI_Exploit_AdminAccessTitle = "Попытка получения прав администратора (Тип 12)",
 	UI_Exploit_AdminAccessButton = "Взломать",
 	UI_Exploit_GameDebuggerTitle = "Отладочное меню игры",

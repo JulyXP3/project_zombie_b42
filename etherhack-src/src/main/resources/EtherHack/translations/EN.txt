@@ -67,6 +67,8 @@
 	UI_Exploit_DebugBypass = "Bypass debug mode prohibition (Type 12)",
 	UI_Exploit_TraitPointTitle = "Character trait points",
 	UI_Exploit_CombatSpeedMultiplierTitle = "Attack speed (1.0-3.0; >2.0 kick risk)",
+	UI_CharacterPanel_ResetButton = "Reset",
+	UI_CharacterPanel_ApplyButton = "Apply",
 	UI_Exploit_AdminAccessTitle = "Attempt to gain admin rights (Type 12)",
 	UI_Exploit_AdminAccessButton = "Hack",
 	UI_Exploit_GameDebuggerTitle = "Game debug menu",

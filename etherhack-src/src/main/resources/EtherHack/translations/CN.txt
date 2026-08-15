@@ -67,6 +67,8 @@
 	UI_Exploit_DebugBypass = "绕过调试模式禁令 (12 型)",
 	UI_Exploit_TraitPointTitle = "角色特性点数",
 	UI_Exploit_CombatSpeedMultiplierTitle = "攻速倍率 (1.0-3.0; >2.0有踢出风险)",
+	UI_CharacterPanel_ResetButton = "重置",
+	UI_CharacterPanel_ApplyButton = "应用",
 	UI_Exploit_AdminAccessTitle = "尝试获取管理员权限 (12 型)",
 	UI_Exploit_AdminAccessButton = "破解",
 	UI_Exploit_GameDebuggerTitle = "游戏调试菜单",

@@ -28,25 +28,45 @@ function EtherCharacterPanel:addCheckBox(title, method, isSelected, isOnlyInGame
     self.rows = self.rows + 1;
 end
 
-function EtherCharacterPanel:addTextEntryBox(title, initialText, minValue, maxValue, applyMethod)
+function EtherCharacterPanel:addTextEntryBox(title, initialText, minValue, maxValue, applyMethod, defaultValue)
     local rowY = 20 + self.rows * 40;
+    local fontH = getTextManager():getFontHeight(UIFont.Small);
 
-    local label = ISLabel:new(30, rowY, getTextManager():getFontHeight(UIFont.Small), title, 1, 1, 1, 1, UIFont.Small, true);
+    local label = ISLabel:new(30, rowY + 3, fontH, title, 1, 1, 1, 1, UIFont.Small, true);
     self:addChild(label);
 
-    local entry = ISTextEntryBox:new(tostring(initialText), 30, rowY + 20, 120, 20);
+    local labelW = getTextManager():MeasureStringX(UIFont.Small, title) + 15;
+    local entry = ISTextEntryBox:new(tostring(initialText), 30 + labelW, rowY + 1, 75, 20);
     entry.font = UIFont.Small;
     entry:initialise();
     entry:instantiate();
-    entry.onTextChange = function()
+    local function applyEntry()
         local num = tonumber(entry:getText());
         if num ~= nil then
             if minValue ~= nil and num < minValue then num = minValue; end
             if maxValue ~= nil and num > maxValue then num = maxValue; end
             applyMethod(num);
         end
-    end;
+    end
+    entry.onTextChange = applyEntry;
     self:addChild(entry);
+
+    if defaultValue ~= nil then
+        local x = 30 + labelW + entry.width + 8;
+        local applyBtn = UIButton:new(x, rowY + 1, 50, 20, getTranslate("UI_CharacterPanel_ApplyButton"), applyEntry);
+        applyBtn:initialise();
+        applyBtn:instantiate();
+        self:addChild(applyBtn);
+
+        local resetBtn = UIButton:new(x + applyBtn.width + 8, rowY + 1, 50, 20, getTranslate("UI_CharacterPanel_ResetButton"),
+        function()
+            entry:setText(tostring(defaultValue));
+            applyEntry();
+        end);
+        resetBtn:initialise();
+        resetBtn:instantiate();
+        self:addChild(resetBtn);
+    end
 
     self:setScrollHeight(self:getScrollHeight() + 40);
     self.rows = self.rows + 1;
@@ -235,7 +255,7 @@ function EtherCharacterPanel:createChildren()
 
     self:addTextEntryBox(getTranslate("UI_Exploit_CombatSpeedMultiplierTitle"), getCombatSpeedMultiplier(), 1.0, 3.0, function(value)
         setCombatSpeedMultiplier(value);
-    end);
+    end, 1.0);
 
     self:updatePanel();
 end
