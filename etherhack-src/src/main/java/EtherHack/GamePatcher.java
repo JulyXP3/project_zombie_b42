@@ -49,7 +49,7 @@ import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -216,6 +216,25 @@ public class GamePatcher {
             newInstructions.add((AbstractInsnNode)new InsnNode(174));
             newInstructions.add((AbstractInsnNode)carryOnLabel);
             method.instructions.insert(newInstructions);
+        });
+    }
+
+    public void patchCombatSpeed() {
+        Patch.injectIntoClass("zombie/characters/IsoGameCharacter", "calculateCombatSpeed", false, method -> {
+            AbstractInsnNode returnInsn = method.instructions.getLast();
+            while (returnInsn != null && returnInsn.getOpcode() != 174) {
+                returnInsn = returnInsn.getPrevious();
+            }
+            if (returnInsn == null) {
+                throw new IllegalStateException("FRETURN not found in calculateCombatSpeed");
+            }
+            InsnList toInject = new InsnList();
+            toInject.add((AbstractInsnNode)new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+            toInject.add((AbstractInsnNode)new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+            toInject.add((AbstractInsnNode)new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "combatSpeedMultiplier", "F"));
+            toInject.add((AbstractInsnNode)new InsnNode(106));
+            method.instructions.insertBefore(returnInsn, toInject);
+            Logger.print("  [OK] Injected combat speed multiplier into IsoGameCharacter.calculateCombatSpeed()");
         });
     }
 
@@ -402,6 +421,7 @@ public class GamePatcher {
         this.exposePrivateFields();
         this.patchGameWindow();
         this.patchItemContainer();
+        this.patchCombatSpeed();
         this.patchLuaEventManager();
         this.patchLuaManager();
         this.patchAntiCheatSystem();

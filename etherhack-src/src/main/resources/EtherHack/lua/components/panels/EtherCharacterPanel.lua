@@ -9,9 +9,8 @@ EtherCharacterPanel = ISPanel:derive("EtherCharacterPanel"); -- 琚ч偑瑜嬭�
 --* 琚涜姱鏂滈偑鑳佽阿姊拌柂鎳堟 瑜旀娉绘枩鑺郴瑜嬭姱鑳?
 --*********************************************************
 function EtherCharacterPanel:addCheckBox(title, method, isSelected, isOnlyInGame)
-    local checkBoxAmount = #self.checkBoxList;
     local checkboxX = 30;
-    local checkboxY = 20 + checkBoxAmount * 40;
+    local checkboxY = 20 + self.rows * 40;
 
     local checkbox = UICheckbox:new(checkboxX, checkboxY, title, isSelected, method);
     checkbox:initialise();
@@ -26,6 +25,31 @@ function EtherCharacterPanel:addCheckBox(title, method, isSelected, isOnlyInGame
     self:setScrollHeight(self:getScrollHeight() + checkbox.height + 40);
 
     table.insert(self.checkBoxList, checkbox);
+    self.rows = self.rows + 1;
+end
+
+function EtherCharacterPanel:addTextEntryBox(title, initialText, minValue, maxValue, applyMethod)
+    local rowY = 20 + self.rows * 40;
+
+    local label = ISLabel:new(30, rowY, getTextManager():getFontHeight(UIFont.Small), title, 1, 1, 1, 1, UIFont.Small, true);
+    self:addChild(label);
+
+    local entry = ISTextEntryBox:new(tostring(initialText), 30, rowY + 20, 120, 20);
+    entry.font = UIFont.Small;
+    entry:initialise();
+    entry:instantiate();
+    entry.onTextChange = function()
+        local num = tonumber(entry:getText());
+        if num ~= nil then
+            if minValue ~= nil and num < minValue then num = minValue; end
+            if maxValue ~= nil and num > maxValue then num = maxValue; end
+            applyMethod(num);
+        end
+    end;
+    self:addChild(entry);
+
+    self:setScrollHeight(self:getScrollHeight() + 40);
+    self.rows = self.rows + 1;
 end
 
 --*********************************************************
@@ -205,6 +229,18 @@ function EtherCharacterPanel:createChildren()
         toggleOptimalWeight(isChecked);
     end, isOptimalWeight(), false);
 
+    self:addCheckBox(getTranslate("UI_CharacterPanel_CritMax"), function(isChecked)
+        toggleCritMax(isChecked);
+    end, isCritMax(), false);
+
+    self:addTextEntryBox(getTranslate("UI_Exploit_CritDamageMultiplierTitle"), getCritDamageMultiplier(), 2, 200, function(value)
+        setCritDamageMultiplier(value);
+    end);
+
+    self:addTextEntryBox(getTranslate("UI_Exploit_CombatSpeedMultiplierTitle"), getCombatSpeedMultiplier(), 1.0, 3.0, function(value)
+        setCombatSpeedMultiplier(value);
+    end);
+
     self:updatePanel();
 end
 
@@ -239,7 +275,8 @@ function EtherCharacterPanel:new(posX, posY, width, height)
     menuTableData.localPlayer = getPlayer();
     self.__index = self;
 
-    self.checkBoxList = {}; -- 灏忛攲鎳堣鑺郴 鑳佽姊拌 瑜旀娉绘枩鑺郴瑜嬭姱鑳?
+    self.checkBoxList = {};
+    self.rows = 0; -- 灏忛攲鎳堣鑺郴 鑳佽姊拌 瑜旀娉绘枩鑺郴瑜嬭姱鑳?
 
     return menuTableData;
 end

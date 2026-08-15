@@ -590,6 +590,42 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="toggleCritMax", global=true)
+    public static void toggleCritMax(boolean var0) {
+        EtherMain.getInstance().etherAPI.isCritMax = var0;
+        saveConfig("startup");
+        if (!var0) {
+            EtherMain.getInstance().etherAPI.resetCritMax();
+        }
+    }
+
+    @LuaMethod(name="isCritMax", global=true)
+    public static boolean isCritMax() {
+        return EtherMain.getInstance().etherAPI.isCritMax;
+    }
+
+    @LuaMethod(name="getCritDamageMultiplier", global=true)
+    public static float getCritDamageMultiplier() {
+        return EtherMain.getInstance().etherAPI.critDamageMultiplier;
+    }
+
+    @LuaMethod(name="setCritDamageMultiplier", global=true)
+    public static void setCritDamageMultiplier(float var0) {
+        EtherMain.getInstance().etherAPI.critDamageMultiplier = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="getCombatSpeedMultiplier", global=true)
+    public static float getCombatSpeedMultiplier() {
+        return EtherMain.getInstance().etherAPI.combatSpeedMultiplier;
+    }
+
+    @LuaMethod(name="setCombatSpeedMultiplier", global=true)
+    public static void setCombatSpeedMultiplier(float var0) {
+        EtherMain.getInstance().etherAPI.combatSpeedMultiplier = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isUnlimitedCondition", global=true)
     public static boolean isUnlimitedCondition() {
         return EtherMain.getInstance().etherAPI.isUnlimitedCondition;

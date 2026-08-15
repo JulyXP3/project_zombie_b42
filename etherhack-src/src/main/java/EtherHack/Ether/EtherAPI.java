@@ -92,6 +92,8 @@ public class EtherAPI {
     final ConcurrentHashMap<String, Texture> textureCache = new ConcurrentHashMap();
     private final SafeAPI safeAPI = SafeAPI.getInstance();
     private final ConcurrentHashMap<String, float[]> originalWeaponStats = new ConcurrentHashMap();
+    private final ConcurrentHashMap<String, Boolean> critMaxAlwaysKnockdown = new ConcurrentHashMap();
+    private final ConcurrentHashMap<String, Float> critMaxDamageMultiplier = new ConcurrentHashMap();
     public Color mainUIAccentColor;
     public Color vehiclesUIColor;
     public Color zombiesUIColor;
@@ -112,6 +114,9 @@ public class EtherAPI {
     public boolean isUnlimitedEndurance;
     public boolean isUnlimitedAmmo;
     public int ammoFarmCount = 30;
+    public boolean isCritMax;
+    public float critDamageMultiplier = 100.0f;
+    public float combatSpeedMultiplier = 1.0f;
     public boolean isAutoRepairItems;
     public boolean isDisableFatigue;
     public boolean isDisableHunger;
@@ -176,6 +181,9 @@ public class EtherAPI {
         var3.setProperty("isUnlimitedEndurance", Boolean.toString(this.isUnlimitedEndurance));
         var3.setProperty("isUnlimitedAmmo", Boolean.toString(this.isUnlimitedAmmo));
         var3.setProperty("ammoFarmCount", Integer.toString(this.ammoFarmCount));
+        var3.setProperty("isCritMax", Boolean.toString(this.isCritMax));
+        var3.setProperty("critDamageMultiplier", Float.toString(this.critDamageMultiplier));
+        var3.setProperty("combatSpeedMultiplier", Float.toString(this.combatSpeedMultiplier));
         var3.setProperty("isAutoRepairItems", Boolean.toString(this.isAutoRepairItems));
         var3.setProperty("isDisableFatigue", Boolean.toString(this.isDisableFatigue));
         var3.setProperty("isDisableHunger", Boolean.toString(this.isDisableHunger));
@@ -253,6 +261,9 @@ public class EtherAPI {
         this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedEndurance", false);
         this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedAmmo", false);
         this.ammoFarmCount = ConfigUtils.getIntFromConfig(var3, "ammoFarmCount", 30);
+        this.isCritMax = ConfigUtils.getBooleanFromConfig(var3, "isCritMax", false);
+        this.critDamageMultiplier = ConfigUtils.getFloatFromConfig(var3, "critDamageMultiplier", 100.0f);
+        this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var3, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var3, "isAutoRepairItems", false);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var3, "isDisableFatigue", false);
         this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var3, "isDisableHunger", false);
@@ -327,6 +338,9 @@ public class EtherAPI {
         this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCondition", false);
         this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedEndurance", false);
         this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedAmmo", false);
+        this.isCritMax = ConfigUtils.getBooleanFromConfig(var1, "isCritMax", false);
+        this.critDamageMultiplier = ConfigUtils.getFloatFromConfig(var1, "critDamageMultiplier", 100.0f);
+        this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var1, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var1, "isAutoRepairItems", false);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var1, "isDisableFatigue", false);
         this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var1, "isDisableHunger", false);
@@ -464,6 +478,30 @@ public class EtherAPI {
         }
     }
 
+    public void resetCritMax() {
+        IsoPlayer player = IsoPlayer.getInstance();
+        if (player != null) {
+            ArrayList<InventoryItem> items = player.getInventory().getItems();
+            if (items != null) {
+                for (InventoryItem item : items) {
+                    if (!(item instanceof HandWeapon)) {
+                        continue;
+                    }
+                    HandWeapon weapon = (HandWeapon)item;
+                    String weaponType = weapon.getFullType();
+                    if (this.critMaxAlwaysKnockdown.containsKey(weaponType)) {
+                        weapon.setAlwaysKnockdown(this.critMaxAlwaysKnockdown.get(weaponType));
+                    }
+                    if (this.critMaxDamageMultiplier.containsKey(weaponType)) {
+                        weapon.setCriticalDamageMultiplier(this.critMaxDamageMultiplier.get(weaponType));
+                    }
+                }
+            }
+        }
+        this.critMaxAlwaysKnockdown.clear();
+        this.critMaxDamageMultiplier.clear();
+    }
+
     private void applyUnlimitedAmmo(IsoPlayer player, InventoryItem item) {
         if (item == null || !item.getStringItemType().equals("RangedWeapon") || item.getContainer() == null || item.getMaxAmmo() <= 0) {
             return;
@@ -520,6 +558,19 @@ public class EtherAPI {
             var3.setMinRange(0.0f);
             var3.setHitChance(100);
             var3.setCriticalDamageMultiplier(100000.0f);
+        }
+        if (this.isCritMax && var2 != null && (var2.getStringItemType().equals("RangedWeapon") || var2.getStringItemType().equals("MeleeWeapon")) && var2 instanceof HandWeapon) {
+            var3 = (HandWeapon)var2;
+            String critWeaponType = var3.getFullType();
+            if (!this.critMaxAlwaysKnockdown.containsKey(critWeaponType)) {
+                this.critMaxAlwaysKnockdown.put(critWeaponType, var3.isAlwaysKnockdown());
+            }
+            if (!this.critMaxDamageMultiplier.containsKey(critWeaponType)) {
+                this.critMaxDamageMultiplier.put(critWeaponType, var3.getCriticalDamageMultiplier());
+            }
+            var3.setAlwaysKnockdown(true);
+            var3.setCriticalChance(100.0f);
+            var3.setCriticalDamageMultiplier(this.critDamageMultiplier);
         }
         if ((Boolean)SandboxOptions.instance.getOptionByName("MultiHitZombies").asConfigOption().getValueAsObject() != this.isMultiHitZombies) {
             SandboxOptions.instance.set("MultiHitZombies", (Object)this.isMultiHitZombies);
