@@ -595,7 +595,10 @@ public class EtherAPI {
             if (var2.getHaveBeenRepaired() > 1) {
                 var2.setHaveBeenRepaired(1);
             }
-            var2.setCondition(var2.getConditionMax());
+            if (var2.getCondition() != var2.getConditionMax() || var2.getHaveBeenRepaired() > 1) {
+                var2.setCondition(var2.getConditionMax());
+                var2.syncItemFields();
+            }
         }
         if (this.isAutoRepairItems && (var7 = var1.getInventory().getItems()) != null && !var7.isEmpty()) {
             for (InventoryItem var5 : var7) {                if (var5 == null) continue;

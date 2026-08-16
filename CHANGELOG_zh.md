@@ -9,6 +9,7 @@
 - 界面: 布局常量统一(`EtherTheme.rowH/btnH/labelPadY`), 复选框/滑块/按钮行高一致; 按钮文字按字体高度垂直居中, 按文本实际宽度自动撑宽(切换语言不再溢出)。
 - 界面: 战利品页分区间距拉大, 刷弹药行与重置按钮左对齐并动态堆叠(宽度不足时换行)。
 - 修复: `install.bat` 先删除游戏残留 `zombie/EtherHack` 再安装, 避免打包版游戏卸载残留导致安装被拒。
+- 修复: 手中物品无限耐久多人版 —— 满耐久经 `syncItemFields()` 同步服务端(`SyncItemFieldsPacket.processServer` 零校验采纳), 服务端每次攻击消耗后下一帧被拉回满, 多人不再掉耐久。
 - 构建: lib 精简 —— 移除 `zombie.jar` 与 LFS 标记, 仅上传 3 个小依赖 jar; README 补充 JDK17+ 与 Gradle 9.1.0 版本要求, 安装步骤补 `projectzomboid.jar → lib/zombie.jar` 复制说明。
 
 ## [3.1.6]
