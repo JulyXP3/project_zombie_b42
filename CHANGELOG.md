@@ -10,7 +10,7 @@
 - UI: loot page got larger section spacing; ammo farm row and reset button are left-aligned and stack dynamically when width is tight.
 - Fixed: `install.bat` now deletes leftover `zombie/EtherHack` before installing, preventing install rejection caused by leftovers from the packaged-game uninstaller.
 - Fixed: infinite hand-hold durability now works in multiplayer — full condition is pushed to the server via `syncItemFields()` (server-side `SyncItemFieldsPacket.processServer` accepts it with zero validation), so every server-side durability loss is pulled back to full on the next frame.
-- Build: slimmed lib — removed `zombie.jar` and LFS markers, only 3 small dependency jars are tracked; README documents JDK17+ and Gradle 9.1.0 and adds the `projectzomboid.jar → lib/zombie.jar` copy step.
+- Build: slimmed lib — removed `zombie.jar` and LFS markers, only 3 small dependency jars are tracked; README documents JDK25 and Gradle 9.1.0 and adds the `projectzomboid.jar → lib/zombie.jar` copy step.
 
 ## [3.1.6]
 
