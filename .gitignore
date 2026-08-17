@@ -11,6 +11,10 @@ temp/
 # 全量反编译参考 (CFR 整包输出, 可重生成, 不入仓库)
 analysis/decompiled2/
 
+# analysis/ 只允许入库 md 文件, 其余(反编译产物等)一律不入库
+analysis/*
+!analysis/*.md
+
 # 内部规则文件 (仅本地保留, 不入仓库)
 /规则.md
 
