@@ -11,14 +11,14 @@ The main addition over the original mod is an **Item Search + Minimap Marker** f
 ### Item Search & Minimap Markers (new)
 
 - In the **Item Creator** page (main panel), filter items by name or ID, select an item, and click **"Show on map"**.
-- The mod scans loaded world tiles within a radius of 48 tiles (player floor 卤1) for matching items:
+- The mod scans loaded world tiles within a radius of 48 tiles (player floor ±1) for matching items:
   - Furniture/container contents (`IsoObject` containers)
   - Floor items and bags on the ground (including bag contents)
-  - Items on corpses (corpse container via `getDeadBodys()` 鈫?`getContainer()`)
+  - Items on corpses (corpse container via `getDeadBodys()` → `getContainer()`)
   - Vehicle part containers (trunk, seats, etc.)
 - Matches are drawn on the movable minimap as **gray squares**, same size as player/zombie markers; multiple items on one tile show a count.
 - Markers follow the player: re-scan triggers when you walk 5+ tiles (cooldown 2s), when your inventory count changes (debounced 1s), or when the inventory window container set changes.
-- **Minimap quick-toggle bar** (top of the movable minimap window): `Me / Players / Vehicles / Zombies / Items` 鈥?white = on, gray = off. Turning "Items" off clears the markers and drops all per-tick cost; turning it back on silently re-scans the last search target.
+- **Minimap quick-toggle bar** (top of the movable minimap window): `Me / Players / Vehicles / Zombies / Items` — white = on, gray = off. Turning "Items" off clears the markers and drops all per-tick cost; turning it back on silently re-scans the last search target.
 - The **Map** tab checkboxes (Show local player / Show other players / Show vehicles / Show zombies / Show items) are **two-way synced** with the minimap quick-toggle bar (toggling either side updates the other immediately, and the state is persisted to config).
 - Close the minimap: click the **X** button on the window.
 
@@ -74,7 +74,7 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 - **Item radar name-match bug**: when a search filter is active, clicking "Show on map" tracks **every** item in the filtered list (the name filter is a substring match). For example, searching `Wrench` will also track `Ratchet Wrench`. To track a single item only, clear the filter text and select the item directly.
 - Only **loaded** chunks around the player can be scanned (client-side limitation; the server's `processItems` registry is empty on the client).
-- Player inventories/equipment are intentionally excluded; other players' items appear with the 1鈥?s sync delay.
+- Player inventories/equipment are intentionally excluded; other players' items appear with the 1–2s sync delay.
 - Loot encryption on servers hides container contents from the client entirely.
 
 ## Acknowledgments
