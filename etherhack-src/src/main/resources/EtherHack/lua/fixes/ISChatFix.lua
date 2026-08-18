@@ -13,14 +13,14 @@ require "ISUI/ISChat"
 local original_ISChat_makeFade = ISChat.makeFade
 
 -- Override with nil-safe version
-function ISChat:makeFade()
+function ISChat:makeFade(fraction)
     -- Safety check: skip if chatText is nil
     if self.chatText == nil then
         return
     end
     
-    -- Call the original function
-    original_ISChat_makeFade(self)
+    -- Call the original function (B42 makeFade 带 fraction 参数, 必须透传, 否则 calcAlpha 里 fraction*nil 报 __mul)
+    original_ISChat_makeFade(self, fraction)
 end
 
 print("[EtherHack] ISChat compatibility fix loaded")
