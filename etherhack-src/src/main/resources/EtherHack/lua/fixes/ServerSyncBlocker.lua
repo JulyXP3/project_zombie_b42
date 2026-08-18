@@ -172,11 +172,95 @@ function ServerSyncBlocker.enableGodModeProtection()
     print("[EtherHack] GodMode stats protection enabled")
 end
 
+--============================================================================
+-- Vehicle protection: unconditional hotwire + keyless engine start.
+-- Blocks VehicleUpdate downlink so the server cannot revert local hotwire/
+-- engine state, keeps the engine running locally, repeatedly replays the
+-- hotwire TimedAction to the server until it authorizes hotwired=true, and
+-- sends the vanilla startEngine command (server trusts client's haveKey) to
+-- authorize the engine. After 30s of retrying, protection is released for
+-- two ticks to read the server-authorized state; if both hotwired and engine
+-- are authorized, protection stays off (clean state), otherwise it resumes.
+--============================================================================
+
+function ServerSyncBlocker.enableVehicle()
+    if enableVehicleProtection then enableVehicleProtection() end
+    ServerSyncBlocker.vehicleProtection = true
+    ServerSyncBlocker.vehicleConfirming = false
+    ServerSyncBlocker.vehicleConfirmDue = getTimestampMs() + 30000
+    ServerSyncBlocker.vehicleRetryDue = 0
+    print("[EtherHack] Vehicle protection enabled - hotwire & engine will be kept locally, server authorization in progress")
+    return true
+end
+
+function ServerSyncBlocker.disableVehicle()
+    if disableVehicleProtection then disableVehicleProtection() end
+    ServerSyncBlocker.vehicleProtection = false
+    ServerSyncBlocker.vehicleConfirming = false
+    print("[EtherHack] Vehicle protection disabled")
+    return true
+end
+
+function ServerSyncBlocker.isVehicleActive()
+    return ServerSyncBlocker.vehicleProtection
+end
+
+local function vehicleAndDriver()
+    local player = getPlayer()
+    if not player then return nil end
+    local vehicle = player:getVehicle()
+    if not vehicle or not vehicle:isDriver(player) then return nil end
+    return vehicle
+end
+
+function ServerSyncBlocker.applyVehicleProtection()
+    local vehicle = vehicleAndDriver()
+    if not vehicle then return end
+    vehicle:setHotwired(true)
+    if not vehicle:isEngineRunning() then
+        vehicle:tryStartEngine(true)
+    end
+    local now = getTimestampMs()
+    if now >= ServerSyncBlocker.vehicleRetryDue then
+        ServerSyncBlocker.vehicleRetryDue = now + 5000
+        ISTimedActionQueue.add(ISHotwireVehicle:new(getPlayer()))
+        sendClientCommand(getPlayer(), "vehicle", "startEngine", {haveKey = true})
+    end
+end
+
+function ServerSyncBlocker.confirmVehicleProtection()
+    ServerSyncBlocker.vehicleConfirmTicks = ServerSyncBlocker.vehicleConfirmTicks + 1
+    if ServerSyncBlocker.vehicleConfirmTicks < 2 then return end
+    local vehicle = vehicleAndDriver()
+    local ok = vehicle ~= nil and vehicle:isHotwired() and vehicle:isEngineRunning()
+    if ok then
+        ServerSyncBlocker.vehicleProtection = false
+        ServerSyncBlocker.vehicleConfirming = false
+        print("[EtherHack] Vehicle hotwire & engine authorized by server, protection released")
+    else
+        if enableVehicleProtection then enableVehicleProtection() end
+        ServerSyncBlocker.vehicleConfirming = false
+        ServerSyncBlocker.vehicleConfirmDue = getTimestampMs() + 30000
+    end
+end
+
 -- Register for OnTick to periodically reapply values
 local function onTick()
     if ServerSyncBlocker.isActive() then
         ServerSyncBlocker.filterPackets()
         ServerSyncBlocker.reapply()
+    end
+    if ServerSyncBlocker.vehicleProtection then
+        if ServerSyncBlocker.vehicleConfirming then
+            ServerSyncBlocker.confirmVehicleProtection()
+        else
+            ServerSyncBlocker.applyVehicleProtection()
+            if getTimestampMs() >= ServerSyncBlocker.vehicleConfirmDue then
+                if disableVehicleProtection then disableVehicleProtection() end
+                ServerSyncBlocker.vehicleConfirming = true
+                ServerSyncBlocker.vehicleConfirmTicks = 0
+            end
+        end
     end
 end
 

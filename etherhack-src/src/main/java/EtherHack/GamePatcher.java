@@ -49,7 +49,7 @@ import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -392,6 +392,42 @@ public class GamePatcher {
         }
     }
 
+    private void patchVehicleNoKey() {
+        Logger.print("Patching BaseVehicle for unconditional hotwire & keyless start...");
+        try {
+            Patch.injectIntoClass("zombie/vehicles/BaseVehicle", "tryHotwire", false, method -> {
+                if (!method.desc.equals("(I)V")) {
+                    return;
+                }
+                InsnList hookInstructions = new InsnList();
+                hookInstructions.add(new LdcInsnNode(200));
+                hookInstructions.add(new VarInsnNode(54, 1));
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected electricity level 200 into BaseVehicle.tryHotwire()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: tryHotwire injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+        try {
+            Patch.injectIntoClass("zombie/vehicles/BaseVehicle", "tryStartEngine", false, method -> {
+                if (!method.desc.equals("(Z)V")) {
+                    return;
+                }
+                InsnList hookInstructions = new InsnList();
+                hookInstructions.add(new InsnNode(4));
+                hookInstructions.add(new VarInsnNode(54, 1));
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected haveKey=true into BaseVehicle.tryStartEngine()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: tryStartEngine injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
     private void patchAbstractAntiCheatValidation() {
         Patch.injectIntoClass("zombie/network/anticheats/AbstractAntiCheat", "validate", false, method -> {
             InsnList hookInstructions = new InsnList();
@@ -504,6 +540,7 @@ public class GamePatcher {
         this.patchHeadshotOnly();
         this.patchGameClientSyncBlocker();
         this.patchRoleCapabilityForSP();
+        this.patchVehicleNoKey();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");
         Logger.print("Extracting EtherHack files to the current directory...");

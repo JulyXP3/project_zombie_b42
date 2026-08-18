@@ -39,6 +39,7 @@ public class ServerSyncBlocker {
     private volatile boolean blockSkillsSync = false;
     private volatile boolean blockInventorySync = false;
     private volatile boolean blockTraitsSync = false;
+    private volatile boolean blockVehicleSync = false;
     private long lastFilterLogTime = 0L;
     private final Map<CharacterStat, Float> protectedStats = new ConcurrentHashMap<CharacterStat, Float>();
     private final Map<String, Integer> protectedSkillLevels = new ConcurrentHashMap<String, Integer>();
@@ -106,6 +107,18 @@ public class ServerSyncBlocker {
         blocker.protectedSkillXP.clear();
         blocker.protectedTraits.clear();
         Logger.printLog("All protection disabled");
+    }
+
+    @LuaMethod(name="enableVehicleProtection", global=true)
+    public static void enableVehicleProtection() {
+        ServerSyncBlocker.getInstance().blockVehicleSync = true;
+        Logger.printLog("Vehicle protection enabled - vehicle state sync will be blocked");
+    }
+
+    @LuaMethod(name="disableVehicleProtection", global=true)
+    public static void disableVehicleProtection() {
+        ServerSyncBlocker.getInstance().blockVehicleSync = false;
+        Logger.printLog("Vehicle protection disabled");
     }
 
     @LuaMethod(name="protectStat", global=true)
@@ -240,7 +253,7 @@ public class ServerSyncBlocker {
     }
 
     private void filterPackets() {
-        if (!(this.blockStatsSync || this.blockSkillsSync || this.blockInventorySync)) {
+        if (!(this.blockStatsSync || this.blockSkillsSync || this.blockInventorySync || this.blockVehicleSync)) {
             return;
         }
         try {
@@ -302,6 +315,9 @@ public class ServerSyncBlocker {
             if (packetId == PacketTypes.PacketType.PlayerXp.getId()) {
                 return this.blockSkillsSync;
             }
+            if (packetId == PacketTypes.PacketType.VehicleUpdate.getId()) {
+                return this.blockVehicleSync;
+            }
         }
         catch (Exception exception) {
             // empty catch block
@@ -318,7 +334,7 @@ public class ServerSyncBlocker {
     @LuaMethod(name="getProtectionStatus", global=true)
     public static String getProtectionStatus() {
         ServerSyncBlocker blocker = ServerSyncBlocker.getInstance();
-        return String.format("Stats:%b Skills:%b Inventory:%b Traits:%b", blocker.blockStatsSync, blocker.blockSkillsSync, blocker.blockInventorySync, blocker.blockTraitsSync);
+        return String.format("Stats:%b Skills:%b Inventory:%b Traits:%b Vehicle:%b", blocker.blockStatsSync, blocker.blockSkillsSync, blocker.blockInventorySync, blocker.blockTraitsSync, blocker.blockVehicleSync);
     }
 
     static {
