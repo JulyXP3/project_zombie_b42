@@ -24,7 +24,7 @@
 
 ### 其他改动 / 修复
 
-完整更新历史见 [CHANGELOG_zh.md](CHANGELOG_zh.md)。
+完整更新历史见 [更新日志.md](更新日志.md)。
 
 ## 安装
 

@@ -24,7 +24,7 @@ The main addition over the original mod is an **Item Search + Minimap Marker** f
 
 ### Other changes / fixes
 
-See [CHANGELOG.md](CHANGELOG.md) for the full change history.
+See [UPDATELOG_EN.md](UPDATELOG_EN.md) for the full change history.
 
 ## Installation
 
