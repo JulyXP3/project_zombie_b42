@@ -305,7 +305,8 @@ function EtherSettingsPanel:createChildren()
 
     self:addButtonWithLabel(getTranslate("UI_Settings_Language"), nextName, function ()
         setLanguage(nextLang);
-        EtherMain:close();
+        EtherMain.instance:removeFromUIManager();
+        EtherMain.instance = nil;
         EtherMain.OnOpenPanel(EtherMain.menuKeyID);
     end, false);
 

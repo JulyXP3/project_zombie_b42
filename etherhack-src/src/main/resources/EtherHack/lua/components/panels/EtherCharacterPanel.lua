@@ -169,13 +169,13 @@ function EtherCharacterPanel:createChildren()
         setCombatSpeedMultiplier(value);
     end, 1.0, 60);
 
-    self:addCheckBox(getTranslate("UI_CharacterPanel_AutoRepairsItems"), function(isChecked)
-        toggleAutoRepairItems(isChecked);
-    end, isAutoRepairItems(), false);
-
     self:addCheckBox(getTranslate("UI_CharacterPanel_HeadshotOnly"), function(isChecked)
         toggleHeadshotOnly(isChecked)
     end, isHeadshotOnly(), false);
+
+    self:addCheckBox(getTranslate("UI_CharacterPanel_AutoRepairsItems"), function(isChecked)
+        toggleAutoRepairItems(isChecked);
+    end, isAutoRepairItems(), false);
 
     self:addCheckBox(getTranslate("UI_CharacterPanel_DisableRecoil"), function(isChecked)
         toggleNoRecoil(isChecked)

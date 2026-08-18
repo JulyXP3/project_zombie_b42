@@ -1,5 +1,13 @@
 # Changelog
 
+## [3.1.8] - Current
+
+- Feature: headshot-only for firearms — ASM hook in `CombatManager.processHit` forces the targeted-body-part path with `BODYPART_HEAD` (fixed head hits + 3x headshot damage; server never re-rolls body part or damage, anti-cheat only caps damage at 100).
+- UI: menu close now hides the instance instead of destroying it — reopening restores the previous tab and scroll positions.
+- Fixed: language switch rebuilds the menu instance immediately (previously relied on the old destroy-on-close flow, so texts only refreshed after switching pages).
+- UI: "Headshot only" and "Auto-repair inventory items" checkboxes swapped positions.
+- Build: version bumped to 3.1.8.
+
 ## [3.1.7] - Current
 
 - Feature: unlimited ammo synced to server + ammo farming — refills ammo and triggers unload/eject (magazine weapons spawn magazines) when depleted, synced to server-side fields.
