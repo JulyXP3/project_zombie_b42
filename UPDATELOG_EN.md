@@ -6,7 +6,7 @@
 - UI: closing the menu now hides it — reopening restores the previous tab and scroll position.
 - Fixed: language switch takes effect immediately (texts no longer require a page switch to refresh).
 - UI: "Headshot only" and "Auto-repair inventory items" checkboxes swapped positions.
-- Fixed: NoClip / Invisible / God mode / Zombies don't attack now work in single-player again (previously blocked by the vanilla permission system); ineffective in multiplayer.
+- Fixed: NoClip / Invisible / God mode / Zombies don't attack now work in single-player again (requires enabling "Bypass debug mode ban (type 12)"). Note: ineffective in multiplayer.
 - Feature: Vehicle unconditional hotwire — instantly hotwires and starts the vehicle locally; auto-disables after 30s. Toggle moved to the Character tab, above "Auto-repair inventory items".
 - Build: version bumped to 3.1.8.
 
@@ -20,7 +20,7 @@
 - Fixed: installer now cleans leftover game files before installing (install no longer rejected by stale leftovers).
 - Fixed: infinite durability for held items in multiplayer.
 - Build: slimmer dependencies (3 small jars); JDK25 and Gradle 9.1.0 required.
-- Fixed: server sync protection overhaul — module now actually active, no more stat/skill rollback, anti-cheat toggle works, logs no longer spam.
+- Fixed: server sync protection — because the server force-rolls back skills/stats, level-ups only take effect locally while the feature is enabled and are lost after a reconnect.
 
 ## [3.1.6]
 
