@@ -6,7 +6,7 @@
 - UI: closing the menu now hides it — reopening restores the previous tab and scroll position.
 - Fixed: language switch takes effect immediately (texts no longer require a page switch to refresh).
 - UI: "Headshot only" and "Auto-repair inventory items" checkboxes swapped positions.
-- Feature: Single-player unlock — NoClip / Invisible / God mode / Zombies don't attack no longer blocked by the vanilla permission system in single-player (multiplayer unaffected).
+- Fixed: NoClip / Invisible / God mode / Zombies don't attack now work in single-player again (previously blocked by the vanilla permission system); ineffective in multiplayer.
 - Build: version bumped to 3.1.8.
 
 ## [3.1.7]
