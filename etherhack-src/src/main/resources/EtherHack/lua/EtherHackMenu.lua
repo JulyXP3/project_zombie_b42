@@ -1,14 +1,10 @@
 require "ISUI/ISPanel"
 
 --*********************************************************
---* Подключение фиксов для vanilla багов
---*********************************************************
-require "EtherHack/lua/fixes/ISChatFix"
-
---*********************************************************
 --* Server Sync Protection (prevents server from overwriting local changes)
+--* 注: ISChatFix / ServerSyncBlocker 不再 require, 由 EtherLuaManager 用 RunLua 直接加载
+--* (PZ vanilla require loader 找不到 EtherHack/lua 下的文件)
 --*********************************************************
-require "EtherHack/lua/fixes/ServerSyncBlocker"
 
 --*********************************************************
 --* Подключение модулей

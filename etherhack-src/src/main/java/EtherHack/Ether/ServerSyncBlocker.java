@@ -26,8 +26,10 @@ import se.krka.kahlua.integration.annotations.LuaMethod;
 import zombie.characters.CharacterStat;
 import zombie.characters.IsoGameCharacter;
 import zombie.characters.IsoPlayer;
+import zombie.characters.skills.PerkFactory;
 import zombie.network.PacketTypes;
 import zombie.network.ZomboidNetData;
+import zombie.network.ZomboidNetDataPool;
 
 public class ServerSyncBlocker {
     private static ServerSyncBlocker instance;
@@ -37,6 +39,7 @@ public class ServerSyncBlocker {
     private volatile boolean blockSkillsSync = false;
     private volatile boolean blockInventorySync = false;
     private volatile boolean blockTraitsSync = false;
+    private long lastFilterLogTime = 0L;
     private final Map<CharacterStat, Float> protectedStats = new ConcurrentHashMap<CharacterStat, Float>();
     private final Map<String, Integer> protectedSkillLevels = new ConcurrentHashMap<String, Integer>();
     private final Map<String, Float> protectedSkillXP = new ConcurrentHashMap<String, Float>();
@@ -172,6 +175,13 @@ public class ServerSyncBlocker {
                     catch (Exception exception) {}
                 }
             }
+            if (this.blockSkillsSync) {
+                try {
+                    int fitnessLevel = player.getPerkLevel(PerkFactory.Perks.Fitness);
+                    player.getStats().set(CharacterStat.FITNESS, (float)fitnessLevel / 5.0f - 1.0f);
+                }
+                catch (Exception exception) {}
+            }
         }
         catch (Exception e) {
             Logger.printLog("Error reapplying protected values: " + e.getMessage());
@@ -237,17 +247,41 @@ public class ServerSyncBlocker {
             if (GameClientWrapper.getInstance() == null) {
                 return;
             }
+            int removed = 0;
+            java.util.Queue<ZomboidNetData> queue = this.wrapper.getIncomingNetDataQueue();
+            if (queue != null && !queue.isEmpty()) {
+                ArrayList<ZomboidNetData> kept = new ArrayList<ZomboidNetData>();
+                ZomboidNetData data;
+                while ((data = queue.poll()) != null) {
+                    if (this.shouldFilterPacket(data)) {
+                        ZomboidNetDataPool.instance.discard(data);
+                        ++removed;
+                        continue;
+                    }
+                    kept.add(data);
+                }
+                queue.addAll(kept);
+            }
             ArrayList<ZomboidNetData> netData = this.wrapper.getIncomingNetData();
-            if (netData == null || netData.isEmpty()) {
-                return;
+            if (netData != null && !netData.isEmpty()) {
+                ArrayList<ZomboidNetData> toRemove = new ArrayList<ZomboidNetData>();
+                for (ZomboidNetData packet : netData) {
+                    if (packet == null || !this.shouldFilterPacket(packet)) continue;
+                    toRemove.add(packet);
+                }
+                if (!toRemove.isEmpty()) {
+                    netData.removeAll(toRemove);
+                    removed += toRemove.size();
+                    for (ZomboidNetData packet : toRemove) {
+                        ZomboidNetDataPool.instance.discard(packet);
+                    }
+                }
             }
-            ArrayList<ZomboidNetData> toRemove = new ArrayList<ZomboidNetData>();
-            for (ZomboidNetData packet : netData) {
-                if (packet == null || !this.shouldFilterPacket(packet)) continue;
-                toRemove.add(packet);
-            }
-            if (!toRemove.isEmpty()) {
-                netData.removeAll(toRemove);
+            if (removed > 0) {
+                if (System.currentTimeMillis() - this.lastFilterLogTime > 30000L) {
+                    this.lastFilterLogTime = System.currentTimeMillis();
+                    Logger.printLog("ServerSyncBlocker: filtered " + removed + " sync packet(s)");
+                }
                 this.reapplyAllProtectedValues();
             }
         }
@@ -261,6 +295,12 @@ public class ServerSyncBlocker {
             short packetId = packet.type.getId();
             if (packetId == PacketTypes.PacketType.PlayerUpdateReliable.getId()) {
                 return this.blockStatsSync || this.blockSkillsSync;
+            }
+            if (packetId == PacketTypes.PacketType.SyncPlayerStats.getId()) {
+                return this.blockStatsSync;
+            }
+            if (packetId == PacketTypes.PacketType.PlayerXp.getId()) {
+                return this.blockSkillsSync;
             }
         }
         catch (Exception exception) {

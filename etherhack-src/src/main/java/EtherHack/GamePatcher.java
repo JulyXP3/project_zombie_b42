@@ -49,7 +49,7 @@ import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -316,6 +316,22 @@ public class GamePatcher {
         }
     }
 
+    private void patchGameClientSyncBlocker() {
+        Logger.print("Patching GameClient.update with server sync filter...");
+        try {
+            Patch.injectIntoClass("zombie/network/GameClient", "update", false, method -> {
+                InsnList hookInstructions = new InsnList();
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/ServerSyncBlocker", "filterIncomingSyncPackets", "()V", false));
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected server sync filter into GameClient.update()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: GameClient sync filter injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
     private void patchAbstractAntiCheatValidation() {
         Patch.injectIntoClass("zombie/network/anticheats/AbstractAntiCheat", "validate", false, method -> {
             InsnList hookInstructions = new InsnList();
@@ -425,6 +441,7 @@ public class GamePatcher {
         this.patchLuaEventManager();
         this.patchLuaManager();
         this.patchAntiCheatSystem();
+        this.patchGameClientSyncBlocker();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");
         Logger.print("Extracting EtherHack files to the current directory...");

@@ -22,6 +22,7 @@ public class GameClientWrapper {
     private final GameClient gameClient;
     private static Field incomingNetDataField = null;
     private static Field connectionField = null;
+    private static Field incomingNetDataQueueField = null;
     private static String netDataFieldName = null;
 
     public GameClientWrapper(GameClient client) {
@@ -161,6 +162,25 @@ public class GameClientWrapper {
         catch (Exception e) {
             Logger.printLog("Failed to access incomingNetData: " + e.getMessage());
             return new ArrayList<ZomboidNetData>();
+        }
+    }
+
+    public java.util.Queue<ZomboidNetData> getIncomingNetDataQueue() {
+        try {
+            if (incomingNetDataQueueField == null) {
+                incomingNetDataQueueField = FieldCache.getField(GameClient.class, "MainLoopNetDataQ");
+            }
+            if (incomingNetDataQueueField == null) {
+                return null;
+            }
+            Object value = FieldCache.getFieldValue(null, incomingNetDataQueueField);
+            if (value instanceof java.util.Queue) {
+                return (java.util.Queue)value;
+            }
+            return null;
+        }
+        catch (Exception e) {
+            return null;
         }
     }
 
