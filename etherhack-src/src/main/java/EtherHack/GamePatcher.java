@@ -49,7 +49,7 @@ import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -366,6 +366,32 @@ public class GamePatcher {
         }
     }
 
+    private void patchRoleCapabilityForSP() {
+        Logger.print("Patching Role.hasCapability for single-player unlock...");
+        try {
+            Patch.injectIntoClass("zombie/characters/Role", "hasCapability", true, method -> {
+                if (!method.desc.equals("(Lzombie/characters/IsoMovingObject;Lzombie/characters/Capability;)Z")) {
+                    return;
+                }
+                InsnList hookInstructions = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                hookInstructions.add(new FieldInsnNode(178, "zombie/network/GameClient", "client", "Z"));
+                hookInstructions.add(new JumpInsnNode(154, continueLabel));
+                hookInstructions.add(new FieldInsnNode(178, "zombie/network/GameServer", "server", "Z"));
+                hookInstructions.add(new JumpInsnNode(154, continueLabel));
+                hookInstructions.add(new InsnNode(4));
+                hookInstructions.add(new InsnNode(172));
+                hookInstructions.add(continueLabel);
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected single-player capability unlock into Role.hasCapability()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: Role capability injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
     private void patchAbstractAntiCheatValidation() {
         Patch.injectIntoClass("zombie/network/anticheats/AbstractAntiCheat", "validate", false, method -> {
             InsnList hookInstructions = new InsnList();
@@ -477,6 +503,7 @@ public class GamePatcher {
         this.patchAntiCheatSystem();
         this.patchHeadshotOnly();
         this.patchGameClientSyncBlocker();
+        this.patchRoleCapabilityForSP();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");
         Logger.print("Extracting EtherHack files to the current directory...");
