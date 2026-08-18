@@ -7,7 +7,7 @@
 - Fixed: language switch takes effect immediately (texts no longer require a page switch to refresh).
 - UI: "Headshot only" and "Auto-repair inventory items" checkboxes swapped positions.
 - Fixed: NoClip / Invisible / God mode / Zombies don't attack now work in single-player again (previously blocked by the vanilla permission system); ineffective in multiplayer.
-- Feature: Vehicle unconditional hotwire — instantly hotwires and starts the vehicle locally while replaying the hotwire TimedAction and the startEngine command to the server for authoritative authorization; auto-disables after 30s. Toggle moved to the Character tab, above "Auto-repair inventory items".
+- Feature: Vehicle unconditional hotwire — instantly hotwires and starts the vehicle locally; auto-disables after 30s. Toggle moved to the Character tab, above "Auto-repair inventory items".
 - Build: version bumped to 3.1.8.
 
 ## [3.1.7]
