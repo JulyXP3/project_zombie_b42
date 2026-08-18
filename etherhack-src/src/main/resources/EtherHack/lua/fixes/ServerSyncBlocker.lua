@@ -235,6 +235,9 @@ function ServerSyncBlocker.confirmVehicleProtection()
     local ok = vehicle ~= nil and vehicle:isHotwired() and vehicle:isEngineRunning()
     ServerSyncBlocker.vehicleProtection = false
     ServerSyncBlocker.vehicleConfirming = false
+    if EtherCharacterPanel and EtherCharacterPanel.vehicleCheckbox then
+        EtherCharacterPanel.vehicleCheckbox:setSelected(false)
+    end
     if ok then
         print("[EtherHack] Vehicle hotwire & engine authorized by server, protection auto-disabled")
     else

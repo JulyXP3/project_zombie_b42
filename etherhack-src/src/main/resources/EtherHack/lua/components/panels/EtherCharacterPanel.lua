@@ -26,6 +26,8 @@ function EtherCharacterPanel:addCheckBox(title, method, isSelected, isOnlyInGame
 
     table.insert(self.checkBoxList, checkbox);
     self.rows = self.rows + 1;
+
+    return checkbox;
 end
 
 function EtherCharacterPanel:addTextEntryBox(title, initialText, minValue, maxValue, applyMethod, defaultValue, extraGap)
@@ -173,7 +175,7 @@ function EtherCharacterPanel:createChildren()
         toggleHeadshotOnly(isChecked)
     end, isHeadshotOnly(), false);
 
-    self:addCheckBox(getTranslate("UI_Exploit_VehicleProtection"), function(isChecked)
+    EtherCharacterPanel.vehicleCheckbox = self:addCheckBox(getTranslate("UI_Exploit_VehicleProtection"), function(isChecked)
         if ServerSyncBlocker and type(ServerSyncBlocker) == "table" then
             if isChecked then
                 if ServerSyncBlocker.enableVehicle then
