@@ -28,8 +28,8 @@ function EtherCharacterPanel:addCheckBox(title, method, isSelected, isOnlyInGame
     self.rows = self.rows + 1;
 end
 
-function EtherCharacterPanel:addTextEntryBox(title, initialText, minValue, maxValue, applyMethod, defaultValue)
-    local rowY = 20 + self.rows * 40;
+function EtherCharacterPanel:addTextEntryBox(title, initialText, minValue, maxValue, applyMethod, defaultValue, extraGap)
+    local rowY = 20 + self.rows * 35 + (extraGap or 0);
     local fontH = getTextManager():getFontHeight(UIFont.Small);
 
     local label = ISLabel:new(30, rowY + 3, fontH, title, 1, 1, 1, 1, UIFont.Small, true);
@@ -68,7 +68,7 @@ function EtherCharacterPanel:addTextEntryBox(title, initialText, minValue, maxVa
         self:addChild(resetBtn);
     end
 
-    self:setScrollHeight(self:getScrollHeight() + 40);
+    self:setScrollHeight(self:getScrollHeight() + 35 + (extraGap or 0));
     self.rows = self.rows + 1;
 end
 
@@ -167,7 +167,7 @@ function EtherCharacterPanel:createChildren()
 
     self:addTextEntryBox(getTranslate("UI_Exploit_CombatSpeedMultiplierTitle"), getCombatSpeedMultiplier(), 1.0, 3.0, function(value)
         setCombatSpeedMultiplier(value);
-    end, 1.0);
+    end, 1.0, 60);
 
     self:addCheckBox(getTranslate("UI_CharacterPanel_AutoRepairsItems"), function(isChecked)
         toggleAutoRepairItems(isChecked);

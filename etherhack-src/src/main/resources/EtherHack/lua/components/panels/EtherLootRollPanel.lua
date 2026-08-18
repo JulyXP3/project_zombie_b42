@@ -45,19 +45,25 @@ function EtherLootRollPanel:createChildren()
     local x = 15;
     local y = 14;
 
-    self.radiusLabel = ISLabel:new(x, y, 20, getTranslate("UI_LootRoll_RadiusLabel"), 1, 1, 1, 1, UIFont.Medium, true);
+    -- 重置战利品 标题
+    self.sectionResetLabel = ISLabel:new(x, y, 20, getTranslate("UI_LootRoll_SectionReset"), EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b, 1, UIFont.Small, true);
+    self.sectionResetLabel:initialise();
+    self.sectionResetLabel:instantiate();
+    self:addChild(self.sectionResetLabel);
+
+    self.radiusLabel = ISLabel:new(x, y + 24, 20, getTranslate("UI_LootRoll_RadiusLabel"), 1, 1, 1, 1, UIFont.Medium, true);
     self.radiusLabel:initialise();
     self.radiusLabel:instantiate();
     self:addChild(self.radiusLabel);
 
-    self.radiusBox = ISTextEntryBox:new(tostring(EtherContainerPOC.radius), x + 130, y - 2, 60, 20);
+    self.radiusBox = ISTextEntryBox:new(tostring(EtherContainerPOC.radius), x + 130, y + 22, 60, 20);
     self.radiusBox.font = UIFont.Small;
     self.radiusBox:initialise();
     self.radiusBox:instantiate();
     self.radiusBox:setClearButton(false)
     self:addChild(self.radiusBox);
 
-    self.resetBtn = UIButton:new(x, y + 40, 150, 24, getTranslate("UI_LootRoll_Button"),
+    self.resetBtn = UIButton:new(x, y + 50, 150, 24, getTranslate("UI_LootRoll_Button"),
     function()
         if not isMultiplayer() then
             print("[ContainerPOC] multiplayer only (use your own dedicated server)")
@@ -74,13 +80,19 @@ function EtherLootRollPanel:createChildren()
     self.resetBtn.isOnlyInGame = true;
     self:addChild(self.resetBtn);
 
-    self.hintLabel = ISLabel:new(x, y + 72, 15, getTranslate("UI_LootRoll_Hint"), 0.8, 0.8, 0.8, 1, UIFont.Small, true)
+    self.hintLabel = ISLabel:new(x, y + 76, 15, getTranslate("UI_LootRoll_Hint"), 0.8, 0.8, 0.8, 1, UIFont.Small, true)
     self.hintLabel:initialise()
     self.hintLabel:instantiate()
     self:addChild(self.hintLabel)
 
+    -- 刷弹药 标题
+    self.sectionFarmLabel = ISLabel:new(x, y + 108, 20, getTranslate("UI_LootRoll_SectionFarm"), EtherTheme.blood.r, EtherTheme.blood.g, EtherTheme.blood.b, 1, UIFont.Small, true);
+    self.sectionFarmLabel:initialise();
+    self.sectionFarmLabel:instantiate();
+    self:addChild(self.sectionFarmLabel);
+
     -- === 刷弹药 (ammo farming) — 紧贴"重置容器"下方, 单行: 自动刷(开) 自动刷(关) 设置弹药数 [N] ===
-    local farmY = y + 110;
+    local farmY = y + 132;
     local farmX = 15;   -- 与"重置战利品(F9)"左对齐
     local farmGap = 12;
 

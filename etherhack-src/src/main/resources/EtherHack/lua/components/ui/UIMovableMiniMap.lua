@@ -139,8 +139,8 @@ end
 function UIMovableMiniMap:new()
     local menuTableData = {};
 
-    local width = 400;
-    local height = 400;
+    local width = 300;
+    local height = 300;
 
     local positionX = getCore():getScreenWidth() - width - 15;
     local positionY = getCore():getScreenHeight() - height - 15;
