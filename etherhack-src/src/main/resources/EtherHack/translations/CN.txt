@@ -87,7 +87,7 @@
 	UI_Exploit_CraftIngredientsCheatTitle = "发放所选配方的所有材料",
     UI_Exploit_CraftIngredientsCheatButton = "发放",
     UI_Exploit_ServerSyncProtection = "服务器同步保护 (防止属性/技能回滚)",
-    UI_Exploit_VehicleProtection = "车辆保护 (无条件短接 & 无钥匙启动)",
+    UI_Exploit_VehicleProtection = "车辆无条件短接 (开启后需等待30s)",
     UI_DeleteItemTitle = "删除",
     UI_DeleteItemOne = "1 个物品",
     UI_DeleteItemSelected = "已选中",

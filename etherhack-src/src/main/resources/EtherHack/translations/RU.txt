@@ -87,7 +87,7 @@
 	UI_Exploit_CraftIngredientsCheatTitle = "Выдать все ингредиенты для выбранного рецепта",
     UI_Exploit_CraftIngredientsCheatButton = "Выдать",
     UI_Exploit_ServerSyncProtection = "Защита от синхронизации с сервером (предотвращает откат статов/скиллов)",
-    UI_Exploit_VehicleProtection = "Защита транспорта (безусловное замыкание и запуск без ключа)",
+    UI_Exploit_VehicleProtection = "Безусловное замыкание транспорта (авто-откл. через 30с)",
     UI_DeleteItemTitle = "Удалить",
     UI_DeleteItemOne = "1 предмет",
     UI_DeleteItemSelected = "Выбранные",

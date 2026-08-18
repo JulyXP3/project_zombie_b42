@@ -178,9 +178,9 @@ end
 -- engine state, keeps the engine running locally, repeatedly replays the
 -- hotwire TimedAction to the server until it authorizes hotwired=true, and
 -- sends the vanilla startEngine command (server trusts client's haveKey) to
--- authorize the engine. After 30s of retrying, protection is released for
--- two ticks to read the server-authorized state; if both hotwired and engine
--- are authorized, protection stays off (clean state), otherwise it resumes.
+-- authorize the engine. After 30s the protection auto-disables and the
+-- server-authorized state is read; if the server authorized both hotwire and
+-- engine, the vehicle stays usable cleanly, otherwise it reverts.
 --============================================================================
 
 function ServerSyncBlocker.enableVehicle()
@@ -233,14 +233,12 @@ function ServerSyncBlocker.confirmVehicleProtection()
     if ServerSyncBlocker.vehicleConfirmTicks < 2 then return end
     local vehicle = vehicleAndDriver()
     local ok = vehicle ~= nil and vehicle:isHotwired() and vehicle:isEngineRunning()
+    ServerSyncBlocker.vehicleProtection = false
+    ServerSyncBlocker.vehicleConfirming = false
     if ok then
-        ServerSyncBlocker.vehicleProtection = false
-        ServerSyncBlocker.vehicleConfirming = false
-        print("[EtherHack] Vehicle hotwire & engine authorized by server, protection released")
+        print("[EtherHack] Vehicle hotwire & engine authorized by server, protection auto-disabled")
     else
-        if enableVehicleProtection then enableVehicleProtection() end
-        ServerSyncBlocker.vehicleConfirming = false
-        ServerSyncBlocker.vehicleConfirmDue = getTimestampMs() + 30000
+        print("[EtherHack] Vehicle protection auto-disabled after 30s (server did not authorize)")
     end
 end
 

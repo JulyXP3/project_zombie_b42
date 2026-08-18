@@ -87,7 +87,7 @@
 	UI_Exploit_CraftIngredientsCheatTitle = "Give out all the ingredients for the selected recipe",
     UI_Exploit_CraftIngredientsCheatButton = "Give",
     UI_Exploit_ServerSyncProtection = "Server Sync Protection (prevents stat/skill revert)",
-    UI_Exploit_VehicleProtection = "Vehicle Protection (unconditional hotwire & keyless start)",
+    UI_Exploit_VehicleProtection = "Vehicle Unconditional Hotwire (auto-off after 30s)",
     UI_DeleteItemTitle = "Delete",
     UI_DeleteItemOne = "1 item",
     UI_DeleteItemSelected = "Selected",

@@ -173,6 +173,22 @@ function EtherCharacterPanel:createChildren()
         toggleHeadshotOnly(isChecked)
     end, isHeadshotOnly(), false);
 
+    self:addCheckBox(getTranslate("UI_Exploit_VehicleProtection"), function(isChecked)
+        if ServerSyncBlocker and type(ServerSyncBlocker) == "table" then
+            if isChecked then
+                if ServerSyncBlocker.enableVehicle then
+                    ServerSyncBlocker.enableVehicle()
+                end
+            else
+                if ServerSyncBlocker.disableVehicle then
+                    ServerSyncBlocker.disableVehicle()
+                end
+            end
+        else
+            print("[EtherHack] ERROR: ServerSyncBlocker not loaded!")
+        end
+    end, (ServerSyncBlocker and type(ServerSyncBlocker) == "table" and ServerSyncBlocker.vehicleProtection) or false, true);
+
     self:addCheckBox(getTranslate("UI_CharacterPanel_AutoRepairsItems"), function(isChecked)
         toggleAutoRepairItems(isChecked);
     end, isAutoRepairItems(), false);
