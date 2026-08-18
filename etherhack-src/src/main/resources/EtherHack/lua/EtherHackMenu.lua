@@ -64,7 +64,6 @@ EtherMain.accentColor       = {r = getAccentUIColor():getR(), g = getAccentUICol
 function EtherMain:close()
 	EtherMain.instance:setVisible(false);
     EtherMain.instance:removeFromUIManager();
-    EtherMain.instance = nil;
 end
 
 --*********************************************************
@@ -117,11 +116,15 @@ end
 --*********************************************************
 function EtherMain.OnOpenPanel(key)
     if key == EtherMain.menuKeyID then
-        -- Если панель уже существует, закрываем окно
+        -- Если панель уже существует, переключаем видимость (состояние вкладок/прокрутки сохраняется)
         if EtherMain.instance ~= nil then
-            EtherMain.instance:setVisible(false);
-            EtherMain.instance:removeFromUIManager();
-            EtherMain.instance = nil;
+            if EtherMain.instance:getIsVisible() then
+                EtherMain.instance:setVisible(false);
+                EtherMain.instance:removeFromUIManager();
+            else
+                EtherMain.instance:addToUIManager();
+                EtherMain.instance:setVisible(true);
+            end
             return
         end
 
@@ -171,6 +174,7 @@ print("=======================================================")
 --*********************************************************
 local function onGameStart()
     UIMovableMiniMap.instance = nil; -- 上一场游戏的旧实例已失效, 避免 openPanel 误判为已打开
+    EtherMain.instance = nil; -- 同上: 旧菜单实例已失效, 下次按键重新构建
     loadConfig("startup");
     if isMinimapOpen() and getPlayer() ~= nil then
         UIMovableMiniMap.openPanel();
