@@ -7,11 +7,15 @@ import EtherHack.utils.Logger;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 public class FieldCache {
     private static final Map<String, Field> fieldCache = new HashMap<String, Field>();
     private static final Map<String, Method> methodCache = new HashMap<String, Method>();
+    private static final Set<String> warnedFieldKeys = new HashSet<String>();
+    private static final Set<String> warnedMethodKeys = new HashSet<String>();
 
     public static Field getField(Class<?> clazz, String fieldName) {
         String key = clazz.getName() + "." + fieldName;
@@ -34,7 +38,9 @@ public class FieldCache {
                         continue;
                     }
                 }
-                Logger.warn("[FieldCache] Field not found: " + key);
+                if (warnedFieldKeys.add(key)) {
+                    Logger.warn("[FieldCache] Field not found: " + key);
+                }
                 return null;
             }
             catch (Exception e) {
@@ -65,7 +71,9 @@ public class FieldCache {
                         continue;
                     }
                 }
-                Logger.warn("[FieldCache] Method not found: " + key);
+                if (warnedMethodKeys.add(key)) {
+                    Logger.warn("[FieldCache] Method not found: " + key);
+                }
                 return null;
             }
             catch (Exception e) {

@@ -1340,108 +1340,108 @@ public class EtherLuaMethods {
             switch (type.toLowerCase()) {
                 case "xp": {
                     if (ServerOptions.instance.antiCheatXp == null) break;
-                    ServerOptions.instance.antiCheatXp.setValue(0);
+                    ServerOptions.instance.antiCheatXp.setValue(4);
                     break;
                 }
                 case "player": {
                     if (ServerOptions.instance.antiCheatPlayer == null) break;
-                    ServerOptions.instance.antiCheatPlayer.setValue(0);
+                    ServerOptions.instance.antiCheatPlayer.setValue(4);
                     break;
                 }
                 case "movement": {
                     if (ServerOptions.instance.antiCheatSpeed == null) break;
-                    ServerOptions.instance.antiCheatSpeed.setValue(0);
+                    ServerOptions.instance.antiCheatSpeed.setValue(4);
                     break;
                 }
                 case "item": {
                     if (ServerOptions.instance.antiCheatPlayer == null) break;
-                    ServerOptions.instance.antiCheatPlayer.setValue(0);
+                    ServerOptions.instance.antiCheatPlayer.setValue(4);
                     break;
                 }
                 case "hit": {
                     if (ServerOptions.instance.antiCheatHit == null) break;
-                    ServerOptions.instance.antiCheatHit.setValue(0);
+                    ServerOptions.instance.antiCheatHit.setValue(4);
                     break;
                 }
                 case "safety": {
                     if (ServerOptions.instance.antiCheatSafety == null) break;
-                    ServerOptions.instance.antiCheatSafety.setValue(0);
+                    ServerOptions.instance.antiCheatSafety.setValue(4);
                     break;
                 }
                 case "packet": {
                     if (ServerOptions.instance.antiCheatPacketException == null) break;
-                    ServerOptions.instance.antiCheatPacketException.setValue(0);
+                    ServerOptions.instance.antiCheatPacketException.setValue(4);
                     break;
                 }
                 case "permission": {
                     if (ServerOptions.instance.antiCheatPermission == null) break;
-                    ServerOptions.instance.antiCheatPermission.setValue(0);
+                    ServerOptions.instance.antiCheatPermission.setValue(4);
                     break;
                 }
                 case "fire": {
                     if (ServerOptions.instance.antiCheatHit == null) break;
-                    ServerOptions.instance.antiCheatHit.setValue(0);
+                    ServerOptions.instance.antiCheatHit.setValue(4);
                     break;
                 }
                 case "safehouse": {
                     if (ServerOptions.instance.antiCheatSafeHouse == null) break;
-                    ServerOptions.instance.antiCheatSafeHouse.setValue(0);
+                    ServerOptions.instance.antiCheatSafeHouse.setValue(4);
                     break;
                 }
                 case "recipe": {
                     if (ServerOptions.instance.antiCheatXp == null) break;
-                    ServerOptions.instance.antiCheatXp.setValue(0);
+                    ServerOptions.instance.antiCheatXp.setValue(4);
                     break;
                 }
                 case "checksum": {
                     if (ServerOptions.instance.antiCheatChecksum == null) break;
-                    ServerOptions.instance.antiCheatChecksum.setValue(0);
+                    ServerOptions.instance.antiCheatChecksum.setValue(4);
                     break;
                 }
                 case "serverconfig": {
                     if (ServerOptions.instance.antiCheatChecksum == null) break;
-                    ServerOptions.instance.antiCheatChecksum.setValue(0);
+                    ServerOptions.instance.antiCheatChecksum.setValue(4);
                     break;
                 }
                 case "all": {
                     if (ServerOptions.instance.antiCheatSpeed != null) {
-                        ServerOptions.instance.antiCheatSpeed.setValue(0);
+                        ServerOptions.instance.antiCheatSpeed.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatSafety != null) {
-                        ServerOptions.instance.antiCheatSafety.setValue(0);
+                        ServerOptions.instance.antiCheatSafety.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatHit != null) {
-                        ServerOptions.instance.antiCheatHit.setValue(0);
+                        ServerOptions.instance.antiCheatHit.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatPacketException != null) {
-                        ServerOptions.instance.antiCheatPacketException.setValue(0);
+                        ServerOptions.instance.antiCheatPacketException.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatPermission != null) {
-                        ServerOptions.instance.antiCheatPermission.setValue(0);
+                        ServerOptions.instance.antiCheatPermission.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatXp != null) {
-                        ServerOptions.instance.antiCheatXp.setValue(0);
+                        ServerOptions.instance.antiCheatXp.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatHit != null) {
-                        ServerOptions.instance.antiCheatHit.setValue(0);
+                        ServerOptions.instance.antiCheatHit.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatSafeHouse != null) {
-                        ServerOptions.instance.antiCheatSafeHouse.setValue(0);
+                        ServerOptions.instance.antiCheatSafeHouse.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatXp != null) {
-                        ServerOptions.instance.antiCheatXp.setValue(0);
+                        ServerOptions.instance.antiCheatXp.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatPlayer != null) {
-                        ServerOptions.instance.antiCheatPlayer.setValue(0);
+                        ServerOptions.instance.antiCheatPlayer.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatChecksum != null) {
-                        ServerOptions.instance.antiCheatChecksum.setValue(0);
+                        ServerOptions.instance.antiCheatChecksum.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatPlayer != null) {
-                        ServerOptions.instance.antiCheatPlayer.setValue(0);
+                        ServerOptions.instance.antiCheatPlayer.setValue(4);
                     }
                     if (ServerOptions.instance.antiCheatChecksum == null) break;
-                    ServerOptions.instance.antiCheatChecksum.setValue(0);
+                    ServerOptions.instance.antiCheatChecksum.setValue(4);
                 }
             }
         }

@@ -11,6 +11,7 @@
 - 修复: `install.bat` 先删除游戏残留 `zombie/EtherHack` 再安装, 避免打包版游戏卸载残留导致安装被拒。
 - 修复: 手中物品无限耐久多人版 —— 满耐久经 `syncItemFields()` 同步服务端(`SyncItemFieldsPacket.processServer` 零校验采纳), 服务端每次攻击消耗后下一帧被拉回满, 多人不再掉耐久。
 - 构建: lib 精简 —— 移除 `zombie.jar` 与 LFS 标记, 仅上传 3 个小依赖 jar; README 补充 JDK25 与 Gradle 9.1.0 版本要求, 安装步骤补 `projectzomboid.jar → lib/zombie.jar` 复制说明。
+- 修复: 服务器同步保护(B42)全链路 —— ① `ServerSyncBlocker`/`ISChatFix` 改用 `EtherLuaManager` 用 `RunLua` 直接加载(PZ vanilla require 找不到 `EtherHack/lua` 下文件, 模块此前从未生效); ② 过滤时机修正: B42 每帧先 `GameClient.update()` 处理网络包再进 OnTick, 改为 ASM 注入 `GameClient.update()` 开头过滤(双队列 `MainLoopNetData` + `MainLoopNetDataQ`), 属性/技能经验回滚不再发生; ③ 被过滤包归还 `ZomboidNetDataPool`, 避免池降级与持续分配; ④ 过滤日志 30 秒节流, 不再刷屏; ⑤ 保护开启时把 Fitness 等级同步到 `CharacterStat.FITNESS`(`LevelPerk` 仅 debug 模式更新 stats, 玩家编辑器升级此前无实际效果); ⑥ `ISChatFix` 覆盖 `makeFade` 时透传 B42 新增 `fraction` 参数, 消除 `__mul` 报错刷屏; ⑦ B42 反作弊选项关闭值改为 4 而非 0(0 被 `min=1` 校验拒绝, 反作弊从未真正关闭, 保护时灵时不灵); ⑧ `FieldCache` 找不到字段/方法仅警告一次(此前每次调用重复打印)。
 
 ## [3.1.6]
 
