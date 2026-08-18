@@ -161,6 +161,14 @@ function EtherCharacterPanel:createChildren()
         toggleUnlimitedCondition(isChecked);
     end, isUnlimitedCondition(), false);
 
+    self:addCheckBox(getTranslate("UI_CharacterPanel_CritMax"), function(isChecked)
+        toggleCritMax(isChecked);
+    end, isCritMax(), false);
+
+    self:addTextEntryBox(getTranslate("UI_Exploit_CombatSpeedMultiplierTitle"), getCombatSpeedMultiplier(), 1.0, 3.0, function(value)
+        setCombatSpeedMultiplier(value);
+    end, 1.0);
+
     self:addCheckBox(getTranslate("UI_CharacterPanel_AutoRepairsItems"), function(isChecked)
         toggleAutoRepairItems(isChecked);
     end, isAutoRepairItems(), false);
@@ -248,14 +256,6 @@ function EtherCharacterPanel:createChildren()
     self:addCheckBox(getTranslate("UI_CharacterPanel_OptimalWeight"), function(isChecked)
         toggleOptimalWeight(isChecked);
     end, isOptimalWeight(), false);
-
-    self:addCheckBox(getTranslate("UI_CharacterPanel_CritMax"), function(isChecked)
-        toggleCritMax(isChecked);
-    end, isCritMax(), false);
-
-    self:addTextEntryBox(getTranslate("UI_Exploit_CombatSpeedMultiplierTitle"), getCombatSpeedMultiplier(), 1.0, 3.0, function(value)
-        setCombatSpeedMultiplier(value);
-    end, 1.0);
 
     self:updatePanel();
 end

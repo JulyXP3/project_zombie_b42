@@ -142,7 +142,7 @@ public class EtherAPI {
     public boolean isVisualsZombiesEnable;
     public boolean isVisualDrawToLocalPlayer;
     public boolean isVisualDrawPlayerNickname;
-    public boolean isVisualDrawCredits;
+    public boolean isVisualDrawCredits = true;
     public boolean isVisualDrawPlayerInfo;
     public boolean isVisualDrawLineToVehicle;
     public boolean isVisualDrawLineToPlayers;
