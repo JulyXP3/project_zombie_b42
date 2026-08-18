@@ -537,6 +537,17 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="isHeadshotOnly", global=true)
+    public static boolean isHeadshotOnly() {
+        return EtherMain.getInstance().etherAPI.isHeadshotOnly;
+    }
+
+    @LuaMethod(name="toggleHeadshotOnly", global=true)
+    public static void toggleHeadshotOnly(boolean var0) {
+        EtherMain.getInstance().etherAPI.isHeadshotOnly = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isAutoRepairItems", global=true)
     public static boolean isAutoRepairItems() {
         return EtherMain.getInstance().etherAPI.isAutoRepairItems;

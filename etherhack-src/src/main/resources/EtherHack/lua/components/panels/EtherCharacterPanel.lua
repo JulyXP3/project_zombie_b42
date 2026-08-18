@@ -173,6 +173,10 @@ function EtherCharacterPanel:createChildren()
         toggleAutoRepairItems(isChecked);
     end, isAutoRepairItems(), false);
 
+    self:addCheckBox(getTranslate("UI_CharacterPanel_HeadshotOnly"), function(isChecked)
+        toggleHeadshotOnly(isChecked)
+    end, isHeadshotOnly(), false);
+
     self:addCheckBox(getTranslate("UI_CharacterPanel_DisableRecoil"), function(isChecked)
         toggleNoRecoil(isChecked)
     end, isNoRecoil(), false);

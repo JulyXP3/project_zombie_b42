@@ -107,6 +107,7 @@ public class EtherAPI {
     public boolean isEnableNightVision;
     public boolean isZombieDontAttack;
     public boolean isNoRecoil;
+    public boolean isHeadshotOnly;
     public boolean isBypassDebugMode;
     public boolean isUnlimitedCarry;
     public boolean isUnlimitedCondition;
@@ -173,6 +174,7 @@ public class EtherAPI {
         var3.setProperty("isEnableNightVision", Boolean.toString(this.isEnableNightVision));
         var3.setProperty("isZombieDontAttack", Boolean.toString(this.isZombieDontAttack));
         var3.setProperty("isNoRecoil", Boolean.toString(this.isNoRecoil));
+        var3.setProperty("isHeadshotOnly", Boolean.toString(this.isHeadshotOnly));
         var3.setProperty("isBypassDebugMode", Boolean.toString(this.isBypassDebugMode));
         var3.setProperty("isUnlimitedCarry", Boolean.toString(this.isUnlimitedCarry));
         var3.setProperty("isUnlimitedCondition", Boolean.toString(this.isUnlimitedCondition));
@@ -252,6 +254,7 @@ public class EtherAPI {
         this.isEnableNightVision = ConfigUtils.getBooleanFromConfig(var3, "isEnableNightVision", false);
         this.isZombieDontAttack = ConfigUtils.getBooleanFromConfig(var3, "isZombieDontAttack", false);
         this.isNoRecoil = ConfigUtils.getBooleanFromConfig(var3, "isNoRecoil", false);
+        this.isHeadshotOnly = ConfigUtils.getBooleanFromConfig(var3, "isHeadshotOnly", false);
         this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var3, "isBypassDebugMode", false);
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCarry", false);
         this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCondition", false);
@@ -329,6 +332,7 @@ public class EtherAPI {
         this.isEnableNightVision = ConfigUtils.getBooleanFromConfig(var1, "isEnableNightVision", false);
         this.isZombieDontAttack = ConfigUtils.getBooleanFromConfig(var1, "isZombieDontAttack", false);
         this.isNoRecoil = ConfigUtils.getBooleanFromConfig(var1, "isNoRecoil", false);
+        this.isHeadshotOnly = ConfigUtils.getBooleanFromConfig(var1, "isHeadshotOnly", false);
         this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var1, "isBypassDebugMode", false);
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCarry", false);
         this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCondition", false);

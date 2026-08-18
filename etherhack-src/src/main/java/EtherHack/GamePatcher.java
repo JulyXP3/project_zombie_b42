@@ -49,7 +49,7 @@ import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -316,6 +316,40 @@ public class GamePatcher {
         }
     }
 
+    private void patchHeadshotOnly() {
+        Logger.print("Patching CombatManager.processHit with headshot-only hook...");
+        try {
+            Patch.injectIntoClass("zombie/CombatManager", "processHit", false, method -> {
+                InsnList hookInstructions = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isHeadshotOnly", "Z"));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new VarInsnNode(25, 0));
+                hookInstructions.add(new VarInsnNode(25, 1));
+                hookInstructions.add(new VarInsnNode(25, 2));
+                hookInstructions.add(new VarInsnNode(25, 3));
+                hookInstructions.add(new FieldInsnNode(178, "zombie/core/physics/RagdollBodyPart", "BODYPART_HEAD", "Lzombie/core/physics/RagdollBodyPart;"));
+                hookInstructions.add(new VarInsnNode(25, 0));
+                hookInstructions.add(new VarInsnNode(25, 2));
+                hookInstructions.add(new VarInsnNode(25, 3));
+                hookInstructions.add(new MethodInsnNode(182, "zombie/CombatManager", "calculateShotDirection", "(Lzombie/characters/IsoGameCharacter;Lzombie/characters/IsoGameCharacter;)Lzombie/combat/ShotDirection;", false));
+                hookInstructions.add(new MethodInsnNode(182, "zombie/CombatManager", "processTargetedHit", "(Lzombie/inventory/types/HandWeapon;Lzombie/characters/IsoGameCharacter;Lzombie/characters/IsoGameCharacter;Lzombie/core/physics/RagdollBodyPart;Lzombie/combat/ShotDirection;)V", false));
+                hookInstructions.add(new FieldInsnNode(178, "zombie/core/physics/RagdollBodyPart", "BODYPART_HEAD", "Lzombie/core/physics/RagdollBodyPart;"));
+                hookInstructions.add(new MethodInsnNode(182, "zombie/core/physics/RagdollBodyPart", "ordinal", "()I", false));
+                hookInstructions.add(new InsnNode(172));
+                hookInstructions.add(continueLabel);
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected headshot-only hook into CombatManager.processHit()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: Headshot-only injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
     private void patchGameClientSyncBlocker() {
         Logger.print("Patching GameClient.update with server sync filter...");
         try {
@@ -441,6 +475,7 @@ public class GamePatcher {
         this.patchLuaEventManager();
         this.patchLuaManager();
         this.patchAntiCheatSystem();
+        this.patchHeadshotOnly();
         this.patchGameClientSyncBlocker();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");

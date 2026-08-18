@@ -40,6 +40,7 @@
 	UI_CharacterPanel_NightVision = "夜视模式",
 	UI_CharacterPanel_UnlimitedCarry = "无限负重",
 	UI_CharacterPanel_UnlimitedEndurance = "无限耐力",
+	UI_CharacterPanel_HeadshotOnly = "枪械只爆头",
 	UI_CharacterPanel_DisableRecoil = "禁用后坐力",
 	UI_CharacterPanel_DisableFatigue = "禁用疲劳",
 	UI_CharacterPanel_DisableHunger = "禁用饥饿",

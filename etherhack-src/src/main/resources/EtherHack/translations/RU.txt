@@ -40,6 +40,7 @@
 	UI_CharacterPanel_NightVision = "Режим ночного видения",
 	UI_CharacterPanel_UnlimitedCarry = "Неограниченная переноска",
 	UI_CharacterPanel_UnlimitedEndurance = "Неограниченная выносливость",
+	UI_CharacterPanel_HeadshotOnly = "Только в голову",
 	UI_CharacterPanel_DisableRecoil = "Отключить отдачу",
 	UI_CharacterPanel_DisableFatigue = "Отключить усталость",
 	UI_CharacterPanel_DisableHunger = "Отключить голод",

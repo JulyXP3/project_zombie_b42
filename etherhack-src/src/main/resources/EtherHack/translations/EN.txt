@@ -40,6 +40,7 @@
 	UI_CharacterPanel_NightVision = "Night vision mode",
 	UI_CharacterPanel_UnlimitedCarry = "Unlimited carry",
 	UI_CharacterPanel_UnlimitedEndurance = "Unlimited endurance",
+	UI_CharacterPanel_HeadshotOnly = "Headshot only",
 	UI_CharacterPanel_DisableRecoil = "Disable recoil",
 	UI_CharacterPanel_DisableFatigue = "Disable fatigue",
 	UI_CharacterPanel_DisableHunger = "Disable hunger",
