@@ -230,6 +230,7 @@
     UI_VisualsPanel_DrawLineToVehicles = "载具雷达",
     UI_VisualsPanel_DrawLineToPlayers = "玩家雷达(150格)",
     UI_VisualsPanel_360Vision = "视野为 360 度",
+    UI_VisualsPanel_Fullbright = "真-夜视",
     UI_VisualsDraws_PrimaryHand = "主手: ",
     UI_VisualsDraws_SecondaryHand = "副手: ",
     UI_VisualsDraws_VehiclePower = "马力: ",

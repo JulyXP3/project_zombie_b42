@@ -270,6 +270,8 @@ function EtherCharacterPanel:build()
                   on = function(c) ISFarmingMenu.cheat = c; end,
                   get = function() return ISFarmingMenu.cheat; end },
                 { key = "UI_CharacterPanel_NightVision", on = toggleNightVision, get = isEnableNightVision },
+                -- 真-夜视 (Fullbright): 与夜视同模块, 渲染级全亮 (见 GamePatcher.patchFullbright)
+                { key = "UI_VisualsPanel_Fullbright", on = toggleFullbright, get = isFullbright },
                 -- 僵尸不理会 (多人可用): 客户端模拟上传 target=-1, 服务端零校验采纳
                 { key = "UI_CharacterPanel_ZombieDontAttack", on = toggleZombieDontAttack, get = isZombieDontAttack },
             },

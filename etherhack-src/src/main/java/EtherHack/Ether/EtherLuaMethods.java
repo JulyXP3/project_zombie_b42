@@ -729,6 +729,17 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="isFullbright", global=true)
+    public static boolean isFullbright() {
+        return EtherMain.getInstance().etherAPI.isFullbright;
+    }
+
+    @LuaMethod(name="toggleFullbright", global=true)
+    public static void toggleFullbright(boolean var0) {
+        EtherMain.getInstance().etherAPI.isFullbright = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isVisualDrawLineToPlayers", global=true)
     public static boolean isVisualDrawLineToPlayers() {
         return EtherMain.getInstance().etherAPI.isVisualDrawLineToPlayers;

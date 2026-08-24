@@ -2,6 +2,7 @@
 
 ## [3.1.10] - Current
 
+- Added: "True Night Vision" (Fullbright) - render-level full brightness (tiles/models forced white, night tint and vision-cone overlay removed); client-side only; in Character > Special Modes next to Night Vision.
 - Fixed: "Zombies do not attack the player" no longer requires debug privileges (works in SP and MP); fixed the crash / kick-to-menu when a zombie got close while enabled.
 - Fixed: disabling "Unlock debug privileges (SP)" no longer restarts the game (debug mode is on-only; unchecking takes effect on next launch).
 - Renamed: "Marksman Mode" → "Increase Fire Rate"; full-auto pushed further, semi/single fire no longer touches weapon data.

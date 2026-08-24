@@ -230,6 +230,7 @@
     UI_VisualsPanel_DrawLineToVehicles = "Радар транспорта",
     UI_VisualsPanel_DrawLineToPlayers = "Радар игроков (150 клеток)",
     UI_VisualsPanel_360Vision = "Угол обзора объектов 360 градусов",
+    UI_VisualsPanel_Fullbright = "Полная яркость (Fullbright)",
     UI_VisualsDraws_PrimaryHand = "Основная рука: ",
     UI_VisualsDraws_SecondaryHand = "Вторичная рука: ",
     UI_VisualsDraws_VehiclePower = "Мощность: ",

@@ -73,10 +73,12 @@ import zombie.characters.IsoPlayer;
 import zombie.characters.IsoZombie;
 import zombie.core.Color;
 import zombie.core.Core;
+import zombie.core.PerformanceSettings;
 import zombie.core.textures.Texture;
 import zombie.inventory.InventoryItem;
 import zombie.inventory.types.HandWeapon;
 import zombie.iso.IsoWorld;
+import zombie.iso.LightingJNI;
 import zombie.network.GameClient;
 import zombie.network.GameServer;
 import zombie.network.PacketTypes;
@@ -163,6 +165,9 @@ public class EtherAPI {
     public boolean isCharCreateMaxSkills;
     public boolean isCharCreateClothing;
     public boolean isVehicleInstantStart;
+    public boolean isFullbright;
+    private boolean fullbrightApplied;
+    private int fullbrightSavedViewConeOpacity = 3;
 
     public void saveConfig(String var1) {
         String var2 = "EtherHack/config/" + var1 + ".properties";
@@ -235,6 +240,7 @@ public class EtherAPI {
         var3.setProperty("isCharCreateMaxSkills", Boolean.toString(this.isCharCreateMaxSkills));
         var3.setProperty("isCharCreateClothing", Boolean.toString(this.isCharCreateClothing));
         var3.setProperty("isVehicleInstantStart", Boolean.toString(this.isVehicleInstantStart));
+        var3.setProperty("isFullbright", Boolean.toString(this.isFullbright));
         new File("EtherHack/config").mkdirs();
         try (FileOutputStream var4 = new FileOutputStream(var2);){
             var3.store(var4, (String)null);
@@ -320,6 +326,7 @@ public class EtherAPI {
         this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateMaxSkills", false);
         this.isCharCreateClothing = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateClothing", false);
         this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var3, "isVehicleInstantStart", false);
+        this.isFullbright = ConfigUtils.getBooleanFromConfig(var3, "isFullbright", false);
     }
 
     private void initStartupConfig() {
@@ -402,6 +409,7 @@ public class EtherAPI {
         this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateMaxSkills", false);
         this.isCharCreateClothing = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateClothing", false);
         this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var1, "isVehicleInstantStart", false);
+        this.isFullbright = ConfigUtils.getBooleanFromConfig(var1, "isFullbright", false);
     }
 
     public EtherAPI() {
@@ -595,6 +603,25 @@ public class EtherAPI {
         }
         if (var1.isWearingNightVisionGoggles() != this.isEnableNightVision) {
             var1.setWearingNightVisionGoggles(this.isEnableNightVision);
+        }
+        // Fullbright (功能9): 渲染取值改写由 GamePatcher.patchFullbright 三处注入完成
+        // (getVertLight 返白 + cacheLightInfo 白化 + updateRenderSettings 夜色清零)。
+        // 这里只处理切换边沿的配套动作:
+        //  · 视野锥出锥黑幕是独立 overlay (PerformanceSettings.viewConeOpacity, 官方
+        //    选项 0-5 默认 3), 开启置 0、关闭还原进入时的值;
+        //  · chunk FBO 纹理有缓存 (fboRenderChunk 默认开), 仅在 native 光照值变化时才
+        //    重画 —— 调 LightingJNI.buildingsChanged() 强制全量失效, 否则开关切换后已
+        //    缓存的暗块/亮块不会刷新。
+        if (this.isFullbright != this.fullbrightApplied) {
+            this.fullbrightApplied = this.isFullbright;
+            if (this.isFullbright) {
+                this.fullbrightSavedViewConeOpacity = PerformanceSettings.viewConeOpacity;
+                PerformanceSettings.viewConeOpacity = 0;
+            }
+            else {
+                PerformanceSettings.viewConeOpacity = this.fullbrightSavedViewConeOpacity;
+            }
+            LightingJNI.buildingsChanged();
         }
         if (var1.isGodMod() != this.isEnableGodMode) {
             var1.setGodMod(this.isEnableGodMode);

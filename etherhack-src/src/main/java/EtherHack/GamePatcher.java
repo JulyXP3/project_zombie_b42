@@ -50,7 +50,7 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "core/opengl/RenderSettings$PlayerRenderSettings.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -589,6 +589,139 @@ public class GamePatcher {
         }
     }
 
+    /*
+     * Fullbright 真全亮 (功能 9, 纯客户端渲染, 零上行包)。B42 光照计算在 native
+     * (Lighting64.dll), 但渲染取值全部经 Java 单点回读:
+     *  ① IsoGridSquare.getVertLight(I,I) —— 全树 23 处调用全在渲染方法内 (墙/地板/
+     *     水/雪/水洼/FBORenderCell), 且 interpolateLight 经它喂角色/载具模型 ambient,
+     *     开头拦截返回 -1 (0xFFFFFFFF 全白) 即同时覆盖世界几何+模型;
+     *  ② IsoGridSquare.cacheLightInfo() —— 每帧把 native lightInfo 缓存进
+     *     lightInfo[playerIndex], 被 FBORenderCell/IsoObject 用作物件与精灵着色;
+     *     原逻辑跑完后把缓存副本 r/g/b/a 拉满 (只改本方块缓存, 不碰共享对象);
+     *  ③ RenderSettings$PlayerRenderSettings.updateRenderSettings 尾部 —— 全局
+     *     夜色 tint/去饱和清零 (夜视镜正是靠 ambient=1.0 点亮全图的同一条链),
+     *     同时经 stateEndFrame 把 ambient=1 传进 native 作冗余保险。
+     * 视野锥出锥黑幕是独立 overlay (viewConeOpacity, 官方选项), 在 EtherAPI
+     * 切换边沿置 0/还原; chunk FBO 缓存 (fboRenderChunk 默认开) 由同处的
+     * LightingJNI.buildingsChanged() 强制全量重画。佐证: 游戏自带调试开关
+     * DebugDraw.SkipWorldShading 干的就是同一件事, 官方已验证思路可行。
+     */
+    private void patchFullbright() {
+        Logger.print("Patching IsoGridSquare/RenderSettings with fullbright hooks...");
+        try {
+            Patch.injectIntoClass("zombie/iso/IsoGridSquare", "getVertLight", false, method -> {
+                if (!method.desc.equals("(II)I")) {
+                    return;
+                }
+                InsnList hookInstructions = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new JumpInsnNode(198, continueLabel));
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                hookInstructions.add(new JumpInsnNode(198, continueLabel));
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isFullbright", "Z"));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new InsnNode(2));
+                hookInstructions.add(new InsnNode(172));
+                hookInstructions.add(continueLabel);
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected fullbright white into IsoGridSquare.getVertLight()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: getVertLight injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+        try {
+            Patch.injectIntoClass("zombie/iso/IsoGridSquare", "cacheLightInfo", false, method -> {
+                if (!method.desc.equals("()V")) {
+                    return;
+                }
+                AbstractInsnNode returnInsn = method.instructions.getLast();
+                while (returnInsn != null && returnInsn.getOpcode() != 177) {
+                    returnInsn = returnInsn.getPrevious();
+                }
+                if (returnInsn == null) {
+                    throw new IllegalStateException("RETURN not found in IsoGridSquare.cacheLightInfo");
+                }
+                InsnList toInject = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add(new JumpInsnNode(198, continueLabel));
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                toInject.add(new JumpInsnNode(198, continueLabel));
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isFullbright", "Z"));
+                toInject.add(new JumpInsnNode(153, continueLabel));
+                // this.lightInfo[IsoCamera.frameState.playerIndex] 的 r/g/b/a 全部拉满:
+                // aload_0/getfield 数组 + frameState.playerIndex 后 dup2+aaload 取元素存局部变量
+                toInject.add(new VarInsnNode(25, 0));
+                toInject.add(new FieldInsnNode(180, "zombie/iso/IsoGridSquare", "lightInfo", "[Lzombie/core/textures/ColorInfo;"));
+                toInject.add(new FieldInsnNode(178, "zombie/iso/IsoCamera", "frameState", "Lzombie/iso/IsoCamera$FrameState;"));
+                toInject.add(new FieldInsnNode(180, "zombie/iso/IsoCamera$FrameState", "playerIndex", "I"));
+                toInject.add(new InsnNode(93));
+                toInject.add(new InsnNode(50));
+                toInject.add(new VarInsnNode(58, 2));
+                for (String fieldName : new String[]{"r", "g", "b", "a"}) {
+                    toInject.add(new VarInsnNode(25, 2));
+                    toInject.add(new LdcInsnNode((Object)Float.valueOf(1.0f)));
+                    toInject.add(new FieldInsnNode(181, "zombie/core/textures/ColorInfo", fieldName, "F"));
+                }
+                toInject.add(continueLabel);
+                method.instructions.insertBefore(returnInsn, toInject);
+                Logger.print("  [OK] Injected fullbright white into IsoGridSquare.cacheLightInfo()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: cacheLightInfo injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+        try {
+            Patch.injectIntoClass("zombie/core/opengl/RenderSettings$PlayerRenderSettings", "updateRenderSettings", false, method -> {
+                if (!method.desc.equals("(ILzombie/characters/IsoPlayer;)V")) {
+                    return;
+                }
+                AbstractInsnNode returnInsn = method.instructions.getLast();
+                while (returnInsn != null && returnInsn.getOpcode() != 177) {
+                    returnInsn = returnInsn.getPrevious();
+                }
+                if (returnInsn == null) {
+                    throw new IllegalStateException("RETURN not found in PlayerRenderSettings.updateRenderSettings");
+                }
+                InsnList toInject = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add(new JumpInsnNode(198, continueLabel));
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                toInject.add(new JumpInsnNode(198, continueLabel));
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isFullbright", "Z"));
+                toInject.add(new JumpInsnNode(153, continueLabel));
+                // 夜色全局参数清零: ambient=1 / night=0 / darkness=0 / rgb mod=1 /
+                // blendIntensity=0 / desaturation=0 (字段私有但注入发生在同类内, 可直写)
+                for (Object[] fieldAndValue : new Object[][]{{"ambient", Float.valueOf(1.0f)}, {"night", Float.valueOf(0.0f)}, {"darkness", Float.valueOf(0.0f)}, {"rmod", Float.valueOf(1.0f)}, {"gmod", Float.valueOf(1.0f)}, {"bmod", Float.valueOf(1.0f)}, {"blendIntensity", Float.valueOf(0.0f)}, {"desaturation", Float.valueOf(0.0f)}}) {
+                    toInject.add(new VarInsnNode(25, 0));
+                    toInject.add(new LdcInsnNode(fieldAndValue[1]));
+                    toInject.add(new FieldInsnNode(181, "zombie/core/opengl/RenderSettings$PlayerRenderSettings", (String)fieldAndValue[0], "F"));
+                }
+                toInject.add(continueLabel);
+                method.instructions.insertBefore(returnInsn, toInject);
+                Logger.print("  [OK] Injected fullbright globals into RenderSettings$PlayerRenderSettings.updateRenderSettings()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: updateRenderSettings injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
     private void patchAbstractAntiCheatValidation() {
         Patch.injectIntoClass("zombie/network/anticheats/AbstractAntiCheat", "validate", false, method -> {
             InsnList hookInstructions = new InsnList();
@@ -706,6 +839,7 @@ public class GamePatcher {
         this.patchZombieSpotted();
         this.patchZombieShouldAttack();
         this.patchCharacterCreationBoost();
+        this.patchFullbright();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");
         Logger.print("Extracting EtherHack files to the current directory...");

@@ -230,6 +230,7 @@
     UI_VisualsPanel_DrawLineToVehicles = "Vehicle radar",
     UI_VisualsPanel_DrawLineToPlayers = "Player radar (150 tiles)",
     UI_VisualsPanel_360Vision = "The viewing angle of objects is 360 degrees",
+    UI_VisualsPanel_Fullbright = "Fullbright mode",
     UI_VisualsDraws_PrimaryHand = "Primary hand: ",
     UI_VisualsDraws_SecondaryHand = "Secondary hand: ",
     UI_VisualsDraws_VehiclePower = "Power: ",
