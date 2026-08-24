@@ -720,6 +720,48 @@ public class GamePatcher {
             Logger.print("Warning: updateRenderSettings injection failed: " + e.getMessage());
             Logger.logException(e);
         }
+        try {
+            /*
+             * ④ 可见性位与黑暗系数 (室内全亮的关键): 颜色三注入只解决"画出来的东西是白的",
+             * 但无灯房间 native 把玩家对这些格子的 canSee/couldSee 判为 false, 渲染侧据此
+             * *直接不画*: FBORenderCutaways(:729/:736/:1460/:1515/:1529) 对 !isCouldSee 的
+             * 方块跳过裁剪绘制, renderFloorInternal(:7010) 对 darkMulti<0.5 的非本房间格子
+             * 把地板 alpha 归零, :7560 对面墙 alpha=darkMulti*2 —— 这就是"户外全亮、室内
+             * 无灯依旧漆黑一片"的根因 (户外夜晚有天光 => canSee 全真 => 照常绘制成白色)。
+             * 强制 bCanSee/bCouldSee=true + darkMulti/targetDarkMulti=1, 几何体一律照常绘制。
+             * 只动渲染侧: bSeen 不碰 (保留地图探索/Meta 统计), 服务端 LOS 走独立 ServerLOS,
+             * 僵尸 AI 用自身感知 (spotted/vision cone) 不读方块 canSee, 多人零上行影响。
+             */
+            String[][] visMethods = new String[][]{{"bCanSee", "()Z"}, {"bCouldSee", "()Z"}, {"darkMulti", "()F"}, {"targetDarkMulti", "()F"}};
+            for (final String[] spec : visMethods) {
+                final boolean isFloat = spec[1].equals("()F");
+                Patch.injectIntoClass("zombie/iso/LightingJNI$JNILighting", spec[0], false, method -> {
+                    if (!method.desc.equals(spec[1])) {
+                        return;
+                    }
+                    InsnList hookInstructions = new InsnList();
+                    LabelNode continueLabel = new LabelNode();
+                    hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                    hookInstructions.add(new JumpInsnNode(198, continueLabel));
+                    hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                    hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                    hookInstructions.add(new JumpInsnNode(198, continueLabel));
+                    hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                    hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                    hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isFullbright", "Z"));
+                    hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                    hookInstructions.add(new InsnNode(isFloat ? 13 : 4));
+                    hookInstructions.add(new InsnNode(isFloat ? 174 : 172));
+                    hookInstructions.add(continueLabel);
+                    method.instructions.insert(hookInstructions);
+                });
+            }
+            Logger.print("  [OK] Injected fullbright visibility into LightingJNI$JNILighting (bCanSee/bCouldSee/darkMulti/targetDarkMulti)");
+        }
+        catch (Exception e) {
+            Logger.print("Warning: JNILighting visibility injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
     }
 
     private void patchAbstractAntiCheatValidation() {
