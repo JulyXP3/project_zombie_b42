@@ -23,7 +23,6 @@
  *  zombie.network.GameServer
  *  zombie.network.ServerOptions
  *  zombie.network.ZomboidNetData
- *  zombie.ui.UIFont
  *  zombie.vehicles.BaseVehicle
  */
 package EtherHack.Ether;
@@ -68,6 +67,7 @@ import se.krka.kahlua.vm.Platform;
 import zombie.Lua.LuaManager;
 import zombie.SandboxOptions;
 import zombie.characterTextures.BloodBodyPartType;
+import zombie.characters.BodyDamage.BodyPart;
 import zombie.characters.CharacterStat;
 import zombie.characters.IsoPlayer;
 import zombie.characters.IsoZombie;
@@ -80,10 +80,8 @@ import zombie.iso.IsoWorld;
 import zombie.network.GameClient;
 import zombie.network.GameServer;
 import zombie.network.PacketTypes;
-import zombie.network.ServerOptions;
 import zombie.network.packets.INetworkPacket;
 import zombie.network.ZomboidNetData;
-import zombie.ui.UIFont;
 import zombie.vehicles.BaseVehicle;
 
 public class EtherAPI {
@@ -107,8 +105,14 @@ public class EtherAPI {
     public boolean isEnableNightVision;
     public boolean isZombieDontAttack;
     public boolean isNoRecoil;
+    private HandWeapon jamStompedWeapon;
+    private float jamStompedOriginalChance;
+    private HandWeapon recoilStompedWeapon;
+    private long lastPlayerDamageSendMs;
     public boolean isHeadshotOnly;
     public boolean isBypassDebugMode;
+    public boolean initialCoreDebugCaptured;
+    public boolean initialCoreDebug;
     public boolean isUnlimitedCarry;
     public boolean isUnlimitedCondition;
     public boolean isUnlimitedEndurance;
@@ -137,13 +141,11 @@ public class EtherAPI {
     public boolean isDisableFakeInfectionLevel;
     public boolean isOptimalCalories;
     public boolean isOptimalWeight;
-    public boolean isVisualsEnable;
-    public boolean isVisualsPlayersEnable;
+    public boolean isVisualsEnable = true;
     public boolean isVisualsVehiclesEnable;
     public boolean isVisualsZombiesEnable;
-    public boolean isVisualDrawToLocalPlayer;
+    public boolean isVisualDrawLineToZombies;
     public boolean isVisualDrawPlayerNickname;
-    public boolean isVisualDrawCredits = true;
     public boolean isVisualDrawPlayerInfo;
     public boolean isVisualDrawLineToVehicle;
     public boolean isVisualDrawLineToPlayers;
@@ -154,6 +156,13 @@ public class EtherAPI {
     public boolean isMapDrawZombies;
     public boolean isMapDrawItems;
     public boolean isMinimapOpen;
+    public boolean isNoJam;
+    public boolean isNoMuscleStrain;
+    public boolean isFullBodyRestore;
+    public boolean isCharCreateAllTraits;
+    public boolean isCharCreateMaxSkills;
+    public boolean isCharCreateClothing;
+    public boolean isVehicleInstantStart;
 
     public void saveConfig(String var1) {
         String var2 = "EtherHack/config/" + var1 + ".properties";
@@ -205,12 +214,10 @@ public class EtherAPI {
         var3.setProperty("isOptimalCalories", Boolean.toString(this.isOptimalCalories));
         var3.setProperty("isOptimalWeight", Boolean.toString(this.isOptimalWeight));
         var3.setProperty("isVisualsEnable", Boolean.toString(this.isVisualsEnable));
-        var3.setProperty("isVisualsPlayersEnable", Boolean.toString(this.isVisualsPlayersEnable));
         var3.setProperty("isVisualsVehiclesEnable", Boolean.toString(this.isVisualsVehiclesEnable));
         var3.setProperty("isVisualsZombiesEnable", Boolean.toString(this.isVisualsZombiesEnable));
-        var3.setProperty("isVisualDrawToLocalPlayer", Boolean.toString(this.isVisualDrawToLocalPlayer));
+        var3.setProperty("isVisualDrawLineToZombies", Boolean.toString(this.isVisualDrawLineToZombies));
         var3.setProperty("isVisualDrawPlayerNickname", Boolean.toString(this.isVisualDrawPlayerNickname));
-        var3.setProperty("isVisualDrawCredits", Boolean.toString(this.isVisualDrawCredits));
         var3.setProperty("isVisualDrawPlayerInfo", Boolean.toString(this.isVisualDrawPlayerInfo));
         var3.setProperty("isVisualDrawLineToVehicle", Boolean.toString(this.isVisualDrawLineToVehicle));
         var3.setProperty("isVisualDrawLineToPlayers", Boolean.toString(this.isVisualDrawLineToPlayers));
@@ -221,6 +228,13 @@ public class EtherAPI {
         var3.setProperty("isMapDrawZombies", Boolean.toString(this.isMapDrawZombies));
         var3.setProperty("isMapDrawItems", Boolean.toString(this.isMapDrawItems));
         var3.setProperty("isMinimapOpen", Boolean.toString(this.isMinimapOpen));
+        var3.setProperty("isNoJam", Boolean.toString(this.isNoJam));
+        var3.setProperty("isNoMuscleStrain", Boolean.toString(this.isNoMuscleStrain));
+        var3.setProperty("isFullBodyRestore", Boolean.toString(this.isFullBodyRestore));
+        var3.setProperty("isCharCreateAllTraits", Boolean.toString(this.isCharCreateAllTraits));
+        var3.setProperty("isCharCreateMaxSkills", Boolean.toString(this.isCharCreateMaxSkills));
+        var3.setProperty("isCharCreateClothing", Boolean.toString(this.isCharCreateClothing));
+        var3.setProperty("isVehicleInstantStart", Boolean.toString(this.isVehicleInstantStart));
         new File("EtherHack/config").mkdirs();
         try (FileOutputStream var4 = new FileOutputStream(var2);){
             var3.store(var4, (String)null);
@@ -240,7 +254,7 @@ public class EtherAPI {
             Logger.printLog("The config file was not found. Loading canceled.");
             return;
         }
-        this.mainUIAccentColor = ConfigUtils.getColorFromConfig(var3, "mainUIAccentColor", new Color(56, 239, 125));
+        this.mainUIAccentColor = ConfigUtils.getColorFromConfig(var3, "mainUIAccentColor", new Color(72, 216, 168));
         this.vehiclesUIColor = ConfigUtils.getColorFromConfig(var3, "vehiclesUIColor", new Color(150, 150, 200));
         this.zombiesUIColor = ConfigUtils.getColorFromConfig(var3, "zombiesUIColor", new Color(255, 150, 100));
         this.playersUIColor = ConfigUtils.getColorFromConfig(var3, "playersUIColor", new Color(255, 50, 100));
@@ -284,13 +298,11 @@ public class EtherAPI {
         this.isDisableFakeInfectionLevel = ConfigUtils.getBooleanFromConfig(var3, "isDisableFakeInfectionLevel", false);
         this.isOptimalCalories = ConfigUtils.getBooleanFromConfig(var3, "isOptimalCalories", false);
         this.isOptimalWeight = ConfigUtils.getBooleanFromConfig(var3, "isOptimalWeight", false);
-        this.isVisualsEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsEnable", false);
-        this.isVisualsPlayersEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsPlayersEnable", false);
+        this.isVisualsEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsEnable", true);
         this.isVisualsVehiclesEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsVehiclesEnable", false);
         this.isVisualsZombiesEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsZombiesEnable", false);
-        this.isVisualDrawToLocalPlayer = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawToLocalPlayer", false);
+        this.isVisualDrawLineToZombies = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToZombies", false);
         this.isVisualDrawPlayerNickname = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawPlayerNickname", false);
-        this.isVisualDrawCredits = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawCredits", true);
         this.isVisualDrawPlayerInfo = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawPlayerInfo", false);
         this.isVisualDrawLineToVehicle = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToVehicle", false);
         this.isVisualDrawLineToPlayers = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToPlayers", false);
@@ -301,11 +313,18 @@ public class EtherAPI {
         this.isMapDrawZombies = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawZombies", false);
         this.isMapDrawItems = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawItems", false);
         this.isMinimapOpen = ConfigUtils.getBooleanFromConfig(var3, "isMinimapOpen", false);
+        this.isNoJam = ConfigUtils.getBooleanFromConfig(var3, "isNoJam", false);
+        this.isNoMuscleStrain = ConfigUtils.getBooleanFromConfig(var3, "isNoMuscleStrain", false);
+        this.isFullBodyRestore = ConfigUtils.getBooleanFromConfig(var3, "isFullBodyRestore", false);
+        this.isCharCreateAllTraits = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateAllTraits", false);
+        this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateMaxSkills", false);
+        this.isCharCreateClothing = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateClothing", false);
+        this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var3, "isVehicleInstantStart", false);
     }
 
     private void initStartupConfig() {
         if (!new File("EtherHack/config/startup.properties").exists()) {
-            this.mainUIAccentColor = new Color(56, 239, 125);
+            this.mainUIAccentColor = new Color(72, 216, 168);
             this.vehiclesUIColor = new Color(150, 150, 200);
             this.zombiesUIColor = new Color(255, 150, 100);
             this.playersUIColor = new Color(255, 50, 100);
@@ -318,7 +337,7 @@ public class EtherAPI {
         catch (IOException var7) {
             Logger.printLog("Startup file not found. Loading default settings.");
         }
-        this.mainUIAccentColor = ConfigUtils.getColorFromConfig(var1, "mainUIAccentColor", new Color(56, 239, 125));
+        this.mainUIAccentColor = ConfigUtils.getColorFromConfig(var1, "mainUIAccentColor", new Color(72, 216, 168));
         this.vehiclesUIColor = ConfigUtils.getColorFromConfig(var1, "vehiclesUIColor", new Color(150, 150, 200));
         this.zombiesUIColor = ConfigUtils.getColorFromConfig(var1, "zombiesUIColor", new Color(255, 150, 100));
         this.playersUIColor = ConfigUtils.getColorFromConfig(var1, "playersUIColor", new Color(255, 50, 100));
@@ -361,13 +380,11 @@ public class EtherAPI {
         this.isDisableFakeInfectionLevel = ConfigUtils.getBooleanFromConfig(var1, "isDisableFakeInfectionLevel", false);
         this.isOptimalCalories = ConfigUtils.getBooleanFromConfig(var1, "isOptimalCalories", false);
         this.isOptimalWeight = ConfigUtils.getBooleanFromConfig(var1, "isOptimalWeight", false);
-        this.isVisualsEnable = ConfigUtils.getBooleanFromConfig(var1, "isVisualsEnable", false);
-        this.isVisualsPlayersEnable = ConfigUtils.getBooleanFromConfig(var1, "isVisualsPlayersEnable", false);
+        this.isVisualsEnable = ConfigUtils.getBooleanFromConfig(var1, "isVisualsEnable", true);
         this.isVisualsVehiclesEnable = ConfigUtils.getBooleanFromConfig(var1, "isVisualsVehiclesEnable", false);
         this.isVisualsZombiesEnable = ConfigUtils.getBooleanFromConfig(var1, "isVisualsZombiesEnable", false);
-        this.isVisualDrawToLocalPlayer = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawToLocalPlayer", false);
+        this.isVisualDrawLineToZombies = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawLineToZombies", false);
         this.isVisualDrawPlayerNickname = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawPlayerNickname", false);
-        this.isVisualDrawCredits = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawCredits", true);
         this.isVisualDrawPlayerInfo = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawPlayerInfo", false);
         this.isVisualDrawLineToVehicle = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawLineToVehicle", false);
         this.isVisualDrawLineToPlayers = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawLineToPlayers", false);
@@ -378,6 +395,13 @@ public class EtherAPI {
         this.isMapDrawZombies = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawZombies", false);
         this.isMapDrawItems = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawItems", false);
         this.isMinimapOpen = ConfigUtils.getBooleanFromConfig(var1, "isMinimapOpen", false);
+        this.isNoJam = ConfigUtils.getBooleanFromConfig(var1, "isNoJam", false);
+        this.isNoMuscleStrain = ConfigUtils.getBooleanFromConfig(var1, "isNoMuscleStrain", false);
+        this.isFullBodyRestore = ConfigUtils.getBooleanFromConfig(var1, "isFullBodyRestore", false);
+        this.isCharCreateAllTraits = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateAllTraits", false);
+        this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateMaxSkills", false);
+        this.isCharCreateClothing = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateClothing", false);
+        this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var1, "isVehicleInstantStart", false);
     }
 
     public EtherAPI() {
@@ -581,15 +605,46 @@ public class EtherAPI {
         if (this.isEnableInvisible) {
             var1.setInvisible(true);
         }
-        if (this.isZombieDontAttack) {
-            var1.setZombiesDontAttack(true);
-        }
+        // 僵尸不攻击玩家: 不再走 vanilla setZombiesDontAttack —— 该 setter 被 Role.hasCapability
+        // 门禁 (单人需 Core.debug 才放行, 否则强制 false), 是"单人下必须先开解锁调试权限才生效"的
+        // 根因, 且关调试会连带触发 Core.debug 运行时切换导致重启。改由 GamePatcher 注入
+        // IsoZombie.getShouldAttack (攻击唯一裁决门) 拦截本机玩家, SP/MP 通用、无需调试、无重启。
+        // 参见 GamePatcher.patchZombieShouldAttack。
+        // 提高枪械射速 (原"神枪手模式"): 射速门只看玩家侧 recoilDelay (AttemptAttack 前置
+        // getRecoilDelay()<=0 才可击发)。分两档处理:
+        //  · 半自动/单发: 只每帧清玩家侧 recoilDelay, 武器字段不动 => recoilVarX/singleShootSpeed
+        //    全 vanilla (无模型扭曲/动画卡死), 射速由射击动画自然限速, 远高于单发 150ms AC 阈值。
+        //  · 全自动: 把武器侧 recoilDelay 压到 6 (比旧值 8 更激进, 保留安全冗余) —— 玩家侧每帧衰减
+        //    0.625, 每发后取按瞄准/力量缩放的 getRecoilDelay(owner) (双满级最低 ×0.5625), 故实弹间隔
+        //    ≈ ceil(6×0.5625/0.625)=6 帧: <400fps 一律 >15ms 全自动阈值 (60fps=100ms / 240fps=25ms
+        //    冗余); 值非零 => recoilVarX 未满, 姿势/动画仅轻微加速不扭曲。切非全自动/关功能/换枪时一律
+        //    还原脚本 recoilDelay, 防加速值残留把单发打穿 150ms 阈值。
         if (this.isNoRecoil && var2 != null && var2.getStringItemType().equals("RangedWeapon") && var2 instanceof HandWeapon) {
             var3 = (HandWeapon)var2;
-            var3.setRecoilDelay(0);
             var3.setCriticalChance(100.0f);
             var3.setAlwaysKnockdown(true);
             var3.setAimingTime(0);
+            if ("Auto".equals(var3.getFireMode())) {
+                if (this.recoilStompedWeapon != null && this.recoilStompedWeapon != var3 && this.recoilStompedWeapon.getScriptItem() != null) {
+                    this.recoilStompedWeapon.setRecoilDelay(this.recoilStompedWeapon.getScriptItem().recoilDelay);
+                }
+                var3.setRecoilDelay(6);
+                this.recoilStompedWeapon = var3;
+            } else {
+                if (this.recoilStompedWeapon != null && this.recoilStompedWeapon.getScriptItem() != null) {
+                    this.recoilStompedWeapon.setRecoilDelay(this.recoilStompedWeapon.getScriptItem().recoilDelay);
+                }
+                this.recoilStompedWeapon = null;
+                var1.setRecoilDelay(0.0f);
+            }
+        } else {
+            if (this.recoilStompedWeapon != null && this.recoilStompedWeapon.getScriptItem() != null) {
+                this.recoilStompedWeapon.setRecoilDelay(this.recoilStompedWeapon.getScriptItem().recoilDelay);
+            }
+            this.recoilStompedWeapon = null;
+            if (this.isNoRecoil) {
+                var1.setRecoilDelay(0.0f);
+            }
         }
         if (this.isUnlimitedAmmo) {
             this.applyUnlimitedAmmo(var1, var1.getPrimaryHandItem());
@@ -602,6 +657,53 @@ public class EtherAPI {
             if (var2.getCondition() != var2.getConditionMax() || var2.getHaveBeenRepaired() > 1) {
                 var2.setCondition(var2.getConditionMax());
                 var2.syncItemFields();
+            }
+        }
+        // 无卡壳: 卡壳 roll 在持有者客户端的装弹/拉栓动作里(ISReloadWeaponAction/
+        // ISRackFirearm 调 checkJam), 服务端不重判 —— 每帧清卡壳概率与已卡壳状态;
+        // 关闭/换枪时还原进入时的原始概率
+        if (this.isNoJam && var2 != null && var2.getStringItemType().equals("RangedWeapon") && var2 instanceof HandWeapon) {
+            var3 = (HandWeapon)var2;
+            if (this.jamStompedWeapon != var3) {
+                if (this.jamStompedWeapon != null) {
+                    this.jamStompedWeapon.setJamGunChance(this.jamStompedOriginalChance);
+                }
+                this.jamStompedWeapon = var3;
+                this.jamStompedOriginalChance = var3.getJamGunChance();
+            }
+            var3.setJamGunChance(0.0f);
+            var3.setJammed(false);
+        } else if (this.jamStompedWeapon != null) {
+            this.jamStompedWeapon.setJamGunChance(this.jamStompedOriginalChance);
+            this.jamStompedWeapon = null;
+        }
+        // 一包三用 (负重/拉伤/回血): PlayerDamagePacket 服务端 parse 零校验直采
+        // 客户端自报的 maxWeight/BodyDamage, 但服务端每帧 UpdateStrength 会重算
+        // 覆盖 —— 本地踩值 + 每 50ms 重发一次 (20/s 压制 last-writer-wins; 该包
+        // anticheats=None, 限流默认 300/s 且超限仅告警)。
+        // 注: 原「无尸病」已移除 —— corpseSicknessRate 仅驱动 NOXIOUS_SMELL moodle
+        // 档位 (Moodle:458), UpdateIllness 每帧按尸体数重算 rate 并直加
+        // CharacterStat.FOOD_SICKNESS, 从不读该字段, 清零只遮指示器不挡病情。
+        if (this.isUnlimitedCarry || this.isNoMuscleStrain || this.isFullBodyRestore) {
+            if (this.isUnlimitedCarry && var1.getMaxWeight() < 10000) {
+                var1.setMaxWeight(10000);
+            }
+            if (this.isNoMuscleStrain || this.isFullBodyRestore) {
+                ArrayList<BodyPart> bodyParts = var1.getBodyDamage().getBodyParts();
+                for (int bodyIndex = 0; bodyIndex < bodyParts.size(); ++bodyIndex) {
+                    BodyPart bodyPart = bodyParts.get(bodyIndex);
+                    if (this.isNoMuscleStrain && bodyPart.getStiffness() > 0.0f) {
+                        bodyPart.setStiffness(0.0f);
+                    }
+                    if (this.isFullBodyRestore && bodyPart.getHealth() < 100.0f) {
+                        bodyPart.SetHealth(100.0f);
+                    }
+                }
+            }
+            long nowMs = System.currentTimeMillis();
+            if (GameClient.client && nowMs - this.lastPlayerDamageSendMs >= 50L) {
+                this.lastPlayerDamageSendMs = nowMs;
+                GameClient.sendPlayerDamage(var1);
             }
         }
         if (this.isAutoRepairItems && (var7 = var1.getInventory().getItems()) != null && !var7.isEmpty()) {
@@ -688,12 +790,17 @@ public class EtherAPI {
     }
 
     private void bypassDebugMode() {
-        boolean var1 = GameClient.ingame;
-        Boolean antiCheatOption = ServerOptions.instance.getBoolean("AntiCheatProtectionType12");
-        boolean var2 = antiCheatOption != null && antiCheatOption != false;
-        boolean var3 = GameServer.server;
-        boolean var4 = GameServer.coop;
-        Core.debug = var1 && this.isBypassDebugMode && (!var2 && var3 || var4 || !var3);
+        if (!this.initialCoreDebugCaptured) {
+            this.initialCoreDebugCaptured = true;
+            this.initialCoreDebug = Core.debug;
+        }
+        // 只锁存"开启", 绝不在运行时把 Core.debug 由 true 翻回 false: B42 不支持运行时关闭
+        // 调试模式, 关闭会连带把开启时初始化的调试子系统不一致拆除 -> 崩溃/游戏重启 (即用户反馈
+        // "同时开启后再关掉解锁调试权限就游戏重启"的根因)。取消勾选改为下次进游戏才生效。
+        boolean singlePlayer = GameClient.ingame && !GameClient.client && !GameServer.server;
+        if (singlePlayer && this.isBypassDebugMode && !Core.debug) {
+            Core.debug = true;
+        }
     }
 
     @SubscribeLuaEvent(eventName="OnPostUIDraw")
@@ -737,7 +844,7 @@ public class EtherAPI {
 
     private void updateVehiclesVisuals() {
         IsoPlayer var1;
-        if (this.isVisualsEnable && this.isVisualsVehiclesEnable && (var1 = IsoPlayer.getInstance()) != null) {
+        if (this.isVisualsEnable && (this.isVisualsVehiclesEnable || this.isVisualDrawLineToVehicle) && (var1 = IsoPlayer.getInstance()) != null) {
             Set<BaseVehicle> var2 = IsoWorld.instance.getCell().getVehicles();
             float var3 = PlayerUtils.getScreenPositionX(var1);
             float var4 = PlayerUtils.getScreenPositionY(var1);
@@ -746,11 +853,15 @@ public class EtherAPI {
             float var7 = this.vehiclesUIColor.g;
             float var8 = this.vehiclesUIColor.b;
             if (var2 != null && !var2.isEmpty()) {
+                float scale = Rendering.espTextScale();
+                int lineH = Rendering.getEspLineH();
                 for (BaseVehicle var10 : var2) {
                     float var11 = VehicleUtils.getScreenPositionX(var10);
                     float var12 = VehicleUtils.getScreenPositionY(var10);
-                    Rendering.drawTextCenterWithShadow("ID:" + var10.getScriptName(), UIFont.Small, var11, var12, var6, var7, var8, var5);
-                    Rendering.drawTextCenterWithShadow(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_VehicleSpeed") + var10.getMaxSpeed(), UIFont.Small, var11, var12 + 10.0f, var6, var7, var8, var5);
+                    if (this.isVisualsVehiclesEnable) {
+                        Rendering.drawEspTextCenter(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_VehiclePower") + var10.getEnginePower() / 10.0f, scale, var11, var12, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_VehicleSpeed") + var10.getMaxSpeed(), scale, var11, var12 + (float)lineH, var6, var7, var8, var5);
+                    }
                     if (!this.isVisualDrawLineToVehicle) continue;
                     int var13 = (int)PlayerUtils.getDistanceBetweenPlayerAndVehicle(var1, var10);
                     int var14 = Math.max(30, Math.min(150, var13));
@@ -758,8 +869,8 @@ public class EtherAPI {
                     float var16 = (float)var14 / var15;
                     float var17 = var3 + var16 * (var11 - var3);
                     float var18 = var4 + 60.0f + var16 * (var12 - var4);
-                    Rendering.drawLine((int)var11, (int)var12, (int)var3, (int)var4 + 60, var6, var7, var8, 0.8f, 1);
-                    Rendering.drawTextCenterWithShadow(String.valueOf(var13), UIFont.Small, var17, var18, var6, var7, var8, var5);
+                    Rendering.drawThinLine(var11, var12, var3, var4 + 60.0f, var6, var7, var8, 0.8f);
+                    Rendering.drawEspTextCenter(String.valueOf(var13), scale, var17, var18, var6, var7, var8, var5);
                 }
             }
         }
@@ -767,19 +878,31 @@ public class EtherAPI {
 
     private void updateZombiesVisuals() {
         IsoPlayer var1;
-        if (this.isVisualsEnable && this.isVisualsZombiesEnable && (var1 = IsoPlayer.getInstance()) != null) {
+        if (this.isVisualsEnable && (this.isVisualsZombiesEnable || this.isVisualDrawLineToZombies) && (var1 = IsoPlayer.getInstance()) != null) {
             ArrayList<IsoZombie> var2 = IsoWorld.instance.getCell().getZombieList();
-            float var3 = this.zombiesUIColor.a;
-            float var4 = this.zombiesUIColor.r;
-            float var5 = this.zombiesUIColor.g;
-            float var6 = this.zombiesUIColor.b;
+            float var3 = PlayerUtils.getScreenPositionX(var1);
+            float var4 = PlayerUtils.getScreenPositionY(var1);
+            float var5 = this.zombiesUIColor.a;
+            float var6 = this.zombiesUIColor.r;
+            float var7 = this.zombiesUIColor.g;
+            float var8 = this.zombiesUIColor.b;
             if (var2 != null && !var2.isEmpty()) {
-                for (IsoZombie var8 : var2) {
-                    float var9 = ZombieUtils.getScreenPositionX(var8);
-                    float var10 = ZombieUtils.getScreenPositionY(var8);
-                    int var11 = (int)(var8.getHealth() * 100.0f);
-                    Rendering.drawTextCenterWithShadow(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_ZombieTitle"), UIFont.Small, var9, var10, var4, var5, var6, var3);
-                    Rendering.drawTextCenterWithShadow(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_ZombieHealth") + var11, UIFont.Small, var9, var10 + 10.0f, var4, var5, var6, var3);
+                float scale = Rendering.espTextScale();
+                for (IsoZombie var9 : var2) {
+                    float var10 = ZombieUtils.getScreenPositionX(var9);
+                    float var11 = ZombieUtils.getScreenPositionY(var9);
+                    if (this.isVisualsZombiesEnable) {
+                        Rendering.drawEspTextCenter("HP: " + (int)(var9.getHealth() * 100.0f), scale, var10, var11 - 10.0f, var6, var7, var8, var5);
+                    }
+                    if (!this.isVisualDrawLineToZombies || !(PlayerUtils.getDistanceBetweenPlayerAndZombie(var1, var9) < 150.0f)) continue;
+                    int var12 = (int)PlayerUtils.getDistanceBetweenPlayerAndZombie(var1, var9);
+                    int var13 = Math.max(30, Math.min(150, var12));
+                    float var14 = (float)Math.sqrt(Math.pow(var10 - var3, 2.0) + Math.pow(var11 - var4, 2.0));
+                    float var15 = (float)var13 / var14;
+                    float var16 = var3 + var15 * (var10 - var3);
+                    float var17 = var4 + 60.0f + var15 * (var11 - var4);
+                    Rendering.drawThinLine(var10, var11, var3, var4 + 60.0f, var6, var7, var8, 0.8f);
+                    Rendering.drawEspTextCenter(String.valueOf(var12), scale, var16, var17, var6, var7, var8, var5);
                 }
             }
         }
@@ -787,7 +910,7 @@ public class EtherAPI {
 
     private void updatePlayersVisuals() {
         IsoPlayer var1;
-        if (this.isVisualsEnable && this.isVisualsPlayersEnable && (var1 = IsoPlayer.getInstance()) != null) {
+        if (this.isVisualsEnable && (this.isVisualDrawPlayerNickname || this.isVisualDrawPlayerInfo || this.isVisualDrawLineToPlayers) && (var1 = IsoPlayer.getInstance()) != null) {
             GameClient instance = GameClientWrapper.getInstance();
             ArrayList<IsoPlayer> var2 = instance != null ? instance.getPlayers() : null;
             float var3 = PlayerUtils.getScreenPositionX(var1);
@@ -797,6 +920,8 @@ public class EtherAPI {
             float var7 = this.playersUIColor.g;
             float var8 = this.playersUIColor.b;
             if (var2 != null && !var2.isEmpty()) {
+                float scale = Rendering.espTextScale();
+                int lineH = Rendering.getEspLineH();
                 Iterator var9 = var2.iterator();
                 while (true) {
                     if (!var9.hasNext()) {
@@ -805,15 +930,15 @@ public class EtherAPI {
                     IsoPlayer var10 = (IsoPlayer)var9.next();
                     float var11 = PlayerUtils.getScreenPositionX(var10);
                     float var12 = PlayerUtils.getScreenPositionY(var10);
-                    if (var10.isLocalPlayer() && !this.isVisualDrawToLocalPlayer) continue;
+                    if (var10.isLocalPlayer()) continue;
                     if (this.isVisualDrawPlayerNickname) {
-                        Rendering.drawTextCenterWithShadow(var10.getUsername(), UIFont.Small, var11, var12 - 30.0f, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter(var10.getUsername(), scale, var11, var12 - 30.0f, var6, var7, var8, var5);
                     }
                     if (this.isVisualDrawPlayerInfo) {
                         String var13 = var10.getPrimaryHandItem() != null ? var10.getPrimaryHandItem().getDisplayName() : "None";
                         String var14 = var10.getSecondaryHandItem() != null ? var10.getSecondaryHandItem().getDisplayName() : "None";
-                        Rendering.drawTextCenterWithShadow(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_PrimaryHand") + var13, UIFont.Small, var11, var12 + 70.0f, var6, var7, var8, var5);
-                        Rendering.drawTextCenterWithShadow(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_SecondaryHand") + var14, UIFont.Small, var11, var12 + 80.0f, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_PrimaryHand") + var13, scale, var11, var12 + 70.0f, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_SecondaryHand") + var14, scale, var11, var12 + 70.0f + (float)lineH, var6, var7, var8, var5);
                     }
                     if (var10.isLocalPlayer() || !this.isVisualDrawLineToPlayers || !(PlayerUtils.getDistanceBetweenPlayers(var1, var10) < 150.0f)) continue;
                     int var19 = (int)PlayerUtils.getDistanceBetweenPlayers(var10, var1);
@@ -822,8 +947,8 @@ public class EtherAPI {
                     float var16 = (float)var20 / var15;
                     float var17 = var3 + var16 * (var11 - var3);
                     float var18 = var4 + 60.0f + var16 * (var12 - var4);
-                    Rendering.drawLine((int)var11, (int)var12, (int)var3, (int)var4 + 60, var6, var7, var8, 0.8f, 1);
-                    Rendering.drawTextCenterWithShadow(String.valueOf(var19), UIFont.Small, var17, var18, var6, var7, var8, var5);
+                    Rendering.drawThinLine(var11, var12, var3, var4 + 60.0f, var6, var7, var8, 0.8f);
+                    Rendering.drawEspTextCenter(String.valueOf(var19), scale, var17, var18, var6, var7, var8, var5);
                 }
             }
         }

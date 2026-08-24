@@ -4,7 +4,6 @@
 package EtherHack.Ether;
 
 import EtherHack.Ether.EtherAPI;
-import EtherHack.Ether.EtherCredits;
 import EtherHack.Ether.EtherLuaManager;
 import EtherHack.Ether.EtherTranslator;
 import EtherHack.utils.Logger;
@@ -12,7 +11,6 @@ import EtherHack.utils.Logger;
 public class EtherMain {
     private static EtherMain instance;
     public EtherTranslator etherTranslator;
-    public EtherCredits etherCredits;
     public EtherLuaManager etherLuaManager;
     public EtherAPI etherAPI;
 
@@ -26,8 +24,6 @@ public class EtherMain {
             this.etherTranslator = new EtherTranslator();
             Logger.printLog("Loading translations...");
             this.etherTranslator.loadTranslations();
-            Logger.printLog("Creating EtherCredits...");
-            this.etherCredits = new EtherCredits();
             Logger.printLog("Creating EtherAPI...");
             this.etherAPI = new EtherAPI();
             Logger.printLog("EtherAPI created successfully");

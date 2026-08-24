@@ -13,7 +13,9 @@ local fontHeightSmall = getTextManager():getFontHeight(UIFont.Small)
 --* Создание метки
 --*********************************************************
 function UIHealth:addLabel(posX, posY, title)
-    local label = ISLabel:new(posX, posY + 3, getTextManager():getFontHeight(UIFont.Small), title, 1, 1, 1, 1, UIFont.Small, true)
+    -- 走统一构造器: 文字在 ctrlH 行高内居中, 与同行按钮对齐
+    -- (旧写法传 getFontHeight 当高度再手工 +3, 会与 ISLabel 自身的居中叠加)
+    local label = EtherTheme.makeLabel(posX, posY, EtherTheme.ctrlH, title)
 	self:addChild(label)
     return label
 end
@@ -52,7 +54,7 @@ function UIHealth:createChildren()
     self.datas = ISScrollingListBox:new(10, 80, self.width - 20, self.height - 210);
     self.datas:initialise();
     self.datas:instantiate();
-    self.datas.itemheight = fontHeightSmall + 4 * 2
+    self.datas.itemheight = EtherTheme.listItemH
     self.datas.selected = 0;
     self.datas.joypadParent = self;
     self.datas.font = UIFont.NewSmall;
@@ -277,7 +279,7 @@ function UIHealth:render()
 	local player = self.localPlayer;
 
     self:drawTexture(self.resizeimage, self.width-10, self.height - 10, 1, 1, 1, 1);
-    self:drawText(getTranslate("UI_Medic_TotalHealth")..tostring(round(player:getBodyDamage():getHealth())).. "%", 10, 30, 1, 1, 1, 1, UIFont.Small);
+    self:drawText(tr("UI_Medic_TotalHealth", { value = tostring(round(player:getBodyDamage():getHealth())) }), 10, 30, 1, 1, 1, 1, UIFont.Small);
 end
 
 --************************************************************************--

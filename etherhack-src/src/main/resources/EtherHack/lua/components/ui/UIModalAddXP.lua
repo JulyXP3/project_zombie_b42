@@ -31,7 +31,7 @@ function UIModalAddXP:createChildren()
     amountLbl:instantiate()
     self:addChild(amountLbl)
 
-    self.entry = ISTextEntryBox:new("1", 10, amountLbl.x + amountLbl.height + 30, self.width - 20, 24);
+    self.entry = ISTextEntryBox:new("1", 10, amountLbl.x + amountLbl.height + 30, self.width - 20, EtherTheme.entryH);
     self.entry.font = UIFont.Small;
     self.entry:initialise();
     self.entry:instantiate();

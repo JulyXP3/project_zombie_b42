@@ -46,10 +46,11 @@ import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.TryCatchBlockNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -428,6 +429,166 @@ public class GamePatcher {
         }
     }
 
+    /*
+     * 僵尸不理会本机玩家 (多人可用的隐身):
+     * 客户端模拟的僵尸目标经 ZombieSimulationPacket 上传 (target null => -1),
+     * 服务端 parseZombie 零校验采纳 (-1 => target=null), 无目标的僵尸不追不咬
+     * (getShouldAttack 在 target==null 时返回 false)。setTarget 是唯一的目标
+     * setter, 视野/声音/被车撞/受击五条路径全走它 —— 开头拦截本地玩家即全覆盖。
+     */
+    private void patchZombieSetTarget() {
+        Logger.print("Patching IsoZombie.setTarget with zombie-ignore hook...");
+        try {
+            Patch.injectIntoClass("zombie/characters/IsoZombie", "setTarget", false, method -> {
+                if (!method.desc.equals("(Lzombie/iso/IsoMovingObject;)V")) {
+                    return;
+                }
+                InsnList hookInstructions = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isZombieDontAttack", "Z"));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new VarInsnNode(25, 1));
+                hookInstructions.add(new TypeInsnNode(193, "zombie/characters/IsoPlayer"));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new VarInsnNode(25, 1));
+                hookInstructions.add(new TypeInsnNode(192, "zombie/characters/IsoPlayer"));
+                hookInstructions.add(new MethodInsnNode(182, "zombie/characters/IsoPlayer", "isLocalPlayer", "()Z", false));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new InsnNode(177));
+                hookInstructions.add(continueLabel);
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected zombie-ignore hook into IsoZombie.setTarget()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: IsoZombie.setTarget injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
+    /*
+     * 僵尸不感知本机玩家 (修 setTarget 拦截引发的 spottedNew NPE):
+     * IsoPlayer.updateLOS 每帧对附近僵尸调 IsoZombie.spotted(player,...), 其 spottedNew/
+     * spottedOld 内部 setTarget(other) 后立即解引用 this.target.getZ() (IsoZombie 反编译
+     * :1909 等) —— 而 patchZombieSetTarget 把 setTarget(本机玩家) 拦成空操作, target 恒 null,
+     * vanilla 到这行必 NPE (堆栈 IsoZombie.spottedNew -> spotted -> IsoPlayer.TestZombieSpotPlayer)。
+     * spottedNew/spottedOld 只经 spotted() 进入, 故在 spotted 开头拦截: 开关开且 other 是本机
+     * 玩家则直接 return —— 僵尸整套视野感知逻辑对本机玩家不再运行 (既不设 target、不解引用、也不
+     * 追击), 与"不攻击/不理会"意图一致; 其余目标路径 (声音/被车撞/受击/网络) 仍由 setTarget 拦截保持
+     * target=null (多人上传 target=-1), getShouldAttack 注入作为攻击门兜底。
+     */
+    private void patchZombieSpotted() {
+        Logger.print("Patching IsoZombie.spotted with zombie-ignore hook...");
+        try {
+            Patch.injectIntoClass("zombie/characters/IsoZombie", "spotted", false, method -> {
+                if (!method.desc.equals("(Lzombie/iso/IsoMovingObject;Z)V")) {
+                    return;
+                }
+                InsnList hookInstructions = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isZombieDontAttack", "Z"));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new VarInsnNode(25, 1));
+                hookInstructions.add(new TypeInsnNode(193, "zombie/characters/IsoPlayer"));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new VarInsnNode(25, 1));
+                hookInstructions.add(new TypeInsnNode(192, "zombie/characters/IsoPlayer"));
+                hookInstructions.add(new MethodInsnNode(182, "zombie/characters/IsoPlayer", "isLocalPlayer", "()Z", false));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new InsnNode(177));
+                hookInstructions.add(continueLabel);
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected zombie-ignore hook into IsoZombie.spotted()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: IsoZombie.spotted injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
+    /*
+     * 僵尸不攻击本机玩家 (SP+MP 通用, 无需调试权限):
+     * getShouldAttack() 是僵尸攻击的唯一裁决门 (作为动画变量 "battack" 驱动攻击动作),
+     * vanilla 自身的"僵尸不攻击"标志(target.isZombiesDontAttack():862)与 ghostMode(:890)
+     * 判定都在这里。而 IsoGameCharacter.setZombiesDontAttack 被 Role.hasCapability 门禁
+     * (单人需 Core.debug 才放行, 否则强制置 false) —— 这正是单人下该功能失效、必须先开
+     * "解锁调试权限"的根因。改为在 getShouldAttack 开头拦截: 开关开且当前 target 是本机玩家
+     * 则直接 return false。此处位于所有目标设置路径(setTarget / 直写 target 字段 / 网络)的
+     * 下游, 单人本地模拟僵尸与多人本机模拟僵尸均生效; 完全不碰能力系统/Core.debug, 无踢出、
+     * 无关调试导致的游戏重启风险。
+     */
+    private void patchZombieShouldAttack() {
+        Logger.print("Patching IsoZombie.getShouldAttack with zombie-ignore hook...");
+        try {
+            Patch.injectIntoClass("zombie/characters/IsoZombie", "getShouldAttack", false, method -> {
+                if (!method.desc.equals("()Z")) {
+                    return;
+                }
+                InsnList hookInstructions = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isZombieDontAttack", "Z"));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new VarInsnNode(25, 0));
+                hookInstructions.add(new FieldInsnNode(180, "zombie/characters/IsoZombie", "target", "Lzombie/iso/IsoMovingObject;"));
+                hookInstructions.add(new TypeInsnNode(193, "zombie/characters/IsoPlayer"));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new VarInsnNode(25, 0));
+                hookInstructions.add(new FieldInsnNode(180, "zombie/characters/IsoZombie", "target", "Lzombie/iso/IsoMovingObject;"));
+                hookInstructions.add(new TypeInsnNode(192, "zombie/characters/IsoPlayer"));
+                hookInstructions.add(new MethodInsnNode(182, "zombie/characters/IsoPlayer", "isLocalPlayer", "()Z", false));
+                hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                hookInstructions.add(new InsnNode(3));
+                hookInstructions.add(new InsnNode(172));
+                hookInstructions.add(continueLabel);
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected zombie-ignore hook into IsoZombie.getShouldAttack()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: IsoZombie.getShouldAttack injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
+    /*
+     * 建号增强: 在 CreatePlayerPacket.set(byte) (客户端发包前的最终组装点) 末尾
+     * 调 CharacterCreationBoost.apply 改写 descriptor/traits/wornItems —— 服务端
+     * 对建号包的特性点数/技能/服装零校验, 照单全收。
+     */
+    private void patchCharacterCreationBoost() {
+        Logger.print("Patching CreatePlayerPacket.set with creation boost hook...");
+        try {
+            Patch.injectIntoClass("zombie/network/packets/character/CreatePlayerPacket", "set", false, method -> {
+                if (!method.desc.equals("(B)V")) {
+                    return;
+                }
+                AbstractInsnNode returnInsn = method.instructions.getLast();
+                while (returnInsn != null && returnInsn.getOpcode() != 177) {
+                    returnInsn = returnInsn.getPrevious();
+                }
+                if (returnInsn == null) {
+                    throw new IllegalStateException("RETURN not found in CreatePlayerPacket.set");
+                }
+                InsnList toInject = new InsnList();
+                toInject.add(new VarInsnNode(25, 0));
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/CharacterCreationBoost", "apply", "(Ljava/lang/Object;)V", false));
+                method.instructions.insertBefore(returnInsn, toInject);
+                Logger.print("  [OK] Injected creation boost hook into CreatePlayerPacket.set()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: creation boost injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
     private void patchAbstractAntiCheatValidation() {
         Patch.injectIntoClass("zombie/network/anticheats/AbstractAntiCheat", "validate", false, method -> {
             InsnList hookInstructions = new InsnList();
@@ -541,6 +702,10 @@ public class GamePatcher {
         this.patchGameClientSyncBlocker();
         this.patchRoleCapabilityForSP();
         this.patchVehicleNoKey();
+        this.patchZombieSetTarget();
+        this.patchZombieSpotted();
+        this.patchZombieShouldAttack();
+        this.patchCharacterCreationBoost();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");
         Logger.print("Extracting EtherHack files to the current directory...");

@@ -537,6 +537,83 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="isNoJam", global=true)
+    public static boolean isNoJam() {
+        return EtherMain.getInstance().etherAPI.isNoJam;
+    }
+
+    @LuaMethod(name="toggleNoJam", global=true)
+    public static void toggleNoJam(boolean var0) {
+        EtherMain.getInstance().etherAPI.isNoJam = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isNoMuscleStrain", global=true)
+    public static boolean isNoMuscleStrain() {
+        return EtherMain.getInstance().etherAPI.isNoMuscleStrain;
+    }
+
+    @LuaMethod(name="toggleNoMuscleStrain", global=true)
+    public static void toggleNoMuscleStrain(boolean var0) {
+        EtherMain.getInstance().etherAPI.isNoMuscleStrain = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isFullBodyRestore", global=true)
+    public static boolean isFullBodyRestore() {
+        return EtherMain.getInstance().etherAPI.isFullBodyRestore;
+    }
+
+    @LuaMethod(name="toggleFullBodyRestore", global=true)
+    public static void toggleFullBodyRestore(boolean var0) {
+        EtherMain.getInstance().etherAPI.isFullBodyRestore = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isCharCreateAllTraits", global=true)
+    public static boolean isCharCreateAllTraits() {
+        return EtherMain.getInstance().etherAPI.isCharCreateAllTraits;
+    }
+
+    @LuaMethod(name="toggleCharCreateAllTraits", global=true)
+    public static void toggleCharCreateAllTraits(boolean var0) {
+        EtherMain.getInstance().etherAPI.isCharCreateAllTraits = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isCharCreateMaxSkills", global=true)
+    public static boolean isCharCreateMaxSkills() {
+        return EtherMain.getInstance().etherAPI.isCharCreateMaxSkills;
+    }
+
+    @LuaMethod(name="toggleCharCreateMaxSkills", global=true)
+    public static void toggleCharCreateMaxSkills(boolean var0) {
+        EtherMain.getInstance().etherAPI.isCharCreateMaxSkills = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isCharCreateClothing", global=true)
+    public static boolean isCharCreateClothing() {
+        return EtherMain.getInstance().etherAPI.isCharCreateClothing;
+    }
+
+    @LuaMethod(name="toggleCharCreateClothing", global=true)
+    public static void toggleCharCreateClothing(boolean var0) {
+        EtherMain.getInstance().etherAPI.isCharCreateClothing = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isVehicleInstantStart", global=true)
+    public static boolean isVehicleInstantStart() {
+        return EtherMain.getInstance().etherAPI.isVehicleInstantStart;
+    }
+
+    @LuaMethod(name="toggleVehicleInstantStart", global=true)
+    public static void toggleVehicleInstantStart(boolean var0) {
+        EtherMain.getInstance().etherAPI.isVehicleInstantStart = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isHeadshotOnly", global=true)
     public static boolean isHeadshotOnly() {
         return EtherMain.getInstance().etherAPI.isHeadshotOnly;
@@ -773,28 +850,6 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
-    @LuaMethod(name="isVisualsPlayersEnable", global=true)
-    public static boolean isVisualsPlayersEnable() {
-        return EtherMain.getInstance().etherAPI.isVisualsPlayersEnable;
-    }
-
-    @LuaMethod(name="toggleVisualsPlayersEnable", global=true)
-    public static void toggleVisualsPlayersEnable(boolean var0) {
-        EtherMain.getInstance().etherAPI.isVisualsPlayersEnable = var0;
-        saveConfig("startup");
-    }
-
-    @LuaMethod(name="isVisualDrawCredits", global=true)
-    public static boolean isVisualDrawCredits() {
-        return EtherMain.getInstance().etherAPI.isVisualDrawCredits;
-    }
-
-    @LuaMethod(name="toggleVisualDrawCredits", global=true)
-    public static void toggleVisualDrawCredits(boolean var0) {
-        EtherMain.getInstance().etherAPI.isVisualDrawCredits = var0;
-        saveConfig("startup");
-    }
-
     @LuaMethod(name="isVisualDrawPlayerNickname", global=true)
     public static boolean isVisualDrawPlayerNickname() {
         return EtherMain.getInstance().etherAPI.isVisualDrawPlayerNickname;
@@ -806,14 +861,14 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
-    @LuaMethod(name="isVisualDrawToLocalPlayer", global=true)
-    public static boolean isVisualDrawToLocalPlayer() {
-        return EtherMain.getInstance().etherAPI.isVisualDrawToLocalPlayer;
+    @LuaMethod(name="isVisualDrawLineToZombies", global=true)
+    public static boolean isVisualDrawLineToZombies() {
+        return EtherMain.getInstance().etherAPI.isVisualDrawLineToZombies;
     }
 
-    @LuaMethod(name="toggleVisualDrawToLocalPlayer", global=true)
-    public static void toggleVisualDrawToLocalPlayer(boolean var0) {
-        EtherMain.getInstance().etherAPI.isVisualDrawToLocalPlayer = var0;
+    @LuaMethod(name="toggleVisualDrawLineToZombies", global=true)
+    public static void toggleVisualDrawLineToZombies(boolean var0) {
+        EtherMain.getInstance().etherAPI.isVisualDrawLineToZombies = var0;
         saveConfig("startup");
     }
 
@@ -1107,7 +1162,15 @@ public class EtherLuaMethods {
 
     @LuaMethod(name="getAntiCheat12Status", global=true)
     public static boolean getAntiCheat12Status() {
-        return EtherLuaMethods.getAntiCheatMovementEnabled();
+        try {
+            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatPermission == null) {
+                return false;
+            }
+            return ServerOptions.instance.antiCheatPermission.getValue() > 0;
+        }
+        catch (Exception e) {
+            return false;
+        }
     }
 
     @LuaMethod(name="getAntiCheat8Status", global=true)

@@ -25,7 +25,7 @@ function UIMechanics:createChildren()
     self.datas = ISScrollingListBox:new(10, 130, self.width - 20, self.height - 200);
     self.datas:initialise();
     self.datas:instantiate();
-    self.datas.itemheight = fontHeightSmall + 4 * 2
+    self.datas.itemheight = EtherTheme.listItemH
     self.datas.selected = 0;
     self.datas.joypadParent = self;
     self.datas.font = UIFont.NewSmall;
@@ -206,10 +206,21 @@ function UIMechanics:render()
 	    end
 
         self:drawTextCentre( name, self.width / 2, 20, 1.0, 1.0, 1.0, 1.0, UIFont.Medium);
-        self:drawTextCentre( getText("IGUI_OverallCondition")..": "..tostring(self.totalCondition) .. "%", self.width / 2, 40, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
-        self:drawTextCentre( getText("IGUI_char_Weight")..": "..tostring(vehicle:getMass()), self.width / 2, 60, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
+        -- 分隔符与单位交给 UI_Fmt_* 翻译模板, 不在 Lua 里拼 ": " / "%" / " hp";
+        -- label 仍取 vanilla IGUI_ 官方词条, 避免重复翻译已有文案。
+        self:drawTextCentre(tr("UI_Fmt_LabelPercent", {
+            label = getText("IGUI_OverallCondition"),
+            value = tostring(self.totalCondition),
+        }), self.width / 2, 40, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
+        self:drawTextCentre(tr("UI_Fmt_LabelValue", {
+            label = getText("IGUI_char_Weight"),
+            value = tostring(vehicle:getMass()),
+        }), self.width / 2, 60, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
         if vehicle:getPartById("Engine") then
-		    self:drawTextCentre(getText("IGUI_EnginePower") .. ": " .. (vehicle:getEnginePower()/10) .. " hp", self.width / 2, 80, 1, 1, 1, 1, UIFont.Small);
+		    self:drawTextCentre(tr("UI_Fmt_EnginePower", {
+                label = getText("IGUI_EnginePower"),
+                value = tostring(vehicle:getEnginePower() / 10),
+            }), self.width / 2, 80, 1, 1, 1, 1, UIFont.Small);
 	    end
 
         if self.datas.items[self.datas.selected] ~= nil then

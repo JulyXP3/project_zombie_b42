@@ -1,20 +1,115 @@
 require "ISUI/ISPanel"
 
 --*********************************************************
---* 琚氳阿鑺枩閭阿瑜滆柂瑜樻 瑜嶈瑜岄偑钖姱鑳佹郴鎳?UI
+--* 地图面板 (已迁移到 EtherFormPanel: 游标布局 + 统一 add* API)
+--*
+--* 迁移前的问题 (UI重构方案.md P1/P2/P3/P7):
+--*   - 自实现 addLabel/addButton/addCheckBox/addButtonWithLabel, 签名与其他面板不一;
+--*   - 位置手算 self.map.y + self.map.height + 20 + rows * 40, 且按钮行步长 50、
+--*     复选框行步长 40 混用同一个 self.rows;
+--*   - uiElements / rows / mapCheckboxes 挂在类表上 (跨实例共享)。
+--* 迁移后: 地图作为自定义行 (基类无内建地图行), 其下的按钮/复选框由游标接管;
+--*   5 个复选框降为数据表 + 循环; 状态改为实例级。
+--*
+--* 红线 (零功能影响): toggleMapDrawLocalPlayer / isMapDrawLocalPlayer 等开关契约,
+--*   setMapDrawItems / EtherItemSearch.setEnabled / UIMap.* / UIMovableMiniMap.openPanel
+--*   的名称与参数一律未改。
 --*********************************************************
-EtherMapPanel = ISPanel:derive("EtherMapPanel"); -- 琚ч偑瑜嬭阿姊板啓鑺儊閭柂鎳堟 鑺 ISPanel
+EtherMapPanel = EtherFormPanel:derive("EtherMapPanel");
 
 --*********************************************************
---* 琚ㄦ枩瑜夐偑鏂滆姱瑜屾郴閭?prerender
+--* 地图绘制开关: 数据表 + 循环 (取代原先 5 个近乎相同的块)
+--*   key 翻译键 / on 开关函数 / get 取值函数 / flag UIMap 上的字段名
+--* flag 用于每帧把复选框状态同步回 UIMap (小地图/地图页可能各自改动它)
 --*********************************************************
-function EtherMapPanel:prerender()
-    self:setStencilRect(0,10,self:getWidth(),self:getHeight() - 20);
-    ISPanel.prerender(self);
+local function drawToggles()
+    return {
+        {
+            key = "UI_Map_DrawLocalPlayer", flag = "drawLocalPlayer",
+            get = isMapDrawLocalPlayer,
+            on = function(isChecked)
+                toggleMapDrawLocalPlayer(isChecked)
+                UIMap.drawLocalPlayer = isChecked
+            end,
+        },
+        {
+            key = "UI_Map_DrawOtherPlayers", flag = "drawAllPlayers",
+            get = isMapDrawAllPlayers,
+            on = function(isChecked)
+                toggleMapDrawAllPlayers(isChecked)
+                UIMap.drawAllPlayers = isChecked
+            end,
+        },
+        {
+            key = "UI_Map_DrawVehicles", flag = "drawVehicles",
+            get = isMapDrawVehicles,
+            on = function(isChecked)
+                toggleMapDrawVehicles(isChecked)
+                UIMap.drawVehicles = isChecked
+            end,
+        },
+        {
+            key = "UI_Map_DrawZombies", flag = "drawZombies",
+            get = isMapDrawZombies,
+            on = function(isChecked)
+                toggleMapDrawZombies(isChecked)
+                UIMap.drawZombies = isChecked
+            end,
+        },
+        {
+            key = "UI_Map_DrawItems", flag = "drawItems",
+            get = function() return UIMap.drawItems; end,
+            on = function(isChecked)
+                UIMap.drawItems = isChecked;
+                EtherItemSearch.setEnabled(isChecked);
+                setMapDrawItems(isChecked);
+            end,
+        },
+    };
 end
 
 --*********************************************************
---* 琚ㄦ枩瑜夐偑鏂滆姱瑜屾郴閭?render
+--* 面板内容构建 (基类在 createChildren 里回调 build)
+--*********************************************************
+function EtherMapPanel:build()
+    self.mapCheckboxes = {};
+    if getPlayer() == nil then return end
+
+    UIMap.ensureDrawFlags();
+
+    -- 地图: 自定义行, 高度吃掉面板上半部分, 下方留给按钮 + 开关行
+    local mapH = self.height - 300;
+    if mapH < 200 then mapH = 200; end
+    self:addCustomRow(mapH, function(bx, by, bw)
+        self.map = UIMap:new(bx, by, bw, mapH)
+        self.map:initialise()
+        self.map:instantiate()
+        self.map:initDataAndStyle()
+        self.map.mapAPI:resetView()
+        self.map:restoreSettings()
+        self:_anchor(self.map)
+        self:addChild(self.map)
+    end);
+
+    self:addLabeledButton("UI_Map_MiniMapOpenLabel",
+        getTranslate("UI_Map_MiniMapOpenButton"), function()
+            UIMovableMiniMap.openPanel()
+        end);
+
+    local list = drawToggles();
+    self:addCheckboxGroup(list);        -- 等宽行盒 (基类按最宽标签定列数)
+    for i = 1, #list do
+        local cb = list[i].widget;
+        if cb ~= nil then
+            cb.mapFlag = list[i].flag;
+            table.insert(self.mapCheckboxes, cb);
+        end
+    end
+end
+
+--*********************************************************
+--* render: 在基类绘制之外, 把复选框状态同步回 UIMap 的开关
+--* (小地图等其它入口也会改这些标记, 故每帧对齐), 并在非游戏内给出提示。
 --*********************************************************
 function EtherMapPanel:render()
     if self.mapCheckboxes ~= nil then
@@ -22,167 +117,35 @@ function EtherMapPanel:render()
             cb:setCheked(UIMap[cb.mapFlag] == true)
         end
     end
-    ISPanel.render(self);
-    self:clearStencilRect();
 
-    if self.localPlayer == nil then 
-        self:drawTextCentre(self.workInGameText, self.width / 2, self.height / 2, 1.0, 1.0, 1.0, 1.0, UIFont.Large)
-    end;
+    EtherFormPanel.render(self);
+
+    if getPlayer() == nil then
+        if self.workInGameText == nil then
+            self.workInGameText = getTranslate("UI_Map_PanelWorkOnlyInGame");
+        end
+        self:drawTextCentre(self.workInGameText, self.width / 2, self.height / 2,
+            1.0, 1.0, 1.0, 1.0, UIFont.Large)
+    end
 end
 
 --*********************************************************
---* 琚ㄦ枩瑜夐偑鏂滆姱瑜屾郴閭?瑜嬭姱鏂滆瑜屾噲娉?娉昏姱璋㈡瑜嬫噲娉婚偑 灞戣瑜曟噲
+--* 滚轮: 悬停在地图上时缩放地图, 否则滚动面板 (与迁移前一致)
 --*********************************************************
 function EtherMapPanel:onMouseWheel(del)
-	self:setYScroll(self:getYScroll() - (del * 40));
-
-    if self:getMouseX() > 10 and self:getMouseY() > 10 and self:getMouseX() < self.map.width + 10 and self:getMouseY() < self.map.height + 10 then
-        self.map:onMouseWheel(del);
-    end 
-	return true;
-end
-
---*********************************************************
---* 琚涜姱鏂滈偑鑳佽阿姊拌柂鎳堟 瑜旀娉绘枩鑺郴瑜嬭姱鑳?
---*********************************************************
-function EtherMapPanel:addCheckBox(title, method, isSelected, flagName)
-    local rows = self.rows;
-    local checkboxX = 10;
-    local checkboxY = self.map.y + self.map.height + 20 + rows * 40;
-
-    local checkbox = UICheckbox:new(checkboxX, checkboxY, title, isSelected, method);
-    checkbox:initialise();
-    checkbox:instantiate();
-    checkbox:setAnchorLeft(true);
-    checkbox:setAnchorRight(false);
-    checkbox:setAnchorTop(false);
-    checkbox:setAnchorBottom(true);
-    if flagName ~= nil then
-        checkbox.mapFlag = flagName;
-        table.insert(self.mapCheckboxes, checkbox);
+    if self.map ~= nil then
+        local mx, my = self:getMouseX(), self:getMouseY();
+        local mapY = self.map.y + self:getYScroll();
+        if mx > self.map.x and mx < self.map.x + self.map.width
+            and my > mapY and my < mapY + self.map.height then
+            self.map:onMouseWheel(del);
+            return true;
+        end
     end
-    self:addChild(checkbox);
-
-    self:setScrollHeight(self:getScrollHeight() + checkbox.height + 40);
-
-    self.rows = self.rows + 1;
-
-    table.insert(self.uiElements, checkbox);
+    return EtherFormPanel.onMouseWheel(self, del);
 end
 
 --*********************************************************
---* 灏忚姱锜瑰啓閭柂鎳堟 灞戞瑜屾郴鎳?
+--* :new / :createChildren / :prerender
+--* 全部继承自 EtherFormPanel, 无需重写。
 --*********************************************************
-function EtherMapPanel:addLabel(posX, posY, title)
-    local label = ISLabel:new(posX, posY + 3, getTextManager():getFontHeight(UIFont.Small), title, 1, 1, 1, 1, UIFont.Small, true)
-	self:addChild(label)
-    return label
-end
-
---*********************************************************
---* 灏忚姱锜瑰啓閭柂鎳堟 娉昏柂鑺攲娉绘噲
---*********************************************************
-function EtherMapPanel:addButton(posX, posY, buttonTitle, onClick)
-    local buttonWidth, buttonHeight = 260, 32;
-    local button = UIButton:new(posX, posY, buttonWidth, buttonHeight, buttonTitle, onClick)
-    button:initialise();
-    button:instantiate();
-    button:setAnchorLeft(true);
-    button:setAnchorRight(false);
-    button:setAnchorTop(false);
-    button:setAnchorBottom(true);
-    self:addChild(button);
-    table.insert(self.uiElements, button);
-    return button
-end
-
---*********************************************************
---* 灏忚姱锜瑰啓閭柂鎳堟 娉昏柂鑺攲娉绘噲 瑜?锜归偑璋愯姱璋㈣姱鑳佹郴鑺睉
---*********************************************************
-function EtherMapPanel:addButtonWithLabel(title, buttonTitle, func)
-    local rows = self.rows;
-    local buttonY = self.map.y + self.map.height + 20 + rows * 50;
-    
-    self:addLabel(10, buttonY - 3, title)
-    local button = self:addButton(self:getWidth() - 260 - 40, buttonY, buttonTitle, func)
-
-    self.rows = self.rows + 1;
-
-    return button
-end
-
---*********************************************************
---* 灏忚姱锜瑰啓閭柂鎳堟 鍐欒姱瑜旀瑜夎柂鎳堣 瑜濊阿姊板睉姊拌柂瑜岃姱鑳?
---*********************************************************
-function EtherMapPanel:createChildren()
-    ISPanel.createChildren(self);
-
-    self:setScrollChildren(true)
-    self:setScrollHeight(0)
-    self:addScrollBars();
-
-    if self.localPlayer == nil then return end;
-
-    UIMap.ensureDrawFlags();
-
-    self.map = UIMap:new(20, 20, self.width - 40, self.height - 400)
-    self.map:initialise()
-    self.map:instantiate()
-    self.map:initDataAndStyle()
-    self.map.mapAPI:resetView()
-    self.map:restoreSettings()
-    self:addChild(self.map)
-
-    self:addButtonWithLabel(getTranslate("UI_Map_MiniMapOpenLabel"), getTranslate("UI_Map_MiniMapOpenButton"), function ()
-        UIMovableMiniMap.openPanel()
-    end)
-
-    self:addCheckBox(getTranslate("UI_Map_DrawLocalPlayer"), function (isChecked)
-        toggleMapDrawLocalPlayer(isChecked)
-        UIMap.drawLocalPlayer = isChecked
-    end, isMapDrawLocalPlayer(), "drawLocalPlayer")
-
-    self:addCheckBox(getTranslate("UI_Map_DrawOtherPlayers"), function (isChecked)
-        toggleMapDrawAllPlayers(isChecked)
-        UIMap.drawAllPlayers = isChecked
-    end, isMapDrawAllPlayers(), "drawAllPlayers")
-
-    self:addCheckBox(getTranslate("UI_Map_DrawVehicles"), function (isChecked)
-        toggleMapDrawVehicles(isChecked)
-        UIMap.drawVehicles = isChecked
-    end, isMapDrawVehicles(), "drawVehicles")
-
-    self:addCheckBox(getTranslate("UI_Map_DrawZombies"), function (isChecked)
-        toggleMapDrawZombies(isChecked)
-        UIMap.drawZombies = isChecked
-    end, isMapDrawZombies(), "drawZombies")
-
-    self:addCheckBox(getTranslate("UI_Map_DrawItems"), function (isChecked)
-        UIMap.drawItems = isChecked;
-        EtherItemSearch.setEnabled(isChecked);
-        setMapDrawItems(isChecked);
-    end, UIMap.drawItems, "drawItems")
-
-end
---*********************************************************
---* 灏忚姱锜瑰啓閭柂鎳堟 钖姱鑳佽姱璋愯姱 瑜濇郴锜规灞戦攲璋㈣瑜夐偑 灞戞钖
---*********************************************************
-function EtherMapPanel:new(posX, posY, width, height)
-    local menuTableData = {};
-
-    menuTableData = ISPanel:new(posX, posY, width, height);
-    setmetatable(menuTableData, self);
-    menuTableData.background = true;
-	menuTableData.backgroundColor = {r=0.0, g=0.0, b=0.0, a=0.0};
-	menuTableData.borderColor = {r=0.0, g=0.0, b=0.0, a=0.0};
-    menuTableData.moveWithMouse = true;
-    menuTableData.workInGameText = getTranslate("UI_Map_PanelWorkOnlyInGame");
-    menuTableData.localPlayer = getPlayer();
-    self.__index = self;
-
-    self.uiElements = {};
-    self.rows = 0;
-    self.mapCheckboxes = {};
-
-    return menuTableData;
-end

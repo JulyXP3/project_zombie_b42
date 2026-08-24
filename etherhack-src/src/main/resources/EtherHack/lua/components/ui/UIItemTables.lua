@@ -8,13 +8,45 @@ UIItemTables = ISPanel:derive("UIItemTables");
 local fontHeightSmall = getTextManager():getFontHeight(UIFont.Small)
 
 --*********************************************************
+--* Обработка prerender
+--* 底部控制块的切角框画在子控件之下 (渲染序: prerender -> 子控件 -> render),
+--* 与其它面板的"功能成框"风格一致。
+--*********************************************************
+function UIItemTables:prerender()
+    ISPanel.prerender(self);
+    if self.ctrlBox ~= nil then
+        local b = self.ctrlBox;
+        -- 实底 + 切角描边: 控制块成为独立"模块", 与上方列表明确分层不贴边
+        self:drawRect(b.x, b.y, b.w, b.h, 0.45, 0.03, 0.05, 0.055);
+        EtherTheme.drawTileBox(self, b.x, b.y, b.w, b.h, false, 8);
+    end
+end
+
+--*********************************************************
 --* Обработка render
 --*********************************************************
 function UIItemTables:render()
     ISPanel.render(self);
-    
-    local y = self.datas.y + self.datas.height + 5
-    self:drawText(getText("IGUI_DbViewer_TotalResult") .. self.totalResult, 0, y, 1,1,1,1,UIFont.Small)
+
+    -- 结果计数 (位置随底部控制块, 不再贴死 x=0)
+    if self.totalTextX ~= nil then
+        local td = EtherTheme.textDim;
+        -- 标签与数值的拼接方式交给 UI_Fmt_LabelCount 模板
+        self:drawText(tr("UI_Fmt_LabelCount", {
+                label = getText("IGUI_DbViewer_TotalResult"),
+                value = tostring(self.totalResult),
+            }),
+            self.totalTextX, self.totalTextY, td.r, td.g, td.b, 1, UIFont.Small)
+    end
+
+    -- 过滤行标签 (静态文案集中绘制, 避免 ISLabel 的 Medium 字号压住输入框)
+    if self.filterLabels ~= nil then
+        local tc = EtherTheme.text;
+        for i = 1, #self.filterLabels do
+            local l = self.filterLabels[i];
+            self:drawText(l.text, l.x, l.y, tc.r, tc.g, tc.b, 1, UIFont.Small);
+        end
+    end
 
     -- 按钮显隐: 搜索有结果, 或直接选中了某项物品时显示 (每帧计算, 覆盖列表点击)
     self:refreshShowOnMap();
@@ -49,7 +81,7 @@ end
 --* Создание дочерних элементов
 --*********************************************************
 EtherContainerPOC = EtherContainerPOC or { radius = 10 }
--- F10 快捷键与「战利品重掷」选项卡共用此入口
+-- F9 快捷键与「战利品重掷」选项卡共用此入口
 
 -- 重置附近容器战利品: 服务端 clearContainerExplore 无校验地
 -- 清空 explored 标记 + 房间程序化生成记录 -> 再次搜索重新 roll 战利品
@@ -78,6 +110,11 @@ function EtherContainerPOC.reset()
                                         x = sq:getX(), y = sq:getY(), z = sq:getZ(),
                                         index = i, containerIndex = ci,
                                     });
+                                    -- 即时刷新 (容器战利品重掷链-分析.md §四 方式B, 已按反编译验证):
+                                    -- requestServerItemsForContainer 就是发 RequestItemsForContainer 包,
+                                    -- 与同事 C++ 直发同款 —— 服务端清完标记后见容器未探索即重新 roll 并推送,
+                                    -- 无需手动重开箱子。注意: 每容器发 2 包, 大半径密集区注意反作弊阈值(~100包)。
+                                    c:requestServerItemsForContainer();
                                     count = count + 1;
                                 end
                             end
@@ -86,7 +123,7 @@ function EtherContainerPOC.reset()
                 end
             end
         end
-        print("[ContainerPOC] reset " .. tostring(count) .. " containers nearby, search them for fresh loot");
+        print("[ContainerPOC] reset+refresh " .. tostring(count) .. " containers nearby, loot re-rolled instantly");
     end)
     if not ok then
         print("[ContainerPOC] failed: " .. tostring(err));
@@ -96,112 +133,153 @@ end
 function UIItemTables:createChildren()
     ISPanel.createChildren(self);
 
-    self.datas = ISScrollingListBox:new(0, 25, self.width, self.height - 150);
+    -- 统一排版参数 (与其它面板同一套): 外边距 / 盒内边距 / 控件高 / 间距
+    local tm = getTextManager();
+    local PAD = 12;
+    local IP = 10;
+    local GAP = EtherTheme.ctrlGap;
+    local ctrlH = EtherTheme.ctrlH;
+    local fhS = EtherTheme.fontHgtSmall;
+    local hdrH = EtherTheme.listHeaderH;  -- 列表列头画在列表 y 之上, 需预留(与 itemheight 同源)
+    local boxW = self.width - PAD * 2;
+    local innerX = PAD + IP;
+    local innerW = boxW - IP * 2;
+
+    -- ================= 底部控制块 (结果计数行 + 按钮行 + 过滤行) =================
+    -- 必须单趟算完: 先把所有会影响块高的分支(地图按钮是否换行 / 过滤行是否拆两行)
+    -- 全部测量出来, 再推导 blockY、各行 Y 和列表高度。
+    --
+    -- 反例(曾经的写法, 导致过滤行掉到面板背景外面):
+    --   先按最小高度定下 blockY 和 rowTotalY/rowBtnY/rowFilterY 以及列表高度,
+    --   之后在分支里 "blockH = blockH + ctrlH + GAP; blockY = H - PAD - blockH"。
+    --   盒子顶边往上长了, 但里面各行仍在旧坐标 —— 内容整体溢出盒底 ctrlH + GAP。
+    --   同一个分支还只重置了 bx 而没有推进按钮行 Y, 地图按钮直接叠在 Give x1 下面。
+
+    -- 1) 四个"给物品"按钮等宽(取最宽文案), 且四个按钮 + 三个间隔必须装进 innerW
+    local specs = {
+        { key = "UI_ItemCreator_Button_AddItemX1", n = 1 },
+        { key = "UI_ItemCreator_Button_AddItemX2", n = 2 },
+        { key = "UI_ItemCreator_Button_AddItemX5", n = 5 },
+        { key = "UI_ItemCreator_Button_AddItemX10", n = 10 },
+    };
+    local giveTitles = {};
+    for i = 1, #specs do
+        table.insert(giveTitles, getTranslate(specs[i].key));
+    end
+    local giveW = UIButton.measureGroupWidth(giveTitles);
+    local maxGiveW = math.floor((innerW - GAP * (#specs - 1)) / #specs);
+    if giveW > maxGiveW then giveW = maxGiveW; end
+    local giveRowW = giveW * #specs + GAP * (#specs - 1);
+
+    -- 2) 地图按钮: 与给物品按钮同排放不下就独占一行
+    local mapTitle = getTranslate("UI_ItemSearch_ShowOnMap");
+    local mapW = UIButton.measureWidth(mapTitle);
+    if mapW > innerW then mapW = innerW; end
+    local mapWraps = (giveRowW + GAP + mapW) > innerW;
+
+    -- 3) 过滤区排布。三种形态, 必须在算块高之前定下来:
+    --      同排     : 名称 + ID 挤在一行
+    --      各占一行 : 每个过滤器一行, 标签在左输入框在右
+    --      标签上置 : 标签太宽(长翻译)时标签独占一行, 输入框在下一行占满宽度
+    --    关键: 任何情况下都不能用"最小宽度"去硬撑输入框 —— 标签已经把起点推到右边,
+    --    再给个 60 的下限就会直接冲出盒子右缘 (test_overflow.py 会抓到)。
+    local nameT = getTranslate("UI_ItemCreator_Title_FilterByName");
+    local idT = getTranslate("UI_ItemCreator_Title_FilterById");
+    local nlW = tm:MeasureStringX(UIFont.Small, nameT);
+    local ilW = tm:MeasureStringX(UIFont.Small, idT);
+
+    local pairEntW = math.floor((innerW - nlW - ilW - GAP * 3) / 2);
+    local sideBySide = pairEntW >= 90;
+    local nameStacked, idStacked = false, false;
+    local nameEntW, idEntW = pairEntW, pairEntW;
+    local filterCtrlRows = 1;      -- 过滤区占用的输入框行数
+    local filterLabelRows = 0;     -- 额外的纯标签行数
+    if not sideBySide then
+        filterCtrlRows = 2;
+        nameEntW = innerW - nlW - GAP;
+        if nameEntW < 90 then
+            nameStacked = true; nameEntW = innerW;
+            filterLabelRows = filterLabelRows + 1;
+        end
+        idEntW = innerW - ilW - GAP;
+        if idEntW < 90 then
+            idStacked = true; idEntW = innerW;
+            filterLabelRows = filterLabelRows + 1;
+        end
+    end
+
+    -- 4) 分支全部确定后才能定块高与块顶
+    -- 过滤输入框行按 entryH 留位 (UITextBox2 最小渲染高, 见 EtherTheme;
+    -- 按 ctrlH 留位时游戏会把框撑高 10px, 实机表现即"输入框冲出控制块")
+    local blockH = IP + fhS + GAP + ctrlH;                   -- 计数行 + 给物品按钮行
+    if mapWraps then blockH = blockH + GAP + ctrlH; end      -- 地图按钮独占一行
+    for _ = 1, filterCtrlRows do
+        blockH = blockH + GAP + EtherTheme.entryH;           -- 过滤输入框行
+    end
+    blockH = blockH + filterLabelRows * (fhS + GAP);         -- 上置的标签行
+    blockH = blockH + IP;
+    local blockY = self.height - PAD - blockH;
+    self.ctrlBox = { x = PAD, y = blockY, w = boxW, h = blockH };
+
+    local rowTotalY  = blockY + IP;
+    local rowBtnY    = rowTotalY + fhS + GAP;
+    local rowMapY    = mapWraps and (rowBtnY + ctrlH + GAP) or rowBtnY;
+    local rowFilterY = rowMapY + ctrlH + GAP;
+    self.totalTextX = innerX;
+    self.totalTextY = rowTotalY;
+
+    -- ================= 列表 (填满顶部到控制块之间) =================
+    -- 列表下移让出分类标签栏(ISTabPanel 标签画在视图顶部)的视觉空间,
+    -- 底部与控制块保持双倍间隙, 杜绝与搜索行贴边/重叠 (实机缺陷)
+    local listY = PAD + hdrH + 6;
+    -- 与控制块 44px 分离带 (实机仍显贴边, 加大); 矮窗口压缩列表绝不反撑
+    local listH = blockY - 44 - listY;
+    if listH < 40 then listH = 40; end
+
+    self.datas = ISScrollingListBox:new(PAD, listY, boxW, listH);
     self.datas:initialise();
     self.datas:instantiate();
-    self.datas.itemheight = fontHeightSmall + 4 * 2
+    self.datas.itemheight = EtherTheme.listItemH
     self.datas.selected = 0;
     self.datas.joypadParent = self;
     self.datas.font = UIFont.NewSmall;
     self.datas.doDrawItem = self.drawDatas;
-    self.datas.drawBorder = true;
+    EtherTheme.styleList(self.datas);
+    self.datas.listHeaderColor = EtherTheme.listHeaderBG;   -- 暗青表头(取代默认暗红)
     self.datas:addColumn(getTranslate("UI_ItemCreator_Title_ItemName"), 0);
-    self.datas:addColumn(getTranslate("UI_ItemCreator_Title_ItemCategory"), 250)
+    self.datas:addColumn(getTranslate("UI_ItemCreator_Title_ItemCategory"), math.floor(boxW * 0.55))
     self:addChild(self.datas);
 
-    self.filterByNameTitle = ISLabel:new(0, self.height - 40, 20, getTranslate("UI_ItemCreator_Title_FilterByName"), 1, 1, 1, 1, UIFont.Medium, true)
-    self.filterByNameTitle:initialise()
-    self.filterByNameTitle:instantiate()
-    self:addChild(self.filterByNameTitle)
+    -- ================= 按钮行 (给物品 x1/x2/x5/x10 + 地图标记) =================
+    local bx = innerX;
+    local function spawnSelected(count)
+        local sel = self.datas.selected;
+        if self.datas.items == nil or sel < 1 or sel > #self.datas.items then return end
+        local item = self.datas.items[sel].item;
+        if item == nil then return end
+        spawnItem(item:getFullName(), count);
+    end
 
-    self.filterByName = ISTextEntryBox:new("", 0, self.height - 20, self.width / 2 - 10, 20);
-    self.filterByName.font = UIFont.Small;
-    self.filterByName:initialise();
-    self.filterByName:instantiate();
-    self.filterByName.target = self;
-    self.filterByName.itemsListFilter = self.filterName;
-    self.filterByName.onTextChange = UIItemTables.onFilterChange;
-    self.filterByName:setClearButton(true)
-    self:addChild(self.filterByName);
-    table.insert(self.filterWidgets, self.filterByName);
+    for i = 1, #specs do
+        local n = specs[i].n;
+        local btn = UIButton:new(bx, rowBtnY, giveW, ctrlH, getTranslate(specs[i].key),
+            function() spawnSelected(n); end, giveW);
+        btn:initialise();
+        btn:instantiate();
+        btn:setAnchorLeft(true);
+        btn:setAnchorRight(false);
+        btn:setAnchorTop(false);
+        btn:setAnchorBottom(true);
+        btn.isOnlyInGame = true;
+        self:addChild(btn);
+        table.insert(self.buttonList, btn);
+        bx = bx + giveW + GAP;
+    end
 
-    self.filterByIdTitle = ISLabel:new(self.width / 2, self.height - 40, 20, getTranslate("UI_ItemCreator_Title_FilterById"), 1, 1, 1, 1, UIFont.Medium, true)
-    self.filterByIdTitle:initialise()
-    self.filterByIdTitle:instantiate()
-    self:addChild(self.filterByIdTitle)
+    -- 换行时地图按钮独占一行 (rowMapY 已在块高计算里预留过这一行)
+    if mapWraps then bx = innerX; end
 
-    self.filterById = ISTextEntryBox:new("", self.width / 2, self.height - 20, self.width / 2, 20);
-    self.filterById.font = UIFont.Small;
-    self.filterById:initialise();
-    self.filterById:instantiate();
-    self.filterById:setClearButton(true)
-    self.filterById.target = self;
-    self.filterById.itemsListFilter = self.filterType;
-    self.filterById.onTextChange = UIItemTables.onFilterChange;
-    self:addChild(self.filterById);
-    table.insert(self.filterWidgets, self.filterById);
-
-    self.addItemX1 = UIButton:new(0, self.height - 80, 100, 24, getTranslate("UI_ItemCreator_Button_AddItemX1"), 
-    function() 
-        local item = self.datas.items[self.datas.selected].item;
-        spawnItem(item:getFullName(), 1);
-    end)
-    self.addItemX1:initialise();
-    self.addItemX1:instantiate();
-    self.addItemX1:setAnchorLeft(true);
-    self.addItemX1:setAnchorRight(false);
-    self.addItemX1:setAnchorTop(false);
-    self.addItemX1:setAnchorBottom(true);
-    self.addItemX1.isOnlyInGame = true;
-    self:addChild(self.addItemX1);
-    table.insert(self.buttonList, self.addItemX1);
-
-    self.addItemX2 = UIButton:new(self.addItemX1:getX() + self.addItemX1.width + 10, self.height - 80, 100, 24, getTranslate("UI_ItemCreator_Button_AddItemX2"), 
-    function() 
-        local item = self.datas.items[self.datas.selected].item;
-        spawnItem(item:getFullName(), 2);
-    end)
-    self.addItemX2:initialise();
-    self.addItemX2:instantiate();
-    self.addItemX2:setAnchorLeft(true);
-    self.addItemX2:setAnchorRight(false);
-    self.addItemX2:setAnchorTop(false);
-    self.addItemX2:setAnchorBottom(true);
-    self.addItemX2.isOnlyInGame = true;
-    self:addChild(self.addItemX2);
-    table.insert(self.buttonList, self.addItemX2);
-
-    self.addItemX5 = UIButton:new(self.addItemX2:getX() + self.addItemX2.width + 10, self.height - 80, 100, 24, getTranslate("UI_ItemCreator_Button_AddItemX5"), 
-    function() 
-        local item = self.datas.items[self.datas.selected].item;
-        spawnItem(item:getFullName(), 5);
-    end)
-    self.addItemX5:initialise();
-    self.addItemX5:instantiate();
-    self.addItemX5:setAnchorLeft(true);
-    self.addItemX5:setAnchorRight(false);
-    self.addItemX5:setAnchorTop(false);
-    self.addItemX5:setAnchorBottom(true);
-    self.addItemX5.isOnlyInGame = true;
-    self:addChild(self.addItemX5);
-    table.insert(self.buttonList, self.addItemX5);
-
-    self.addItemX10 = UIButton:new(self.addItemX5:getX() + self.addItemX5.width + 10, self.height - 80, 100, 24, getTranslate("UI_ItemCreator_Button_AddItemX10"), 
-    function() 
-        local item = self.datas.items[self.datas.selected].item;
-        spawnItem(item:getFullName(), 10);
-    end)
-    self.addItemX10:initialise();
-    self.addItemX10:instantiate();
-    self.addItemX10:setAnchorLeft(true);
-    self.addItemX10:setAnchorRight(false);
-    self.addItemX10:setAnchorTop(false);
-    self.addItemX10:setAnchorBottom(true);
-    self.addItemX10.isOnlyInGame = true;
-    self:addChild(self.addItemX10);
-    table.insert(self.buttonList, self.addItemX10);
-
-    self.showOnMap = UIButton:new(self.addItemX10:getX() + self.addItemX10.width + 10, self.height - 80, 150, 24, getTranslate("UI_ItemSearch_ShowOnMap"), 
+    self.showOnMap = UIButton:new(bx, rowMapY, mapW, ctrlH, mapTitle,
     function() 
         -- 搜索词非空: 扫描当前过滤列表里的全部物品; 否则: 扫描选中的单个物品
         local hasFilter = false;
@@ -235,15 +313,79 @@ function UIItemTables:createChildren()
         if nTargets == 0 then return end
 
         self.showOnMap.title = getTranslate("UI_ItemSearch_Scanning");
-        EtherItemSearch.scan(targetTypes);
-        self.showOnMap.title = getTranslate("UI_ItemSearch_ShowOnMap");
-    end)
+        -- scan 是同步的, 返回命中数; 0 命中时把结果反馈到按钮标题上
+        -- (UI_ItemSearch_NoResults 此前已翻译但从未被使用)。
+        local nHits = EtherItemSearch.scan(targetTypes);
+        if nHits == nil or nHits == 0 then
+            self.showOnMap.title = getTranslate("UI_ItemSearch_NoResults");
+            self.noResultAt = getTimestampMs();
+        else
+            self.showOnMap.title = getTranslate("UI_ItemSearch_ShowOnMap");
+            self.noResultAt = nil;
+        end
+    end, mapW)
     self.showOnMap:initialise();
     self.showOnMap:instantiate();
     self.showOnMap:setVisible(false);
     self.showOnMap.isOnlyInGame = true;
     self:addChild(self.showOnMap);
     table.insert(self.buttonList, self.showOnMap);
+
+    -- ================= 过滤区 =================
+    -- 形态(同排 / 各占一行 / 标签上置)与宽度已在块高计算处定好, 这里只摆放。
+    -- cy 逐行推进, 与块高的累加顺序严格一致, 保证最后一行正好落在 IP 内边距之上。
+    self.filterLabels = {};
+    local cy = rowFilterY;
+    local eDY = EtherTheme.entryLabelDY;   -- 输入行标签在 entryH 行内居中
+
+    local nameLabelY, nameEntX, nameEntY;
+    if nameStacked then
+        nameLabelY = cy;
+        nameEntX, nameEntY = innerX, cy + fhS + GAP;
+        cy = nameEntY + EtherTheme.entryH + GAP;
+    else
+        nameEntX, nameEntY = innerX + nlW + GAP, cy;
+        nameLabelY = cy + eDY;
+        cy = cy + EtherTheme.entryH + GAP;
+    end
+    table.insert(self.filterLabels, { x = innerX, y = nameLabelY, text = nameT });
+
+    self.filterByName = ISTextEntryBox:new("", nameEntX, nameEntY, nameEntW, EtherTheme.entryH);
+    EtherTheme.styleEntry(self.filterByName);
+    self.filterByName:initialise();
+    self.filterByName:instantiate();
+    self.filterByName.target = self;
+    self.filterByName.itemsListFilter = self.filterName;
+    self.filterByName.onTextChange = UIItemTables.onFilterChange;
+    self.filterByName:setClearButton(true)
+    self:addChild(self.filterByName);
+    table.insert(self.filterWidgets, self.filterByName);
+
+    local idLabelX, idLabelY, idEntX, idEntY;
+    if sideBySide then
+        -- 与名称同排: 接在名称输入框右侧
+        idLabelX = nameEntX + nameEntW + GAP;
+        idLabelY = nameEntY + eDY;
+        idEntX, idEntY = idLabelX + ilW + GAP, nameEntY;
+    elseif idStacked then
+        idLabelX, idLabelY = innerX, cy;
+        idEntX, idEntY = innerX, cy + fhS + GAP;
+    else
+        idLabelX, idLabelY = innerX, cy + eDY;
+        idEntX, idEntY = innerX + ilW + GAP, cy;
+    end
+    table.insert(self.filterLabels, { x = idLabelX, y = idLabelY, text = idT });
+
+    self.filterById = ISTextEntryBox:new("", idEntX, idEntY, idEntW, EtherTheme.entryH);
+    EtherTheme.styleEntry(self.filterById);
+    self.filterById:initialise();
+    self.filterById:instantiate();
+    self.filterById:setClearButton(true)
+    self.filterById.target = self;
+    self.filterById.itemsListFilter = self.filterType;
+    self.filterById.onTextChange = UIItemTables.onFilterChange;
+    self:addChild(self.filterById);
+    table.insert(self.filterWidgets, self.filterById);
 
     self:updatePanel();
 end
@@ -282,8 +424,20 @@ end
 --*********************************************************
 --* Обновление таблицы
 --*********************************************************
+UIItemTables.NO_RESULT_MS = 2000;   -- "未找到物品" 提示在按钮上停留时长
+
 function UIItemTables:update()
     self.datas.doDrawItem = self.drawDatas;
+
+    -- 扫描 0 命中时按钮标题会临时变成提示语, 到点自动恢复
+    if self.noResultAt ~= nil then
+        if getTimestampMs() - self.noResultAt >= UIItemTables.NO_RESULT_MS then
+            self.noResultAt = nil;
+            if self.showOnMap ~= nil then
+                self.showOnMap.title = getTranslate("UI_ItemSearch_ShowOnMap");
+            end
+        end
+    end
 end
 
 --*********************************************************
@@ -368,7 +522,7 @@ function UIItemTables:drawDatas(y, item, alt)
     if item.item:getDisplayCategory() ~= nil then
         self:drawText(getText("IGUI_ItemCat_" .. item.item:getDisplayCategory()), self.columns[2].size + 10, y + 4, 1, 1, 1, a, self.font);
     else
-        self:drawText("<NONE>", self.columns[2].size + 10, y + 4, 1, 1, 1, a, self.font);
+        self:drawText(getTranslate("UI_Common_None"), self.columns[2].size + 10, y + 4, 1, 1, 1, a, self.font);
     end
     
     self:repaintStencilRect(0, clipY, self.width - 20, clipY2 - clipY)

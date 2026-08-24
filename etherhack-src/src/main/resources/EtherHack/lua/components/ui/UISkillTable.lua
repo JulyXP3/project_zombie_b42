@@ -64,29 +64,118 @@ UISkillTable = ISPanel:derive("UISkillTable");
 local fontHeightSmall = getTextManager():getFontHeight(UIFont.Small)
 
 --*********************************************************
+--* 按钮右侧说明文字 (与 EtherVehiclePanel/EtherCharacterPanel 的 ModuleHint 同款):
+--* 做成子控件以随表格一同定位/滚动, 不吞鼠标事件 (点击要能穿到按钮)。
+--* 折行在构造时算一次; 鼠标handler就地定义, 不引用 EtherFormPanel.UIRowBox,
+--* 以免依赖两个文件的加载先后顺序。
+--*********************************************************
+local ButtonHint = ISPanel:derive("EtherSkillButtonHint");
+
+function ButtonHint:render()
+    for i = 1, #self.lines do
+        EtherTheme.drawHintText(self, self.lines[i], 0, (i - 1) * EtherTheme.fontHgtHint,
+            EtherTheme.textDim, 0.9);
+    end
+end
+
+function ButtonHint:onMouseDown(x, y) return false; end
+function ButtonHint:onMouseUp(x, y) return false; end
+function ButtonHint:onMouseMove(dx, dy) return false; end
+
+function ButtonHint:new(x, y, w, text)
+    local lines = EtherTheme.wrapHint(text, w);
+    local o = ISPanel:new(x, y, w, #lines * EtherTheme.fontHgtHint + 2);
+    setmetatable(o, self);
+    self.__index = self;
+    o.background = false;
+    o.backgroundColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.borderColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.moveWithMouse = false;
+    o.lines = lines;
+    return o;
+end
+
+--*********************************************************
+--* 在指定按钮右侧摆一条说明文字, 纵向对齐到按钮行中线。
+--* 余宽不足 (窄窗口/按钮换行占满整排) 时直接不放, 避免逐字折行糊成一团。
+--*********************************************************
+local MIN_HINT_W = 60;
+
+local function placeButtonHint(panel, btnX, btnY, btnW, availRight, key)
+    local hx = btnX + btnW + EtherTheme.ctrlGap;
+    local hw = availRight - hx;
+    if hw < MIN_HINT_W then return nil; end
+    local hint = ButtonHint:new(hx, btnY, hw, getTranslate(key));
+    hint:setY(btnY + math.floor((EtherTheme.ctrlH - hint.height) / 2));
+    hint:initialise();
+    hint:instantiate();
+    hint:setAnchorLeft(true);
+    hint:setAnchorRight(false);
+    hint:setAnchorTop(false);
+    hint:setAnchorBottom(true);
+    panel:addChild(hint);
+    return hint;
+end
+
+--*********************************************************
 --* Создание дочерних элементов
 --*********************************************************
 function UISkillTable:createChildren()
     ISPanel.createChildren(self);
 
-    self.datas = ISScrollingListBox:new(0, 0, self.width, self.height - 90);
+    -- 按钮行贴表格底部并留内边距 (原实现 y=height-80 且 x=0: 按钮下方空 56px
+    -- 显得悬在中间, x=0 还压住表格左边框)。四个按钮等宽, 排不下自动换行。
+    local PAD = 8;
+    local ctrlH = EtherTheme.ctrlH;
+    local GAP = EtherTheme.ctrlGap;
+    local tm = getTextManager();
+    local titles = {
+        getTranslate("UI_PlayerEditor_PlayerSkills_AddXP"),
+        getTranslate("UI_PlayerEditor_PlayerSkills_AddLevel"),
+        getTranslate("UI_PlayerEditor_PlayerSkills_TakeLevel"),
+        getTranslate("UI_PlayerEditor_PlayerSkills_MaxAllSkills"),
+    };
+    local btnW = UIButton.measureGroupWidth(titles);
+    -- 单个按钮不得超过整行可用宽度, 否则会越出表格右缘
+    local maxBtnW = self.width - PAD * 2;
+    if btnW > maxBtnW then btnW = maxBtnW; end
+
+    local perRow = math.floor((self.width - PAD * 2 + GAP) / (btnW + GAP));
+    if perRow < 1 then perRow = 1; end
+    local btnRows = math.ceil(#titles / perRow);
+    local btnBlockH = btnRows * ctrlH + (btnRows - 1) * GAP;
+    local btnY = self.height - btnBlockH - PAD;
+    local listH = btnY - GAP;
+    if listH < 60 then listH = 60; end
+
+    local function btnPos(i)
+        local r = math.floor((i - 1) / perRow);
+        local c = (i - 1) - r * perRow;
+        return PAD + c * (btnW + GAP), btnY + r * (ctrlH + GAP);
+    end
+
+    self.datas = ISScrollingListBox:new(0, 0, self.width, listH);
     self.datas:initialise();
     self.datas:instantiate();
-    self.datas.itemheight = fontHeightSmall + 4 * 2
+    self.datas.itemheight = EtherTheme.listItemH
     self.datas.selected = 0;
     self.datas.joypadParent = self;
     self.datas.font = UIFont.NewSmall;
     self.datas.doDrawItem = self.drawDatas;
-    self.datas.drawBorder = true;
     self.datas.backgroundColor = {r=0, g=0, b=0, a=0.0};
     EtherTheme.styleList(self.datas);
+    self.datas.drawBorder = false;      -- 外层行盒已提供边框
+    -- 列宽按表宽比例分配, 避免固定像素在窄面板下挤在一起
     self.datas:addColumn(getText("IGUI_PlayerStats_Perk"), 0);
-    self.datas:addColumn(getText("IGUI_PlayerStats_Level"), 140);
-    self.datas:addColumn(getText("IGUI_PlayerStats_XP"), 230);
-    self.datas:addColumn(getText("IGUI_PlayerStats_Boost"),370)
+    self.datas:addColumn(getText("IGUI_PlayerStats_Level"), math.floor(self.width * 0.34));
+    self.datas:addColumn(getText("IGUI_PlayerStats_XP"), math.floor(self.width * 0.52));
+    self.datas:addColumn(getText("IGUI_PlayerStats_Boost"), math.floor(self.width * 0.74))
+    -- 本表嵌在可滚动的"玩家"页里: 自身滚到边界时把滚轮交还外层, 否则外层滚不动
+    EtherTheme.bubbleWheelAtEdge(self.datas);
     self:addChild(self.datas);
 
-    self.addXP = UIButton:new(0, self.height - 80, 100, 24, getTranslate("UI_PlayerEditor_PlayerSkills_AddXP"), 
+    local bx, by = btnPos(1);
+    self.addXP = UIButton:new(bx, by, btnW, ctrlH, titles[1],
     function() 
         if UIModalAddXP.instance then
             UIModalAddXP.instance:close()
@@ -95,7 +184,7 @@ function UISkillTable:createChildren()
         modal:initialise();
         modal:addToUIManager();
         modal:setAlwaysOnTop(true);
-    end)
+    end, btnW)
     self.addXP:initialise();
     self.addXP:instantiate();
     self.addXP:setAnchorLeft(true);
@@ -104,7 +193,8 @@ function UISkillTable:createChildren()
     self.addXP:setAnchorBottom(true);
     self:addChild(self.addXP);
 
-    self.addLevel = UIButton:new(self.addXP.x + self.addXP.width + 10, self.height - 80, 100, 24, getTranslate("UI_PlayerEditor_PlayerSkills_AddLevel"), 
+    bx, by = btnPos(2);
+    self.addLevel = UIButton:new(bx, by, btnW, ctrlH, titles[2],
     function() 
         local selectedItem = self.datas.items[self.datas.selected].item
         self.localPlayer:LevelPerk(selectedItem.perk);
@@ -114,7 +204,7 @@ function UISkillTable:createChildren()
         if selectedItem.perk == Perks.Strength or selectedItem.perk == Perks.Fitness then
             self.parent.traitsPanel:updateTraits();
         end
-    end)
+    end, btnW)
     self.addLevel:initialise();
     self.addLevel:instantiate();
     self.addLevel:setAnchorLeft(true);
@@ -126,7 +216,8 @@ function UISkillTable:createChildren()
     self:addChild(self.addLevel);
     table.insert(self.buttonList, self.addLevel);
 
-    self.takeLevel = UIButton:new(self.addLevel.x + self.addLevel.width + 10, self.height - 80, 100, 24, getTranslate("UI_PlayerEditor_PlayerSkills_TakeLevel"), 
+    bx, by = btnPos(3);
+    self.takeLevel = UIButton:new(bx, by, btnW, ctrlH, titles[3], 
     function() 
         local selectedItem = self.datas.items[self.datas.selected].item
         self.localPlayer:LoseLevel(selectedItem.perk);
@@ -136,7 +227,7 @@ function UISkillTable:createChildren()
         if selectedItem.perk == Perks.Strength or selectedItem.perk == Perks.Fitness then
             self.parent.traitsPanel:updateTraits();
         end
-    end)
+    end, btnW)
     self.takeLevel:initialise();
     self.takeLevel:instantiate();
     self.takeLevel:setAnchorLeft(true);
@@ -148,7 +239,8 @@ function UISkillTable:createChildren()
     self:addChild(self.takeLevel);
     table.insert(self.buttonList, self.takeLevel);
     
-    self.maxSkill = UIButton:new(self.takeLevel.x + self.takeLevel.width + 10, self.height - 80, 100, 24, getTranslate("UI_PlayerEditor_PlayerSkills_MaxAllSkills"), 
+    bx, by = btnPos(4);
+    self.maxSkill = UIButton:new(bx, by, btnW, ctrlH, titles[4], 
     function() 
          for i=0, Perks.getMaxIndex() - 1 do
             local perk = PerkFactory.getPerk(Perks.fromIndex(i));
@@ -163,7 +255,7 @@ function UISkillTable:createChildren()
         safeSync(self.localPlayer);
         self.parent.traitsPanel:updateTraits();
         self:updateSkills();
-    end)
+    end, btnW)
     self.maxSkill:initialise();
     self.maxSkill:instantiate();
     self.maxSkill:setAnchorLeft(true);
@@ -171,6 +263,12 @@ function UISkillTable:createChildren()
     self.maxSkill:setAnchorTop(false);
     self.maxSkill:setAnchorBottom(true);
     self:addChild(self.maxSkill);
+
+    -- 「所有技能升满」右侧提示: 多人下升技能会被服务端回滚, 需先开「其他-服务器同步保护」。
+    -- 取实际 getX/getWidth 而非 btnW: UIButton 会按文案自动加宽 (见 UIButton:new);
+    -- 按钮若换行到下一排, by 也随之取自 btnPos(4), 提示跟着走。
+    self.syncHint = placeButtonHint(self, self.maxSkill:getX(), by,
+        self.maxSkill:getWidth(), self.width - PAD, "UI_PlayerEditor_SyncProtectionHint");
 
     self:updateSkills();
 end
@@ -257,7 +355,7 @@ function UISkillTable:drawDatas(y, item, alt)
     self:drawTextCentre(tostring(item.item.level), (self.columns[2].size + self.columns[3].size) / 2, y + yoff, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1, UIFont.Small)
 
     if item.item.xpToLevel == -1 then
-        self:drawTextCentre("MAX", (self.columns[3].size + self.columns[4].size) / 2, y + yoff, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1, UIFont.Small);
+        self:drawTextCentre(getTranslate("UI_Skill_MaxLevel"), (self.columns[3].size + self.columns[4].size) / 2, y + yoff, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1, UIFont.Small);
     else
         self:drawTextCentre(tostring(item.item.xp) .. "/" .. tostring(item.item.xpToLevel), (self.columns[3].size + self.columns[4].size) / 2, y + yoff, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 1, UIFont.Small);
     end

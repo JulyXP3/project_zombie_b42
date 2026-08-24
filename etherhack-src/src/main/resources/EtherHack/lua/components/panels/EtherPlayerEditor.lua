@@ -1,237 +1,254 @@
 require "ISUI/ISPanel"
 
 --*********************************************************
---* 琚氳阿鑺枩閭阿瑜滆柂瑜樻 瑜嶈瑜岄偑钖姱鑳佹郴鎳?UI
+--* 玩家编辑面板 (已迁移到 EtherFormPanel: 游标布局 + 统一 add* API)
+--*
+--* 迁移前的问题 (UI重构方案.md P1/P2/P4 + 用户实测缺陷):
+--*   - 纯绝对坐标网格 (180,20) (180,60) ... 与魔法式 310+360+20;
+--*   - 右侧信息列固定放在 self.width - 140, 面板收窄到 888 后文字被右缘截断
+--*     ("管理等级: nor…"), 且与 x=500 的 Edit 按钮重叠;
+--*   - 特质/技能表的列头画在表体之上(PZ 行为), 会压住上方的人物信息行;
+--*   - 信息文案全靠 getText(k) .. ": " .. value 拼接。
+--* 迁移后: 头像 + 信息 + 两张表各占一个自定义行, 位置由基类游标接管;
+--*   信息列按实测宽度排布并右对齐按钮, 任何语言都不越界。
+--* 信息文字走 Info 页同款"整串缩放绘制" (drawHintText, 约小3号);
+--*   姓/名行已删 (与用户名重复)。Edit 按钮仍为子控件, 行位不变。
+--*
+--* 红线 (零功能影响): getHoursAlive/setHoursAlive/getZombieKills/setZombieKills、
+--*   UITraitsTable/UISkillTable、ISUI3DModel 的用法与参数一律未改。
 --*********************************************************
-EtherPlayerEditor = ISPanel:derive("EtherPlayerEditor"); -- 琚ч偑瑜嬭阿姊板啓鑺儊閭柂鎳堟 鑺 ISPanel
+EtherPlayerEditor = EtherFormPanel:derive("EtherPlayerEditor");
 
 --*********************************************************
---* 琚ㄦ枩瑜夐偑鏂滆姱瑜屾郴閭?prerender
+--* 头像衬底 (纹理 + 描边): 做成子控件, 位置随滚动由 UI 系统处理,
+--* 避免在 prerender 手绘时还要自己叠加 getYScroll()。
 --*********************************************************
-function EtherPlayerEditor:prerender()
-    self:setStencilRect(0,10,self:getWidth(),self:getHeight() - 20);
-    ISPanel.prerender(self);
+local AvatarBackdrop = ISPanel:derive("EtherAvatarBackdrop");
 
-    if self.localPlayer == nil then return end
-    local x, y, w, h = self.avatarPanel.x, self.avatarPanel.y, self.avatarPanel.width, self.avatarPanel.height
-    self:drawRectBorder(x - 2, y - 2, w + 4, h + 4, 1, 0.10, 0.52, 0.22);
-	self:drawTextureScaled(self.avatarBackgroundTexture, x, y, w, h, 1, 1, 1, 1);
-end
-
---*********************************************************
---* 琚ㄦ枩瑜夐偑鏂滆姱瑜屾郴閭?瑜嬭姱鏂滆瑜屾噲娉?娉昏姱璋㈡瑜嬫噲娉婚偑 灞戣瑜曟噲
---*********************************************************
-function EtherPlayerEditor:onMouseWheel(del)
-	self:setYScroll(self:getYScroll() - (del * 40));
-	return true;
-end
-
---*********************************************************
---* 琚ㄦ枩瑜夐偑鏂滆姱瑜屾郴閭?render
---*********************************************************
-function EtherPlayerEditor:render()
-    ISPanel.render(self);
-
-    if self.localPlayer == nil then
-        self:drawTextCentre(self.workInGameText, self.width / 2, self.height / 2, 1.0, 1.0, 1.0, 1.0, UIFont.Large)
-    end;
-
-    self:clearStencilRect();
-end
-
---*********************************************************
---* 琚涜姱鏂滈偑鑳佽阿姊拌柂鎳堟 瑜屾娉昏瑜岃姱鑳佽姱娉?瑜嬭瑜夎姱娉绘噲
---*********************************************************
-function EtherPlayerEditor:addLabel(text, x, y, font, color)
-    if font == nil then
-        font = UIFont.Small;
+function AvatarBackdrop:render()
+    if self.tex ~= nil then
+        self:drawTextureScaled(self.tex, 0, 0, self.width, self.height, 1, 1, 1, 1);
     end
+    local b = EtherTheme.blood;
+    self:drawRectBorder(0, 0, self.width, self.height, 0.5, b.r, b.g, b.b);
+end
 
-    if color == nil then
-        color = {r = 1, g = 1, b = 1, a = 1}
-    end
+function AvatarBackdrop:onMouseDown(x, y) return false; end
+function AvatarBackdrop:onMouseUp(x, y) return false; end
 
-    local height = getTextManager():getFontHeight(font)
-
-    local label = ISLabel:new(x, y, height, text, color.r, color.g, color.b, color.a, font, true)
-    label:initialise()
-    label:instantiate()
-    self:addChild(label)
+function AvatarBackdrop:new(x, y, w, h, tex)
+    local o = ISPanel:new(x, y, w, h);
+    setmetatable(o, self);
+    self.__index = self;
+    o.background = false;
+    o.backgroundColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.borderColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.moveWithMouse = false;
+    o.tex = tex;
+    return o;
 end
 
 --*********************************************************
---* 灏忚姱锜瑰啓閭柂鎳堟 鍐欒姱瑜旀瑜夎柂鎳堣 瑜濊阿姊板睉姊拌柂瑜岃姱鑳?
+--* 安全取职业名 (B42: CharacterProfessionDefinition; 逐级回退)
 --*********************************************************
-function EtherPlayerEditor:createChildren()
-    ISPanel.createChildren(self);
-    
-    -- Store initial player state
-    self.childrenCreated = false;
-    
-    -- Try to create children if player exists
-    self:tryCreatePlayerUI();
-end
-
---*********************************************************
---* Try to create player UI elements
---*********************************************************
-function EtherPlayerEditor:tryCreatePlayerUI()
-    -- If already created, skip
-    if self.childrenCreated then return; end
-    
-    -- Check if player exists and has a valid descriptor
-    if self.localPlayer == nil then 
-        self.localPlayer = getPlayer();
-        if self.localPlayer == nil then return; end
-    end
-    
-    local descriptor = self.localPlayer:getDescriptor();
-    if descriptor == nil then return end;
-
-    -- Create 3D avatar panel with error handling
-    local avatarOk, avatarErr = pcall(function()
-        self.avatarPanel = ISUI3DModel:new(20, 20, 128, 270)
-        self.avatarPanel:setVisible(true)
-        -- 必须设置角色, 否则 modelInstance 为 null, UI3DModel 渲染时每帧 NPE
-        -- (原生 CharacterCreationAvatar 同款用法; 不要用 setOutfitName, 无 baseVisual 时也会 NPE)
-        self.avatarPanel:setCharacter(self.localPlayer)
-        self.avatarPanel:setState("idle")
-        self.avatarPanel:setDirection(IsoDirections.S)
-        self.avatarPanel:setIsometric(false)
-        self:addChild(self.avatarPanel)
-    end)
-    if not avatarOk then
-        print("[EtherHack] Avatar panel creation failed: " .. tostring(avatarErr));
-        -- Create a placeholder panel instead
-        self.avatarPanel = ISPanel:new(20, 20, 128, 270);
-        self.avatarPanel:initialise();
-        self.avatarPanel:instantiate();
-        self.avatarPanel.backgroundColor = {r=0.2, g=0.2, b=0.2, a=0.8};
-        self:addChild(self.avatarPanel);
-    end
-
-    self:addLabel(getText("IGUI_PlayerStats_Username") .. " ".. tostring(self.localPlayer:getUsername() or ""), 180, 20);
-    self:addLabel(getText("IGUI_PlayerStats_DisplayName").. " ".. tostring(self.localPlayer:getDisplayName() or ""), 180, 60);
-    self:addLabel(getText("UI_characreation_forename").. ": " .. tostring(descriptor:getForename() or ""), 180, 100);
-    self:addLabel(getText("UI_characreation_surname").. ": " .. tostring(descriptor:getSurname() or ""), 180, 140);
-    
-    -- Safely get profession name (Build 42 uses CharacterProfessionDefinition)
-    local professionName = "Unknown";
-    local profOk, profErr = pcall(function()
-        -- Build 42: Use getCharacterProfession() which returns CharacterProfession object
+local function professionName(descriptor)
+    local name = "Unknown";
+    local ok, err = pcall(function()
         local professionObj = nil;
         if descriptor.getCharacterProfession then
             professionObj = descriptor:getCharacterProfession();
         end
-        
         if professionObj ~= nil then
-            -- Build 42: Use CharacterProfessionDefinition to get the label
             if CharacterProfessionDefinition and CharacterProfessionDefinition.getCharacterProfessionDefinition then
                 local profDef = CharacterProfessionDefinition.getCharacterProfessionDefinition(professionObj);
                 if profDef and profDef.getLabel then
-                    professionName = tostring(profDef:getLabel() or "Unknown");
+                    name = tostring(profDef:getLabel() or "Unknown");
                 end
             end
-            -- Fallback: try getName on the profession object itself
-            if professionName == "Unknown" and professionObj.getName then
-                professionName = tostring(professionObj:getName() or "Unknown");
+            if name == "Unknown" and professionObj.getName then
+                name = tostring(professionObj:getName() or "Unknown");
             end
-            -- Last fallback: tostring
-            if professionName == "Unknown" then
-                professionName = tostring(professionObj);
+            if name == "Unknown" then
+                name = tostring(professionObj);
             end
         end
     end)
-    if not profOk then
-        print("[EtherHack] Failed to get profession: " .. tostring(profErr));
+    if not ok then
+        print("[EtherHack] Failed to get profession: " .. tostring(err));
     end
-    self:addLabel(getText("IGUI_PlayerStats_Profession").. " ".. professionName, 180, 180);
-    
-    -- Time survived
-    local timeSurvived = "N/A"
-    if self.localPlayer.getTimeSurvived then
-        timeSurvived = tostring(self.localPlayer:getTimeSurvived() or "N/A")
-    end
-    self:addLabel(getText("IGUI_char_Survived_For").. ": " .. timeSurvived, 180, 220);
-    
-    local editTimeBtn = ISButton:new(500, 220, 120, 36, getTranslate("UI_PlayerEditor_EditStats") or "Edit", self, self.onEditTimeButton)
-    editTimeBtn:initialise()
-    editTimeBtn:instantiate()
-    self:addChild(editTimeBtn)
-    
-    -- Zombie kills
-    local zombieKills = "0"
-    if self.localPlayer.getZombieKills then
-        zombieKills = tostring(self.localPlayer:getZombieKills() or 0)
-    end
-    self:addLabel(getText("IGUI_char_Zombies_Killed").. ": " .. zombieKills, 180, 260);
-    
-    local editKillsBtn = ISButton:new(500, 260, 120, 36, getTranslate("UI_PlayerEditor_EditStats") or "Edit", self, self.onEditKillsButton)
-    editKillsBtn:initialise()
-    editKillsBtn:instantiate()
-    self:addChild(editKillsBtn)
-
-    local chatMuted = getText("Sandbox_ThumpNoChasing_option1") or "Yes";
-    if self.localPlayer.isAllChatMuted and not self.localPlayer:isAllChatMuted() then
-        chatMuted = getText("Sandbox_ThumpNoChasing_option2") or "No"
-    end
-
-    self:addLabel(getText("IGUI_PlayerStats_AccessLevel") .. " ".. tostring(self.localPlayer:getAccessLevel() or ""), self.width - 140, 20);
-    self:addLabel(getText("IGUI_PlayerStats_ChatMuted").. " ".. chatMuted, self.width - 140, 60);
-    
-    -- Nutrition info
-    local weight = "N/A"
-    local calories = "N/A"
-    local nutrition = self.localPlayer:getNutrition()
-    if nutrition then
-        if nutrition.getWeight then weight = tostring(math.floor(nutrition:getWeight() or 0)) end
-        if nutrition.getCalories then calories = tostring(math.floor(nutrition:getCalories() or 0)) end
-    end
-    self:addLabel(getText("IGUI_char_Weight").. ": ".. weight, self.width - 140, 100);
-    self:addLabel((getTranslate("UI_PlayerEditor_PlayerInfo_Calories") or "Calories").. ": ".. calories, self.width - 140, 140);
-
-    self:addLabel(getTranslate("UI_PlayerEditor_PlayerTraits_Title") or "Traits", 20, self.avatarPanel.x + self.avatarPanel.height + 10, UIFont.Medium )
-
-    -- Safely create traits panel
-    local traitsOk, traitsErr = pcall(function()
-        self.traitsPanel = UITraitsTable:new(20, 390, self.width - 20 * 2, 360);
-        self.traitsPanel:initialise();
-        self.traitsPanel.parent = self;
-        self:addChild(self.traitsPanel);
-    end)
-    if not traitsOk then
-        print("[EtherHack] Failed to create traits panel: " .. tostring(traitsErr))
-    end
-
-    self:addLabel(getTranslate("UI_PlayerEditor_PlayerSkills_Title") or "Skills", 20, 310 + 360 + 20, UIFont.Medium )
-
-    -- Safely create skills panel
-    local skillsOk, skillsErr = pcall(function()
-        self.skillPanel = UISkillTable:new(20, 310 + 360 + 60, self.width - 20 * 2, 360);
-        self.skillPanel:initialise();
-        self.skillPanel.parent = self;
-        self:addChild(self.skillPanel);
-    end)
-    if not skillsOk then
-        print("[EtherHack] Failed to create skills panel: " .. tostring(skillsErr))
-    end
-    
-    -- Mark children as successfully created
-    self.childrenCreated = true;
-    print("[EtherHack] Player Editor UI created successfully");
+    return name;
 end
 
+--*********************************************************
+--* 人物信息行数据 (标签 + 值), 集中构建便于统一排布与折行
+--*********************************************************
+function EtherPlayerEditor:infoRows()
+    local p = self.localPlayer;
+    local descriptor = p:getDescriptor();
+
+    local timeSurvived = "N/A";
+    if p.getTimeSurvived then
+        timeSurvived = tostring(p:getTimeSurvived() or "N/A");
+    end
+    local zombieKills = "0";
+    if p.getZombieKills then
+        zombieKills = tostring(p:getZombieKills() or 0);
+    end
+
+    local chatMuted = getText("Sandbox_ThumpNoChasing_option1") or "Yes";
+    if p.isAllChatMuted and not p:isAllChatMuted() then
+        chatMuted = getText("Sandbox_ThumpNoChasing_option2") or "No";
+    end
+
+    local weight, calories = "N/A", "N/A";
+    local nutrition = p:getNutrition();
+    if nutrition then
+        if nutrition.getWeight then weight = tostring(math.floor(nutrition:getWeight() or 0)); end
+        if nutrition.getCalories then calories = tostring(math.floor(nutrition:getCalories() or 0)); end
+    end
+
+    return {
+        { label = getText("IGUI_PlayerStats_Username"), value = tostring(p:getUsername() or "") },
+        { label = getText("IGUI_PlayerStats_DisplayName"), value = tostring(p:getDisplayName() or "") },
+        { label = getText("IGUI_PlayerStats_Profession"), value = professionName(descriptor) },
+        { label = getText("IGUI_PlayerStats_AccessLevel"), value = tostring(p:getAccessLevel() or "") },
+        { label = getText("IGUI_PlayerStats_ChatMuted"), value = chatMuted },
+        { label = getText("IGUI_char_Weight"), value = weight },
+        { label = getTranslate("UI_PlayerEditor_PlayerInfo_Calories") or "Calories", value = calories },
+        { label = getText("IGUI_char_Survived_For"), value = timeSurvived, edit = "time" },
+        { label = getText("IGUI_char_Zombies_Killed"), value = zombieKills, edit = "kills" },
+    };
+end
+
+--*********************************************************
+--* 面板内容构建 (基类在 createChildren 里回调 build)
+--*********************************************************
+function EtherPlayerEditor:build()
+    self.localPlayer = getPlayer();
+    if self.localPlayer == nil then return end
+    if self.localPlayer:getDescriptor() == nil then return end
+
+    local tm = getTextManager();
+    local ctrlH = EtherTheme.ctrlH;
+    local fhS = EtherTheme.fontHgtSmall;
+    -- 行距必须容纳 Edit 按钮 (ctrlH), 否则按钮会比行高还高、上下溢出相邻行
+    local rowStep = math.max(fhS + 8, ctrlH + 2);
+    local AV_W, AV_H = 128, 260;
+
+    -- ================= 头像 + 信息 =================
+    local rows = self:infoRows();
+    local infoH = math.max(AV_H, #rows * rowStep);
+
+    self:addCustomRow(infoH, function(bx, by, bw)
+        -- 头像衬底 + 3D 模型 (衬底先加 -> 在模型下层)
+        local backdrop = AvatarBackdrop:new(bx, by, AV_W, AV_H, self.avatarBackgroundTexture);
+        backdrop:initialise();
+        backdrop:instantiate();
+        self:_anchor(backdrop);
+        self:addChild(backdrop);
+
+        local avatarOk, avatarErr = pcall(function()
+            self.avatarPanel = ISUI3DModel:new(bx, by, AV_W, AV_H)
+            self.avatarPanel:setVisible(true)
+            -- 必须设置角色, 否则 modelInstance 为 null, UI3DModel 每帧 NPE
+            self.avatarPanel:setCharacter(self.localPlayer)
+            self.avatarPanel:setState("idle")
+            self.avatarPanel:setDirection(IsoDirections.S)
+            self.avatarPanel:setIsometric(false)
+            self:addChild(self.avatarPanel)
+        end)
+        if not avatarOk then
+            print("[EtherHack] Avatar panel creation failed: " .. tostring(avatarErr));
+        end
+
+        -- 信息列: 头像右侧单列纵向排布。
+        -- 单列 + 值右对齐, 从根上避免"右侧固定列被面板右缘截断"与"和 Edit 按钮重叠"。
+        local ix = bx + AV_W + 16;
+        local iw = (bx + bw) - ix;
+        local editTitle = getTranslate("UI_PlayerEditor_EditStats") or "Edit";
+        local editW = tm:MeasureStringX(UIFont.Small, editTitle) + EtherTheme.ctrlPadX * 2;
+
+        -- 信息文字改走 Info 页同款"整串缩放绘制": 标签/值不再建 ISLabel 子控件,
+        -- 布局参数存 self.infoDraw, 由 render 逐帧 drawHintText (约小3号)。
+        -- 行位/rowStep 不变, 与 Edit 按钮共用同一条中线。
+        self.infoDraw = {
+            rows = rows,
+            x = ix, right = bx + bw, y0 = by,
+            iw = iw, rowStep = rowStep, editW = editW,
+        };
+
+        for i = 1, #rows do
+            local r = rows[i];
+            local y = by + (i - 1) * rowStep;
+
+            -- Edit 按钮: 与本行竖直居中, 右对齐到信息列右缘
+            if r.edit ~= nil then
+                local cb = (r.edit == "time")
+                    and function() self:onEditTimeButton(); end
+                    or function() self:onEditKillsButton(); end
+                -- 按钮在本行内竖直居中 (行高 rowStep, 按钮高 ctrlH)
+                local btn = UIButton:new((bx + bw) - editW,
+                    y + math.floor((rowStep - ctrlH) / 2), editW, ctrlH, editTitle, cb);
+                self:addWidget(btn);
+            end
+        end
+    end);
+
+    -- ================= 特质 =================
+    -- 两张表各自占一个自定义行; 表的列头画在表体之上(PZ 行为), 故预留 LIST_HEADER_H
+    local hdrH = EtherFormPanel.LIST_HEADER_H;
+    local tableH = 220;
+
+    self:addSpacer(EtherFormPanel.SECTION_GAP);
+    self:addModule("UI_PlayerEditor_PlayerTraits_Title", tableH + hdrH, function(bx, by, bw)
+        local ok, err = pcall(function()
+            self.traitsPanel = UITraitsTable:new(bx, by + hdrH, bw, tableH);
+            self.traitsPanel:initialise();
+            self.traitsPanel.parent = self;
+            self:_anchor(self.traitsPanel);
+            self:addChild(self.traitsPanel);
+        end)
+        if not ok then
+            print("[EtherHack] Failed to create traits panel: " .. tostring(err))
+        end
+    end);
+
+    -- ================= 技能 =================
+    self:addSpacer(EtherFormPanel.SECTION_GAP);
+    self:addModule("UI_PlayerEditor_PlayerSkills_Title", tableH + hdrH, function(bx, by, bw)
+        local ok, err = pcall(function()
+            self.skillPanel = UISkillTable:new(bx, by + hdrH, bw, tableH);
+            self.skillPanel:initialise();
+            self.skillPanel.parent = self;
+            self:_anchor(self.skillPanel);
+            self:addChild(self.skillPanel);
+        end)
+        if not ok then
+            print("[EtherHack] Failed to create skills panel: " .. tostring(err))
+        end
+    end);
+
+    self.childrenCreated = true;
+end
+
+--*********************************************************
+--* 重建面板内容 (编辑存活时长/击杀数后刷新显示)
+--*********************************************************
 function EtherPlayerEditor:updateLabels()
-    -- Remove all existing children
-    if self.avatarPanel then
-        self:removeChild(self.avatarPanel)
+    -- 先快照再移除: 直接在遍历 Java 子元素列表时移除元素并不安全
+    local kids = {};
+    for _, child in pairs(self:getChildren()) do
+        table.insert(kids, child);
     end
-    for _,child in pairs(self:getChildren()) do
-        self:removeChild(child)
+    for i = 1, #kids do
+        self:removeChild(kids[i]);
     end
-    -- Reset creation flag and recreate
+
+    self.avatarPanel = nil;
+    self.traitsPanel = nil;
+    self.skillPanel = nil;
     self.childrenCreated = false;
-    self:tryCreatePlayerUI()
+    self:createChildren();
 end
 
 function EtherPlayerEditor:onEditTimeButton()
@@ -269,43 +286,76 @@ function EtherPlayerEditor:onEditKillsButton()
 end
 
 --*********************************************************
---* 琚ㄦ枩钖姱鑳佽阿姊拌柂鎳堟 閿岄偑钖璋㈡噲
+--* 手绘内容 (基类 renderContent 钩子): 在裁剪区内逐帧绘制信息行,
+--* 滚出面板的像素由裁剪区剪掉 —— 此前画在 clearStencilRect 之后,
+--* 滚动时文字会越出面板画到其它 UI 上 (实机缺陷, 已修)。
+--* 标签白/值暗色, 值右对齐并让出 Edit 按钮位, 过长折行取第一行;
+--* 测宽/折行/行距全部用 hint 缩放套件 (hintWidth/wrapHint/fontHgtHint),
+--* 与 drawHintText 同一套缩放 (见 EtherTheme 注释)。
+--*********************************************************
+function EtherPlayerEditor:renderContent()
+    local info = self.infoDraw;
+    if info == nil then return end
+
+    local dy = math.floor((info.rowStep - EtherTheme.fontHgtHint) / 2);
+    for i = 1, #info.rows do
+        local r = info.rows[i];
+        local y = info.y0 + (i - 1) * info.rowStep + dy;
+        EtherTheme.drawHintText(self, r.label, info.x, y, EtherTheme.text);
+
+        -- 该行右侧预留: 有 Edit 按钮的行要让出按钮宽度
+        local rightPad = 0;
+        if r.edit ~= nil then rightPad = info.editW + EtherTheme.ctrlGap; end
+
+        local availW = info.iw - EtherTheme.hintWidth(r.label) - EtherTheme.ctrlGap - rightPad;
+        if availW < 40 then availW = 40; end
+        local valueText = r.value;
+        if EtherTheme.hintWidth(valueText) > availW then
+            valueText = EtherTheme.wrapHint(valueText, availW)[1];
+        end
+        local vx = info.right - rightPad - EtherTheme.hintWidth(valueText);
+        EtherTheme.drawHintText(self, valueText, vx, y, EtherTheme.textDim);
+    end
+end
+
+function EtherPlayerEditor:render()
+    EtherFormPanel.render(self);
+
+    if getPlayer() == nil then
+        self:drawTextCentre(self.workInGameText, self.width / 2, self.height / 2,
+            1.0, 1.0, 1.0, 1.0, UIFont.Large)
+    end
+end
+
+--*********************************************************
+--* update: 进入游戏后补建 UI; 并保持头像跟随当前角色
 --*********************************************************
 function EtherPlayerEditor:update()
     ISPanel.update(self);
-    
-    -- Try to create UI if player wasn't available before
+
     if not self.childrenCreated then
-        self.localPlayer = getPlayer();
-        if self.localPlayer then
-            self:tryCreatePlayerUI();
+        local p = getPlayer();
+        if p ~= nil then
+            self.localPlayer = p;
+            self:createChildren();
         end
+        return;
     end
 
-    if self.localPlayer == nil then return end
-    
-    if self.avatarPanel then
+    if self.avatarPanel ~= nil and self.localPlayer ~= nil then
         self.avatarPanel:setCharacter(self.localPlayer)
     end
 end
 
 --*********************************************************
---* 灏忚姱锜瑰啓閭柂鎳堟 钖姱鑳佽姱璋愯姱 瑜濇郴锜规灞戦攲璋㈣瑜夐偑 灞戞钖
+--* 构造 (其余继承 EtherFormPanel)
 --*********************************************************
 function EtherPlayerEditor:new(posX, posY, width, height)
-    local menuTableData = {};
-
-    menuTableData = ISPanel:new(posX, posY, width, height);
-    setmetatable(menuTableData, self);
-    menuTableData.background = true;
-	menuTableData.backgroundColor = {r=0.0, g=0.0, b=0.0, a=0.0};
-	menuTableData.borderColor = {r=0.0, g=0.0, b=0.0, a=0.0};
-    menuTableData.moveWithMouse = true;
-    menuTableData.avatarBackgroundTexture = getTexture("media/ui/avatarBackground.png")
-    menuTableData.workInGameText = getTranslate("UI_PlayerEditor_PanelWorkOnlyInGame") or "This panel only works in-game";
-    menuTableData.localPlayer = getPlayer();
-    EtherPlayerEditor.instance = self;
-    self.__index = self;
-
-    return menuTableData;
+    local o = EtherFormPanel.new(self, posX, posY, width, height);
+    o.avatarBackgroundTexture = getTexture("media/ui/avatarBackground.png");
+    o.workInGameText = getTranslate("UI_PlayerEditor_PanelWorkOnlyInGame") or "This panel only works in-game";
+    o.localPlayer = getPlayer();
+    o.childrenCreated = false;
+    EtherPlayerEditor.instance = o;      -- 原实现误把类表赋给 instance
+    return o;
 end

@@ -178,9 +178,10 @@ end
 -- engine state, keeps the engine running locally, repeatedly replays the
 -- hotwire TimedAction to the server until it authorizes hotwired=true, and
 -- sends the vanilla startEngine command (server trusts client's haveKey) to
--- authorize the engine. After 30s the protection auto-disables and the
--- server-authorized state is read; if the server authorized both hotwire and
--- engine, the vehicle stays usable cleanly, otherwise it reverts.
+-- authorize the engine. As soon as the engine is confirmed running (hotwired
+-- + engine running) the protection auto-disables and the server-authorized
+-- state is read; a 30s timeout is kept only as a fallback for when the engine
+-- can never start (no fuel/battery), so the toggle never hangs on.
 --============================================================================
 
 function ServerSyncBlocker.enableVehicle()
@@ -235,14 +236,42 @@ function ServerSyncBlocker.confirmVehicleProtection()
     local ok = vehicle ~= nil and vehicle:isHotwired() and vehicle:isEngineRunning()
     ServerSyncBlocker.vehicleProtection = false
     ServerSyncBlocker.vehicleConfirming = false
-    if EtherCharacterPanel and EtherCharacterPanel.vehicleCheckbox then
-        EtherCharacterPanel.vehicleCheckbox:setCheked(false)
+    if EtherVehiclePanel and EtherVehiclePanel.checkboxByKey then
+        local cb = EtherVehiclePanel.checkboxByKey["UI_Exploit_VehicleProtection"]
+        if cb then cb:setCheked(false); end
     end
     if ok then
-        print("[EtherHack] Vehicle hotwire & engine authorized by server, protection auto-disabled")
+        print("[EtherHack] Vehicle hotwire & engine authorized, protection auto-disabled")
     else
-        print("[EtherHack] Vehicle protection auto-disabled after 30s (server did not authorize)")
+        print("[EtherHack] Vehicle protection auto-disabled (engine did not start / server did not authorize)")
     end
+end
+
+--============================================================================
+-- 无条件启动引擎 (VehicleCommands.startEngine 无权限校验, haveKey 由客户端
+-- 上传; 服务端 tryStartEngine 仍判油/电/损坏)。开车时引擎未转则周期补发;
+-- 引擎转起来即自动取消勾选; 取消勾选立即停止重试 (每 tick 先查开关)。
+--============================================================================
+function ServerSyncBlocker.updateInstantEngineStart()
+    if not (isVehicleInstantStart and isVehicleInstantStart()) then return end
+    local player = getPlayer()
+    if not player then return end
+    local vehicle = player:getVehicle()
+    if not vehicle or not vehicle:isDriver(player) then return end
+    if vehicle:isEngineRunning() then
+        -- 启动成功: 自动关闭开关并同步勾选框 UI
+        if toggleVehicleInstantStart then toggleVehicleInstantStart(false); end
+        if EtherVehiclePanel and EtherVehiclePanel.checkboxByKey then
+            local cb = EtherVehiclePanel.checkboxByKey["UI_VehiclePanel_InstantStart"]
+            if cb then cb:setCheked(false); end
+        end
+        print("[EtherHack] Engine started - auto-retry disabled")
+        return
+    end
+    local now = getTimestampMs()
+    if now < (ServerSyncBlocker.instantStartRetryDue or 0) then return end
+    ServerSyncBlocker.instantStartRetryDue = now + 1000
+    sendClientCommand(player, "vehicle", "startEngine", {haveKey = true})
 end
 
 -- Register for OnTick to periodically reapply values
@@ -251,12 +280,17 @@ local function onTick()
         ServerSyncBlocker.filterPackets()
         ServerSyncBlocker.reapply()
     end
+    ServerSyncBlocker.updateInstantEngineStart()
     if ServerSyncBlocker.vehicleProtection then
         if ServerSyncBlocker.vehicleConfirming then
             ServerSyncBlocker.confirmVehicleProtection()
         else
             ServerSyncBlocker.applyVehicleProtection()
-            if getTimestampMs() >= ServerSyncBlocker.vehicleConfirmDue then
+            -- 引擎一旦转起来即进入收尾(释放下行阻断并读授权结果); 30s 仅作兜底,
+            -- 防止引擎因缺油/没电永远起不来时开关一直挂着。
+            local v = vehicleAndDriver()
+            local engineOk = v ~= nil and v:isHotwired() and v:isEngineRunning()
+            if engineOk or getTimestampMs() >= ServerSyncBlocker.vehicleConfirmDue then
                 if disableVehicleProtection then disableVehicleProtection() end
                 ServerSyncBlocker.vehicleConfirming = true
                 ServerSyncBlocker.vehicleConfirmTicks = 0

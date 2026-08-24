@@ -42,27 +42,100 @@ UITraitsTable = ISPanel:derive("UITraitsTable");
 local fontHeightSmall = getTextManager():getFontHeight(UIFont.Small)
 
 --*********************************************************
+--* 按钮右侧说明文字 (与 EtherVehiclePanel/EtherCharacterPanel 的 ModuleHint 同款):
+--* 做成子控件以随表格一同定位/滚动, 不吞鼠标事件 (点击要能穿到按钮)。
+--* 折行在构造时算一次; 鼠标handler就地定义, 不引用 EtherFormPanel.UIRowBox,
+--* 以免依赖两个文件的加载先后顺序。
+--*********************************************************
+local ButtonHint = ISPanel:derive("EtherTraitsButtonHint");
+
+function ButtonHint:render()
+    for i = 1, #self.lines do
+        EtherTheme.drawHintText(self, self.lines[i], 0, (i - 1) * EtherTheme.fontHgtHint,
+            EtherTheme.textDim, 0.9);
+    end
+end
+
+function ButtonHint:onMouseDown(x, y) return false; end
+function ButtonHint:onMouseUp(x, y) return false; end
+function ButtonHint:onMouseMove(dx, dy) return false; end
+
+function ButtonHint:new(x, y, w, text)
+    local lines = EtherTheme.wrapHint(text, w);
+    local o = ISPanel:new(x, y, w, #lines * EtherTheme.fontHgtHint + 2);
+    setmetatable(o, self);
+    self.__index = self;
+    o.background = false;
+    o.backgroundColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.borderColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.moveWithMouse = false;
+    o.lines = lines;
+    return o;
+end
+
+--*********************************************************
+--* 在指定按钮右侧摆一条说明文字, 纵向对齐到按钮行中线。
+--* 余宽不足 (窄窗口) 时直接不放, 避免逐字折行糊成一团。
+--*********************************************************
+local MIN_HINT_W = 60;
+
+local function placeButtonHint(panel, btnX, btnY, btnW, availRight, key)
+    local hx = btnX + btnW + EtherTheme.ctrlGap;
+    local hw = availRight - hx;
+    if hw < MIN_HINT_W then return nil; end
+    local hint = ButtonHint:new(hx, btnY, hw, getTranslate(key));
+    hint:setY(btnY + math.floor((EtherTheme.ctrlH - hint.height) / 2));
+    hint:initialise();
+    hint:instantiate();
+    hint:setAnchorLeft(true);
+    hint:setAnchorRight(false);
+    hint:setAnchorTop(false);
+    hint:setAnchorBottom(true);
+    panel:addChild(hint);
+    return hint;
+end
+
+--*********************************************************
 --* Создание дочерних элементов
 --*********************************************************
 function UITraitsTable:createChildren()
     ISPanel.createChildren(self);
 
-    self.datas = ISScrollingListBox:new(0, 0, self.width, self.height - 90);
+    -- 按钮行贴表格底部, 并左右留出内边距。
+    -- 原实现: 列表高 height-90、按钮 y=height-80 且 x=0 -> 按钮下方空出 56px,
+    -- 视觉上"按钮悬在中间", 且 x=0 会压住表格左边框 (实测缺陷)。
+    local PAD = 8;
+    local ctrlH = EtherTheme.ctrlH;
+    local GAP = EtherTheme.ctrlGap;
+    local btnY = self.height - ctrlH - PAD;
+    local listH = btnY - GAP;
+    if listH < 60 then listH = 60; end
+
+    self.datas = ISScrollingListBox:new(0, 0, self.width, listH);
     self.datas:initialise();
     self.datas:instantiate();
-    self.datas.itemheight = fontHeightSmall + 4 * 2
+    self.datas.itemheight = EtherTheme.listItemH
     self.datas.selected = 0;
     self.datas.joypadParent = self;
     self.datas.font = UIFont.NewSmall;
     self.datas.doDrawItem = self.drawDatas;
-    self.datas.drawBorder = true;
-    self.datas.backgroundColor = {r=0, g=0, b=0, a=0.0};
+    EtherTheme.styleList(self.datas);   -- 与同页 UISkillTable 共用同一套列表配色
+    self.datas.drawBorder = false;      -- 外层行盒已提供边框
     self.datas:addColumn(getTranslate("UI_PlayerEditor_PlayerTraits_NameTitle"), 0);
-    self.datas:addColumn(getTranslate("UI_PlayerEditor_PlayerTraits_Description"), 150)
+    self.datas:addColumn(getTranslate("UI_PlayerEditor_PlayerTraits_Description"), math.floor(self.width * 0.3))
+    -- 本表嵌在可滚动的"玩家"页里: 自身滚到边界时把滚轮交还外层, 否则外层滚不动
+    EtherTheme.bubbleWheelAtEdge(self.datas);
     self:addChild(self.datas);
 
+    local addTitle = getTranslate("UI_PlayerEditor_PlayerTraits_AddTrait");
+    local delTitle = getTranslate("UI_PlayerEditor_PlayerTraits_DeleteTrait");
+    local tm = getTextManager();
+    -- 两个按钮等宽 (取最宽文案), 各语言下观感一致; 并限制在可用宽度内
+    local btnW = UIButton.measureGroupWidth({ addTitle, delTitle });
+    local maxBtnW = math.floor((self.width - PAD * 2 - GAP) / 2);
+    if btnW > maxBtnW then btnW = maxBtnW; end
 
-    self.addTrait = UIButton:new(0, self.height - 80, 100, 24, getTranslate("UI_PlayerEditor_PlayerTraits_AddTrait"), 
+    self.addTrait = UIButton:new(PAD, btnY, btnW, ctrlH, addTitle,
     function() 
         if UIModalAddTrait.instance then
             UIModalAddTrait.instance:close()
@@ -71,7 +144,7 @@ function UITraitsTable:createChildren()
         modal:initialise();
         modal:addToUIManager();
         modal:setAlwaysOnTop(true);
-    end)
+    end, btnW)
     self.addTrait:initialise();
     self.addTrait:instantiate();
     self.addTrait:setAnchorLeft(true);
@@ -83,7 +156,7 @@ function UITraitsTable:createChildren()
     self:addChild(self.addTrait);
     table.insert(self.buttonList, self.addTrait);
 
-    self.deleteTrait = UIButton:new(self.addTrait.x + self.addTrait.width + 10, self.height - 80, 100, 24, getTranslate("UI_PlayerEditor_PlayerTraits_DeleteTrait"), 
+    self.deleteTrait = UIButton:new(PAD + btnW + GAP, btnY, btnW, ctrlH, delTitle,
     function() 
         local selectedItem = self.datas.items[self.datas.selected];
         if selectedItem and selectedItem.item then
@@ -95,7 +168,7 @@ function UITraitsTable:createChildren()
                 self:updateTraits();
             end
         end
-    end)
+    end, btnW)
     self.deleteTrait:initialise();
     self.deleteTrait:instantiate();
     self.deleteTrait:setAnchorLeft(true);
@@ -106,6 +179,11 @@ function UITraitsTable:createChildren()
     self.deleteTrait.isRequireSelected = true;
     self:addChild(self.deleteTrait);
     table.insert(self.buttonList, self.deleteTrait);
+
+    -- 「移除」右侧提示: 多人下改特质会被服务端回滚, 需先开「其他-服务器同步保护」。
+    -- 取实际 getX/getWidth 而非 btnW: UIButton 会按文案自动加宽 (见 UIButton:new)。
+    self.syncHint = placeButtonHint(self, self.deleteTrait:getX(), btnY,
+        self.deleteTrait:getWidth(), self.width - PAD, "UI_PlayerEditor_SyncProtectionHint");
 
     self:updateTraits();
 end
