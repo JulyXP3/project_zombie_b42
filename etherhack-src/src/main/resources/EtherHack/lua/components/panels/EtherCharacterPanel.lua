@@ -12,8 +12,9 @@ require "ISUI/ISPanel"
 --*     + 攻速倍率输入行 (应用/重置, 手动摆进盒内);
 --*   - 物品与携带: 手中物品无限耐久/自动修理/无限负重(多人经 PlayerDamage
 --*     自报包周期上报, 服务端每帧重算由 20/s 重发压制);
---*   - 特殊模式: 创造/作弊耕种/夜视/车辆无条件短接/僵尸不理会
---*     (僵尸不理会 = IsoZombie.setTarget 注入拦截本地玩家, 模拟上传
+--*   - 特殊模式: 创造/夜视/真-夜视/僵尸不理会
+--*     (作弊耕种已于 2026-08-25 移入独立「耕种」选项卡 EtherFarmingPanel;
+--*      僵尸不理会 = IsoZombie.setTarget 注入拦截本地玩家, 模拟上传
 --*      target=-1 服务端零校验采纳 —— 多人可用, 不再需要调试权限);
 --*   - 状态与需求: 无限耐力 + 各类负面状态禁用 + 维持最佳体重/卡路里
 --*     + 禁用肌肉拉伤/高速回血 (同走 PlayerDamage 自报通道);
@@ -22,8 +23,9 @@ require "ISUI/ISPanel"
 --* 模块内复选框按模块内宽自适应 1~3 列 (planGrid 预排一次, 高度预算与
 --* 实际摆放共用同一份布局; 长标签折行按行内最大行数增高)。
 --*
---* 零功能影响: 下列 toggleX/isX/setX 及 ISBuildMenu.cheat/ISFarmingMenu.cheat
+--* 零功能影响: 下列 toggleX/isX/setX 及 ISBuildMenu.cheat
 --*   均为既有全局, 名称/签名/调用顺序原样保留。
+--*   (ISFarmingMenu.cheat 自耕种选项卡上线后不再有代码设置, 见 EtherFarmingPanel)
 --*********************************************************
 
 EtherCharacterPanel = EtherFormPanel:derive("EtherCharacterPanel");
@@ -266,9 +268,6 @@ function EtherCharacterPanel:build()
                 { key = "UI_CharacterPanel_BuildCheat",
                   on = function(c) ISBuildMenu.cheat = c; end,
                   get = function() return ISBuildMenu.cheat; end },
-                { key = "UI_CharacterPanel_FarmingCheat",
-                  on = function(c) ISFarmingMenu.cheat = c; end,
-                  get = function() return ISFarmingMenu.cheat; end },
                 { key = "UI_CharacterPanel_NightVision", on = toggleNightVision, get = isEnableNightVision },
                 -- 真-夜视 (Fullbright): 与夜视同模块, 渲染级全亮 (见 GamePatcher.patchFullbright)
                 { key = "UI_VisualsPanel_Fullbright", on = toggleFullbright, get = isFullbright },

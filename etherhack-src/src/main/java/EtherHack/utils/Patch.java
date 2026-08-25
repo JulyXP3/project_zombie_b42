@@ -204,6 +204,7 @@ public class Patch {
             }
             catch (Exception e) {
                 Logger.error("Unexpected error processing class '" + className + "'", e);
+                e.printStackTrace();
             }
         }
     }

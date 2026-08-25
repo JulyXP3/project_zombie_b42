@@ -1,16 +1,22 @@
 # Changelog
 
-## [3.1.10] - Current
+## [3.2.0] - Current
 
-- Added: "True Night Vision" (Fullbright) - render-level full brightness (tiles/models forced white, night tint and vision-cone overlay removed, unlit interiors no longer pitch black); client-side only; in Character > Special Modes next to Night Vision.
-- Fixed: "Zombies do not attack the player" no longer requires debug privileges (works in SP and MP); fixed the crash / kick-to-menu when a zombie got close while enabled.
-- Fixed: disabling "Unlock debug privileges (SP)" no longer restarts the game (debug mode is on-only; unchecking takes effect on next launch).
+- Added: "Farming" tab — "Crop Management" (range adjustable, default 3×3 around you: grow to next stage / grow to harvest / water to max / remove water / cure all / infect +25 / harvest / destroy / clear remains, with a live plant counter, stubble/empty tiles flagged separately) + "Sowing" (full seed list with name/ID search, tool-free digging, seed-free sowing, auto-watered after sowing); uses the vanilla farming command channel, works in SP and MP.
+- Removed: the Character-page "Cheat farming mode" toggle (superseded by the Farming tab).
+- Added: "True Night Vision" — render-level full brightness, night tint and vision-cone overlay removed, unlit interiors no longer pitch black (client-side only).
+- Fixed: True Night Vision interiors staying dark.
+- Added: "Reveal Map" button on the Map tab — reveals the entire unexplored area, recorded server-side in multiplayer.
+- Feature: map teleport reworked into "Pathfind & fast-move" — glides at 18 tiles/s along walkable paths, no longer triggers the movement anticheat, unlimited range, WASD/Space cancels anytime; single-player keeps instant teleport.
+- Fixed: the Farming tab rendering blank and the batch-buttons crash; "Grow to Harvest" taking hours to apply (growth schedule reset added); freshly sown crops not responding to growth buttons until the server syncs (the panel tracks sown tiles and sends clamped commands straight to the server).
+- Fixed: "Zombies do not attack the player" no longer requires debug privileges (SP and MP); fixed the crash / kick-to-menu when a zombie got close while enabled.
+- Fixed: disabling "Unlock debug privileges (SP)" no longer restarts the game (debug mode is on-only).
 - Renamed: "Marksman Mode" → "Increase Fire Rate"; full-auto pushed further, semi/single fire no longer touches weapon data.
-- Fixed: "Vehicle unconditional hotwire" now auto-disables the moment the engine starts (30s kept only as a fallback).
-- UI: the "Exploit" nav tab renamed "Other" and moved between "Vehicles" and "Settings"; the Players tab "Remove" / "Max all skills" buttons gained a multiplayer hint.
-- Removed: "No corpse sickness" — it only hid the noxious-smell moodle, it did not stop nausea/food sickness.
+- Fixed: "Vehicle unconditional hotwire" now auto-disables the moment the engine starts.
+- UI: the "Exploit" nav tab renamed "Other" and moved between "Vehicles" and "Settings"; the Players tab gained a multiplayer sync-protection hint.
+- Removed: "No corpse sickness" — it only hid the noxious-smell moodle.
 - Renamed: "Full limb restore" → "Fast health regen (not godmode)"; "No muscle strain" → "Disable muscle strain"; "Creation Boost" hint shortened.
-- Build: version bumped to 3.1.10.
+- Build: version bumped to 3.2.0.
 
 ## [3.1.9]
 

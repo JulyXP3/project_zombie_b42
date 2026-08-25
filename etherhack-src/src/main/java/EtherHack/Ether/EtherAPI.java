@@ -77,6 +77,7 @@ import zombie.core.PerformanceSettings;
 import zombie.core.textures.Texture;
 import zombie.inventory.InventoryItem;
 import zombie.inventory.types.HandWeapon;
+import zombie.iso.IsoGridSquare;
 import zombie.iso.IsoWorld;
 import zombie.iso.LightingJNI;
 import zombie.network.GameClient;

@@ -270,11 +270,8 @@ function UIMap:onRightMouseUp(x, y)
 	local worldX = self.mapAPI:uiToWorldX(x, y)
 	local worldY = self.mapAPI:uiToWorldY(x, y)
 
-	local maxDistance = 100;
-
-	if math.abs(worldX - player:getX() ) > maxDistance or math.abs(worldY - player:getY()) > maxDistance then
-		return;
-	end
+	-- ±100 格限制已移除 (2026-08-25 用户要求): 限速步进与距离无关, 远距只是
+	-- 路程时间更长; 保留区块有效性检查 (未生成区块无法寻路)
 	if getWorld():getMetaGrid():isValidChunk(worldX / 10, worldY / 10) then
 		local option = context:addOption(getTranslate("UI_Map_TeleportContext"), self, self.onTeleport, worldX, worldY)
 	end
@@ -282,13 +279,184 @@ end
 
 --*********************************************************
 --* Безопасная телепортация
+--* MP 修复 (2026-08-25): 旧实现单帧内逐格 setX+sendPlayer 瞬移,
+--* 服务端 AntiCheatSpeed 以 ~1s 窗口采样位移均值 (SpeedChecker,
+--* NetworkCharacterAI.java:330-382, speed=位移*1000/delta),
+--* >20格/s 判违规, 默认策略 antiCheatSpeed=2=踢出 → 必被踢。
+--* 改为 OnTick 时间限速步进: 15格/s 匀速推进 (上限20的安全余量),
+--* 任何采样窗口测得的均值都低于上限; 客户端位置经常规
+--* PlayerPacket 流自动同步, 不再手动 sendPlayer。
+--* 单人无服务端校验, 保持原瞬时传送不变。
+--*
+--* MP 二次修复 (2026-08-25, 蓝队内部服实测被踢): 服务端开启
+--* antiCheatNoClip (默认关, 内部服常开) 时 AntiCheatNoClip 逐包
+--* 检查 (releventPos 每 PlayerPacket 更新, PlayerPacket.java:142):
+--*   包间位移 >2.5格 → "Long blocked" (:90);
+--*   相邻格须 pathMatrix 连通 (:106 checkPathClamp) 且过门/窗
+--*   检查 (:108 checkReachablePath) → "Unreachable/Reachable blocked"。
+--* 直线滑行穿墙的瞬间即违规。改为客户端 BFS 寻路 + 沿路径逐格
+--* 中心走: 邻接判定与 NoClip 检查同源 (getPathMatrix 连通 +
+--* 门/窗 IsOpen, 保守不放行可翻越型), 只走正交步 (len=1 不触发
+--* 对角分支), 单 tick 位移钳 ≤1.0 格 (包间位移恒 <2.5 且 floor 后
+--* 非同格即相邻)。目标被围死 → 传到 BFS 中离目标最近的可达格。
+--* Java 侧 safePlayerTeleport 保留未动 (SafeAPI/ProtectionManagerX
+--* 的防篡改名单引用其名), 但 Lua 不再调用。
 --*********************************************************
-function UIMap:onTeleport(x, y) 
-	if isPlayerInSafeTeleported() then
+local TELEPORT_SPEED = 18.0;   -- 格/秒 (SpeedChecker 窗口均值余量: 上限20, 用户要求激进档18)
+local teleportTask = nil;      -- 进行中的传送 { path=, node=, lastMs=, tx=, ty= }
+
+--*********************************************************
+--* 邻接判定 (与 AntiCheatNoClip.checkPathClamp/checkReachablePath 同源):
+--* pathMatrix 连通 + 中间门/窗必须敞开 (保守: 可翻越型也绕路)。
+--* 返回目标格对象 (可走) 或 nil (不可走/未加载)。
+--*********************************************************
+local function canStepSq(sq, nx, ny)
+	local dx, dy = nx - sq:getX(), ny - sq:getY();
+	if math.abs(dx) + math.abs(dy) ~= 1 then return nil; end   -- 只走正交步
+	local nsq = getCell():getGridSquare(nx, ny, sq:getZ());
+	if nsq == nil then return nil; end
+	if sq:getPathMatrix(dx, dy, 0) then return nil; end        -- true=阻挡
+	local obj;
+	if dy == -1 then obj = sq:getDoorOrWindow(true);           -- N 查 source
+	elseif dx == -1 then obj = sq:getDoorOrWindow(false);      -- W 查 source
+	elseif dy == 1 then obj = nsq:getDoorOrWindow(true);       -- S 查 target
+	else obj = nsq:getDoorOrWindow(false); end                 -- E 查 target
+	if obj ~= nil and not obj:IsOpen() then return nil; end
+	return nsq;
+end
+
+--*********************************************************
+--* BFS 寻路 (4 向正交)。返回格坐标数组 {{x,y},...} (不含起点);
+--* 目标不可达时返回离目标欧氏距离最近的可达格路径; 起点无格返回 nil。
+--*********************************************************
+local function findTeleportPath(sx, sy, tx, ty, z)
+	local startSq = getCell():getGridSquare(sx, sy, z);
+	if startSq == nil then return nil; end
+	if sx == tx and sy == ty then return {}; end
+	local dirs = { { 0, -1 }, { -1, 0 }, { 0, 1 }, { 1, 0 } };
+	local key = function(x, y) return x * 100000 + y; end;
+	local visited = { [key(sx, sy)] = true };
+	local prev = {};
+	local queue = { { sx, sy, startSq } };
+	local head = 1;
+	local best = nil;
+	local bestD = math.huge;
+	while head <= #queue do
+		local cur = queue[head];
+		head = head + 1;
+		local cx, cy = cur[1], cur[2];
+		local cd = math.sqrt((cx - tx) * (cx - tx) + (cy - ty) * (cy - ty));
+		if cd < bestD then
+			bestD = cd;
+			best = { cx, cy };
+		end
+		if cx == tx and cy == ty then break; end
+		for i = 1, 4 do
+			local nx, ny = cx + dirs[i][1], cy + dirs[i][2];
+			local k = key(nx, ny);
+			if not visited[k] then
+				local nsq = canStepSq(cur[3], nx, ny);
+				if nsq ~= nil then
+					visited[k] = true;
+					prev[k] = { cx, cy };
+					table.insert(queue, { nx, ny, nsq });
+				end
+			end
+		end
+	end
+	local path = {};
+	local cur = best;
+	while not (cur[1] == sx and cur[2] == sy) do
+		table.insert(path, 1, cur);
+		cur = prev[key(cur[1], cur[2])];
+		if cur == nil then return nil; end
+	end
+	return path;
+end
+
+local function onTeleportTick()
+	local task = teleportTask;
+	if task == nil then return; end
+	local player = getPlayer();
+	if player == nil then
+		teleportTask = nil;
+		return;
+	end
+	-- 玩家主动按键 (移动/跳跃) 立即终止快速移动, 交还操控权
+	if isKeyDown(Keyboard.KEY_W) or isKeyDown(Keyboard.KEY_A) or isKeyDown(Keyboard.KEY_S)
+		or isKeyDown(Keyboard.KEY_D) or isKeyDown(Keyboard.KEY_SPACE) then
+		teleportTask = nil;
+		return;
+	end
+	local now = getTimestampMs();
+	if task.lastMs == nil then
+		task.lastMs = now;
+		return;
+	end
+	local dt = now - task.lastMs;
+	task.lastMs = now;
+	if dt <= 0 then return; end;
+	if dt > 250 then dt = 250; end;
+	-- 单 tick 位移钳 ≤1.0 格: floor 后要么同格 (NoClip 跳过) 要么相邻格
+	-- (len=1.0 走 checkPathClamp 分支, BFS 已保证连通+门窗), 永不触发
+	-- "Long blocked" (>2.5) 与对角分支 (1.0<len<2.0)
+	local move = math.min(TELEPORT_SPEED * dt / 1000.0, 1.0);
+	local px, py = player:getX(), player:getY();
+	while move > 0.0001 and task.node <= #task.path do
+		local wp = task.path[task.node];
+		local tx, ty = wp[1] + 0.5, wp[2] + 0.5;   -- 格中心 (floor 后恒为目标格)
+		local dx, dy = tx - px, ty - py;
+		local dist = math.sqrt(dx * dx + dy * dy);
+		if dist <= move then
+			player:setX(tx);
+			player:setY(ty);
+			px, py = tx, ty;
+			move = move - dist;
+			task.node = task.node + 1;
+		else
+			player:setX(px + dx / dist * move);
+			player:setY(py + dy / dist * move);
+			move = 0;
+		end
+	end
+	if task.node > #task.path then
+		-- 终点微调到精确点击位置 (与最后路径格同格, floor 后同格不触发 NoClip)
+		player:setX(task.tx);
+		player:setY(task.ty);
+		teleportTask = nil;
+	end
+end
+
+Events.OnTick.Add(onTeleportTick);
+
+function UIMap:onTeleport(x, y)
+	if teleportTask ~= nil then
 		return
 	end
+	local player = self.localPlayer or getPlayer();
+	if player == nil then return; end
 
-	safePlayerTeleport(x, y);
+	if not isMultiplayer() then
+		-- 单人: 无服务端速度校验, 瞬时传送 (与旧行为一致)
+		player:setX(x);
+		player:setY(y);
+		return;
+	end
+
+	-- MP: 先寻路再沿路走 (直线穿墙, 开 antiCheatNoClip 的服必踢)
+	local sx, sy = math.floor(player:getX()), math.floor(player:getY());
+	local path = findTeleportPath(sx, sy, math.floor(x), math.floor(y),
+		math.floor(player:getZ() + 0.001));
+	if path == nil then return; end
+	-- 目标不可达时 BFS 收敛在最近可达格: 终点吸附改用该格中心,
+	-- 否则收尾 snap 会把玩家吸进不可达的墙格 (沙盒实测抓到)
+	if #path > 0 then
+		local lastW = path[#path];
+		if lastW[1] ~= math.floor(x) or lastW[2] ~= math.floor(y) then
+			x, y = lastW[1] + 0.5, lastW[2] + 0.5;
+		end
+	end
+	teleportTask = { path = path, node = 1, lastMs = nil, tx = x, ty = y };
 end
 --*********************************************************
 --* Создание нового экземпляра

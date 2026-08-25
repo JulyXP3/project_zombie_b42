@@ -43,6 +43,7 @@ local etherModules = {
     "EtherHack/lua/components/panels/EtherExploitPanel.lua",
     "EtherHack/lua/components/panels/EtherLootRollPanel.lua",
     "EtherHack/lua/components/panels/EtherVehiclePanel.lua",
+    "EtherHack/lua/components/panels/EtherFarmingPanel.lua",
     "EtherHack/lua/components/panels/EtherSettingsPanel.lua"
 }
 
@@ -98,7 +99,9 @@ function EtherMain:createChildren()
     self.buttonsPanel:addButton("EtherHack/media/ui/teleport.png", "UI_Nav_Teleport", EtherMapPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/loot.png", "UI_Nav_Loot", EtherLootRollPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/vehicle.png", "UI_Nav_Vehicle", EtherVehiclePanel);
-    -- 「其他」(原「漏洞」): 位置固定在「载具」与「设置」之间。
+    -- 「耕种」: 原角色页「作弊耕种模式」开关的面板化替代, 位于「载具」之后
+    self.buttonsPanel:addButton("EtherHack/media/ui/farming.png", "UI_Nav_Farming", EtherFarmingPanel);
+    -- 「其他」(原「漏洞」): 位置固定在「耕种」与「设置」之间。
     self.buttonsPanel:addButton("EtherHack/media/ui/exploit.png", "UI_Nav_Exploit", EtherExploitPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/settings.png", "UI_Nav_Settings", EtherSettingsPanel);
 

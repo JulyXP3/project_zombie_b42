@@ -39,6 +39,7 @@ import java.util.zip.ZipEntry;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
+import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
@@ -50,7 +51,7 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "core/opengl/RenderSettings$PlayerRenderSettings.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "core/opengl/RenderSettings$PlayerRenderSettings.class", "iso/LightingJNI$JNILighting.class", "network/ServerLOS$ServerLighting.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -613,21 +614,27 @@ public class GamePatcher {
                 if (!method.desc.equals("(II)I")) {
                     return;
                 }
+                /*
+                 * 分支-free 注入 (2026-08-25 重写): 旧版内联 if(isFullbright) return -1
+                 * 需要 JumpInsnNode+LabelNode 新分支目标, SafeClassWriter(2)=COMPUTE_FRAMES
+                 * 重算整类帧时 Frame.merge 对无关类型合并 (org/joml/Vector3f <>
+                 * zombie/vehicles/BaseVehicle) 抛 "Index -1 out of bounds" →
+                 * IsoGridSquare.class 从未成功落盘, 组①②从未生效 (MP 纯客户端
+                 * 室内黑的根因之一)。改为: 头部无条件压入覆盖值 (-1 全亮/0 不干预),
+                 * 原 IRETURN 前插 IOR 位合并 — -1|x=-1, 0|x=x, 零新分支零新帧。
+                 * 条件逻辑在 FullbrightHook.vertLightOverride() 内。
+                 */
                 InsnList hookInstructions = new InsnList();
-                LabelNode continueLabel = new LabelNode();
-                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                hookInstructions.add(new JumpInsnNode(198, continueLabel));
-                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
-                hookInstructions.add(new JumpInsnNode(198, continueLabel));
-                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
-                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isFullbright", "Z"));
-                hookInstructions.add(new JumpInsnNode(153, continueLabel));
-                hookInstructions.add(new InsnNode(2));
-                hookInstructions.add(new InsnNode(172));
-                hookInstructions.add(continueLabel);
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/FullbrightHook", "vertLightOverride", "()I", false));
                 method.instructions.insert(hookInstructions);
+                AbstractInsnNode returnInsn = method.instructions.getLast();
+                while (returnInsn != null && returnInsn.getOpcode() != 172) {
+                    returnInsn = returnInsn.getPrevious();
+                }
+                if (returnInsn == null) {
+                    throw new IllegalStateException("IRETURN not found in IsoGridSquare.getVertLight");
+                }
+                method.instructions.insertBefore(returnInsn, new InsnNode(128));   // IOR: 覆盖值|原值
                 Logger.print("  [OK] Injected fullbright white into IsoGridSquare.getVertLight()");
             });
         }
@@ -648,31 +655,15 @@ public class GamePatcher {
                     throw new IllegalStateException("RETURN not found in IsoGridSquare.cacheLightInfo");
                 }
                 InsnList toInject = new InsnList();
-                LabelNode continueLabel = new LabelNode();
-                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                toInject.add(new JumpInsnNode(198, continueLabel));
-                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
-                toInject.add(new JumpInsnNode(198, continueLabel));
-                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
-                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isFullbright", "Z"));
-                toInject.add(new JumpInsnNode(153, continueLabel));
-                // this.lightInfo[IsoCamera.frameState.playerIndex] 的 r/g/b/a 全部拉满:
-                // aload_0/getfield 数组 + frameState.playerIndex 后 dup2+aaload 取元素存局部变量
+                /*
+                 * 分支-free 注入 (2026-08-25 重写, 理由同组①): 旧版内联门禁
+                 * (JumpInsnNode+LabelNode) + astore_2 局部槽写法在 COMPUTE_FRAMES 下
+                 * 帧重算越界, IsoGridSquare.class 从未成功落盘。改为尾部无条件调用
+                 * FullbrightHook.cacheLightInfoHook(this) — 条件在助手方法内部,
+                 * 注入体零分支零标签零新局部。
+                 */
                 toInject.add(new VarInsnNode(25, 0));
-                toInject.add(new FieldInsnNode(180, "zombie/iso/IsoGridSquare", "lightInfo", "[Lzombie/core/textures/ColorInfo;"));
-                toInject.add(new FieldInsnNode(178, "zombie/iso/IsoCamera", "frameState", "Lzombie/iso/IsoCamera$FrameState;"));
-                toInject.add(new FieldInsnNode(180, "zombie/iso/IsoCamera$FrameState", "playerIndex", "I"));
-                toInject.add(new InsnNode(93));
-                toInject.add(new InsnNode(50));
-                toInject.add(new VarInsnNode(58, 2));
-                for (String fieldName : new String[]{"r", "g", "b", "a"}) {
-                    toInject.add(new VarInsnNode(25, 2));
-                    toInject.add(new LdcInsnNode((Object)Float.valueOf(1.0f)));
-                    toInject.add(new FieldInsnNode(181, "zombie/core/textures/ColorInfo", fieldName, "F"));
-                }
-                toInject.add(continueLabel);
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/FullbrightHook", "cacheLightInfoHook", "(Lzombie/iso/IsoGridSquare;)V", false));
                 method.instructions.insertBefore(returnInsn, toInject);
                 Logger.print("  [OK] Injected fullbright white into IsoGridSquare.cacheLightInfo()");
             });
@@ -731,32 +722,43 @@ public class GamePatcher {
              * 强制 bCanSee/bCouldSee=true + darkMulti/targetDarkMulti=1, 几何体一律照常绘制。
              * 只动渲染侧: bSeen 不碰 (保留地图探索/Meta 统计), 服务端 LOS 走独立 ServerLOS,
              * 僵尸 AI 用自身感知 (spotted/vision cone) 不读方块 canSee, 多人零上行影响。
+             * 2026-08-25 补: **listen 服房主** (GameServer.server=true 同进程) 的方块
+             * lighting[0] 是 ServerLOS.ServerLighting 而非 JNILighting (IsoGridSquare:3992),
+             * 其 darkMulti() 硬编码返 0 (ServerLOS.java:381)、bCouldSee 来自服务端 LOS 线程
+             * 真实计算 (暗房间=false) → 房主渲染"户外亮、室内依旧漆黑" (纯客户端连
+             * dedicated 服不受影响, 走 JNILighting)。对 ServerLighting 同四 getter 做同款
+             * 注入; bSeen 不碰, 服务端 LOS 线程走 setter 写入端不受影响, 且反编译核实
+             * isCanSee/isCouldSee 无服务端逻辑调用方 (ServerLOS.isCouldSee(player,sq) 读
+             * 自己的 PlayerData.visible 数组), 房主服务端玩法行为不变。
              */
             String[][] visMethods = new String[][]{{"bCanSee", "()Z"}, {"bCouldSee", "()Z"}, {"darkMulti", "()F"}, {"targetDarkMulti", "()F"}};
-            for (final String[] spec : visMethods) {
-                final boolean isFloat = spec[1].equals("()F");
-                Patch.injectIntoClass("zombie/iso/LightingJNI$JNILighting", spec[0], false, method -> {
-                    if (!method.desc.equals(spec[1])) {
-                        return;
-                    }
-                    InsnList hookInstructions = new InsnList();
-                    LabelNode continueLabel = new LabelNode();
-                    hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                    hookInstructions.add(new JumpInsnNode(198, continueLabel));
-                    hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                    hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
-                    hookInstructions.add(new JumpInsnNode(198, continueLabel));
-                    hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
-                    hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
-                    hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isFullbright", "Z"));
-                    hookInstructions.add(new JumpInsnNode(153, continueLabel));
-                    hookInstructions.add(new InsnNode(isFloat ? 13 : 4));
-                    hookInstructions.add(new InsnNode(isFloat ? 174 : 172));
-                    hookInstructions.add(continueLabel);
-                    method.instructions.insert(hookInstructions);
-                });
+            String[] visClasses = new String[]{"zombie/iso/LightingJNI$JNILighting", "zombie/network/ServerLOS$ServerLighting"};
+            for (final String visClass : visClasses) {
+                for (final String[] spec : visMethods) {
+                    final boolean isFloat = spec[1].equals("()F");
+                    Patch.injectIntoClass(visClass, spec[0], false, method -> {
+                        if (!method.desc.equals(spec[1])) {
+                            return;
+                        }
+                        InsnList hookInstructions = new InsnList();
+                        LabelNode continueLabel = new LabelNode();
+                        hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                        hookInstructions.add(new JumpInsnNode(198, continueLabel));
+                        hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                        hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                        hookInstructions.add(new JumpInsnNode(198, continueLabel));
+                        hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                        hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                        hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isFullbright", "Z"));
+                        hookInstructions.add(new JumpInsnNode(153, continueLabel));
+                        hookInstructions.add(new InsnNode(isFloat ? 13 : 4));
+                        hookInstructions.add(new InsnNode(isFloat ? 174 : 172));
+                        hookInstructions.add(continueLabel);
+                        method.instructions.insert(hookInstructions);
+                    });
+                }
+                Logger.print("  [OK] Injected fullbright visibility into " + visClass + " (bCanSee/bCouldSee/darkMulti/targetDarkMulti)");
             }
-            Logger.print("  [OK] Injected fullbright visibility into LightingJNI$JNILighting (bCanSee/bCouldSee/darkMulti/targetDarkMulti)");
         }
         catch (Exception e) {
             Logger.print("Warning: JNILighting visibility injection failed: " + e.getMessage());

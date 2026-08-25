@@ -96,6 +96,28 @@ function EtherMapPanel:build()
             UIMovableMiniMap.openPanel()
         end);
 
+    -- 点亮全图: 把地图全部未知区域标记为已知+已探索 (2026-08-25 用户需求)。
+    -- 本地 WorldMapVisited 立即生效 (地图 UI 每帧 WorldMapVisited.update 刷新纹理);
+    -- 多人再走 vanilla 的 map.setKnownInSquares 服务器指令 (ClientCommands.lua:1192,
+    -- 零校验) 让服务端按玩家记录, 重进不回退 (服务端只存 known 档, 本地会话内为
+    -- visited 全亮档)。边界取 mapAPI 的方块坐标 (getMinXInSquares 等), 无单位歧义。
+    self:addLabeledButton("UI_Map_RevealAllLabel",
+        getTranslate("UI_Map_RevealAllButton"), function()
+            local m = self.map;
+            if m == nil or m.mapAPI == nil then return; end
+            local api = m.mapAPI;
+            local visited = WorldMapVisited.getInstance();
+            if visited == nil then return; end
+            local x1, y1 = api:getMinXInSquares(), api:getMinYInSquares();
+            local x2, y2 = api:getMaxXInSquares(), api:getMaxYInSquares();
+            visited:setKnownInSquares(x1, y1, x2, y2);
+            visited:setVisitedInSquares(x1, y1, x2, y2);
+            if isMultiplayer() then
+                sendClientCommand(getPlayer(), "map", "setKnownInSquares",
+                    { x1 = x1, y1 = y1, x2 = x2, y2 = y2 });
+            end
+        end);
+
     local list = drawToggles();
     self:addCheckboxGroup(list);        -- 等宽行盒 (基类按最宽标签定列数)
     for i = 1, #list do
