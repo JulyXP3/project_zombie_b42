@@ -54,18 +54,6 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 - **Crop management**: adjustable N×N range (default 3×3) — grow to next stage / grow to harvest / water to max / remove water / cure all / infect +25 / harvest / destroy / clear remains; live plant counter distinguishing stubble/empty tiles; growth applies by the next 10-minute in-game tick
 - **Sowing**: full seed list with name/ID search, tool-free digging, seed-free sowing, auto-watered after sowing
 
-### Other
-
-- Unlock debug privileges (SP) / attempt admin access (type 12) / game debug menu / admin menu (type 8) / vehicle mechanics menu / medical menu / learn all available crafting recipes / grant all materials for the selected recipe / attack-speed multiplier (1.0–3.0, >2.0 risks a kick) / trait points / vehicle unconditional hotwire / server sync protection (no stat/skill rollback) / anti-detection (block the default logger, etc.)
-
-### Info
-
-- Version + anticheat status (permission/movement, BikiniTools/custom logger) and usage-risk notice
-
-### Settings
-
-- UI language (applies instantly) / reload all Lua elements / config list (save/load/delete) / accent color + per-type render colors for player/vehicle/zombie UI elements
-
 ### Other changes / fixes
 
 See [UPDATELOG_EN.md](UPDATELOG_EN.md) for the full change history.
