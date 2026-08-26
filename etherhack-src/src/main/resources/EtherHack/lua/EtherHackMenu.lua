@@ -29,7 +29,6 @@ local etherModules = {
     "EtherHack/lua/components/ui/UIItemTables.lua",
     "EtherHack/lua/components/ui/EtherItemSearch.lua",
     "EtherHack/lua/components/ui/EtherTrapPOC.lua",
-    "EtherHack/lua/components/ui/EtherFishSpawn.lua",
     "EtherHack/lua/components/ui/EtherAmmoFarm.lua",
     "EtherHack/lua/components/ui/UIMap.lua",
     "EtherHack/lua/components/ui/UISkillTable.lua",

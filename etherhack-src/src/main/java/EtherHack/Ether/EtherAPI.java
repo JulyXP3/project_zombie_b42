@@ -493,7 +493,6 @@ public class EtherAPI {
         SafeEtherLuaMethods protectedMethods = this.createProtectedMethods();
         this.exposer.exposeAPI(protectedMethods);
         this.exposer.exposeServerSyncBlocker();
-        this.exposer.exposeFishingSpawn();
         this.initializeProtectedState();
     }
 
@@ -1172,20 +1171,6 @@ public class EtherAPI {
             }
         }
 
-        public void exposeFishingSpawn() {
-            for (Method method : FishingSpawnAPI.class.getMethods()) {
-                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
-                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
-                String name = annotation.name();
-                if (name == null || name.isEmpty()) {
-                    name = method.getName();
-                }
-                // static method -> global function: use exposeGlobalClassFunction,
-                // NOT exposeMethod (the latter only attaches to the class metatable)
-                this.exposeGlobalClassFunction(LuaManager.env, FishingSpawnAPI.class, method, name);
-                Logger.printLog("Exposed FishingSpawnAPI method: " + name);
-            }
-        }
 
         private void exposeGlobalFunction(Method method, String name) {
             this.exposeMethod(method.getDeclaringClass(), method, name, LuaManager.env);
