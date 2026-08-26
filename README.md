@@ -2,25 +2,69 @@
 
 A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) for Project Zomboid Build 42.
 
-The main addition over the original mod is an **Item Search + Minimap Marker** feature, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua).
+The main additions over the original mod are **Farming / Map teleport (pathfind & fast-move) / Reveal Map / True Night Vision / Vehicles / Loot reroll / ESP / Item Search + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
 
 > **Important:** This project is only **temporarily maintained**. Anyone who needs it may fork/clone this repository and continue development. Thanks!
 
 ## Feature Overview
 
-### Item Search & Minimap Markers (new)
+UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, the menu reopens on your last tab and scroll position. Features grouped by nav page:
 
-- In the **Item Creator** page (main panel), filter items by name or ID, select an item, and click **"Show on map"**.
-- The mod scans loaded world tiles within a radius of 48 tiles (player floor ±1) for matching items:
-  - Furniture/container contents (`IsoObject` containers)
-  - Floor items and bags on the ground (including bag contents)
-  - Items on corpses (corpse container via `getDeadBodys()` → `getContainer()`)
-  - Vehicle part containers (trunk, seats, etc.)
-- Matches are drawn on the movable minimap as **gray squares**, same size as player/zombie markers; multiple items on one tile show a count.
-- Markers follow the player: re-scan triggers when you walk 5+ tiles (cooldown 2s), when your inventory count changes (debounced 1s), or when the inventory window container set changes.
-- **Minimap quick-toggle bar** (top of the movable minimap window): `Me / Players / Vehicles / Zombies / Items` — white = on, gray = off. Turning "Items" off clears the markers and drops all per-tick cost; turning it back on silently re-scans the last search target.
-- The **Map** tab checkboxes (Show local player / Show other players / Show vehicles / Show zombies / Show items) are **two-way synced** with the minimap quick-toggle bar (toggling either side updates the other immediately, and the state is persisted to config).
-- Close the minimap: click the **X** button on the window.
+### Character
+
+- **Combat**: One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / Increase Fire Rate / Group-Hit on zombies / Zombies don't attack the player (MP-ready) / Infinite ammo (auto-refill, ammo count configurable) / No jamming / Infinite durability for held items / Auto-repair inventory items
+- **Survival**: Unlimited carry / Infinite stamina / Fast health regen (not godmode) / Disable muscle strain / Disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / Keep optimal calories & weight
+- **Special modes**: Creative mode (high risk) / Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / God mode / NoClip / Invisible (last three: SP only, requires "Unlock debug privileges (SP)")
+- **Character boost**: all traits / max skills / starting outfit (applies to newly created characters)
+
+### Items
+
+- **Item creator**: filter by name/category/ID, grant ×1/×2/×5/×10
+- **Item search + minimap markers**: scans loaded tiles within 48 tiles (floor ±1) — furniture/containers, ground items & bags, corpses, vehicle containers; matches shown as gray squares (with counts); markers refresh as you move; minimap quick-toggle bar (Me/Players/Vehicles/Zombies/Items) two-way synced with the Map tab checkboxes
+
+### Traps
+
+- Search & spawn food (stand next to a placed trap; multiplayer)
+
+### Player
+
+- Skill levels ± / add XP / max all skills; trait add/remove; calorie editing; survival-days / zombie-kill editing (enable "Server sync protection" in multiplayer)
+
+### ESP
+
+- Master switch + four modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed), zombie info (overhead HP bar, zombie radar), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision)
+
+### Map
+
+- **Reveal map**: reveals the entire unexplored area with one click (recorded server-side in multiplayer)
+- **Pathfind & fast-move**: right-click any spot on the map — glides at 18 tiles/s along walkable paths, no longer triggers the movement anticheat, unlimited range, WASD/Space cancels anytime; single-player keeps instant teleport
+- Minimap: movable window + quick-toggle bar; show local player / other players / zombies / vehicles / items
+
+### Loot
+
+- **Reset loot (F9)**: adjustable radius (default 10); reopened containers get re-rolled (gun cabinets/ammo boxes can yield weapons and ammo; multiplayer only)
+- **Ammo farming**: spawn ammo per magazine/weapon type
+
+### Vehicles
+
+- **Start engine unconditionally** (once / auto-retry, auto-unchecks on success) / repair / refuel (the engine still needs fuel and battery; must be seated in the vehicle)
+
+### Farming
+
+- **Crop management**: adjustable N×N range (default 3×3) — grow to next stage / grow to harvest / water to max / remove water / cure all / infect +25 / harvest / destroy / clear remains; live plant counter distinguishing stubble/empty tiles; growth applies by the next 10-minute in-game tick
+- **Sowing**: full seed list with name/ID search, tool-free digging, seed-free sowing, auto-watered after sowing
+
+### Other
+
+- Unlock debug privileges (SP) / attempt admin access (type 12) / game debug menu / admin menu (type 8) / vehicle mechanics menu / medical menu / learn all available crafting recipes / grant all materials for the selected recipe / attack-speed multiplier (1.0–3.0, >2.0 risks a kick) / trait points / vehicle unconditional hotwire / server sync protection (no stat/skill rollback) / anti-detection (block the default logger, etc.)
+
+### Info
+
+- Version + anticheat status (permission/movement, BikiniTools/custom logger) and usage-risk notice
+
+### Settings
+
+- UI language (applies instantly) / reload all Lua elements / config list (save/load/delete) / accent color + per-type render colors for player/vehicle/zombie UI elements
 
 ### Other changes / fixes
 
@@ -32,7 +76,7 @@ Requirements: **JDK 25** and **Gradle 9.1.0**. The build runs through the includ
 
 1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, renamed to `zombie.jar` (it is only read at compile time and never modified).
 2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-3. Take `EtherHack-3.1.7-B42.jar` from the `build` directory.
+3. Take `EtherHack-3.2.0-B42.jar` from the `build` directory.
 4. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
 5. Run `install.bat` to install the mod (requires a JDK on the system).
 
@@ -47,7 +91,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/EtherHack-3.1.7-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
+The output jar is at `etherhack-src/build/EtherHack-3.2.0-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
 
 ## Testing
 
@@ -65,7 +109,7 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/EtherHack-3.1.7-B42.jar` | Ready-to-use build (current release) |
+| `etherhack-src/build/EtherHack-3.2.0-B42.jar` | Ready-to-use build (current release) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `analysis/` | Decompiled class extracts used for verification |
