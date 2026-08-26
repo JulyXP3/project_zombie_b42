@@ -4,7 +4,7 @@
 
 - Added: "Farming" tab — Crop Management (adjustable range, default 3×3: grow / mature / water / drain / cure all / harvest / destroy / clear remains, etc.) + Sowing (full seed list with name/ID search, tool-free digging, seed-free sowing, auto-watered); uses the vanilla farming command channel, works in SP and MP.
 - Removed: the Character-page "Cheat farming mode" toggle (superseded by the Farming tab).
-- Added: a "Create Char" tab — Custom Edit (freely add/remove traits and set skill levels 0-10 at creation; lists are persisted) + Creation Boost (all traits / max skills / unlock all clothing / trait points); unlocking all clothing shows the game's own full outfit picker at creation; everything applies on confirming creation, lists reset when entering a game.
+- Added: a "Create Char" tab — Custom Edit (freely add/remove traits and set skill levels 0-10 at creation; lists are persisted) + Creation Boost (all traits / max skills / unlock all clothing / trait points); unlocking all clothing shows the game's own full outfit picker at creation; everything applies on confirming creation, lists reset when entering a game. Skill levels are additive (stacked on top of profession/trait boosts, capped at 10).
 - Added: "True Night Vision" — render-level full brightness, night tint and vision-cone overlay removed, unlit interiors no longer pitch black (client-side only).
 - Fixed: True Night Vision interiors staying dark.
 - Added: "Reveal Map" button on the Map tab — reveals the entire unexplored area, recorded server-side in multiplayer.
@@ -44,7 +44,6 @@
 - UI: "Headshot only" and "Auto-repair inventory items" checkboxes swapped positions.
 - Fixed: NoClip / Invisible / God mode / Zombies don't attack now work in single-player again (requires enabling "Bypass debug mode ban (type 12)"). Note: ineffective in multiplayer.
 - Feature: Vehicle unconditional hotwire — instantly hotwires and starts the vehicle locally; auto-disables after 30s. Toggle moved to the Character tab, above "Auto-repair inventory items".
-- Fixed: fishing-rod item spawn — restored the Loot page spawn UI (previously overwritten during a sync with the lite edition) and the fishSpawn* globals (removed exposeFishingSpawn caused an error on spawn); list position/height adjusted.
 - Build: version bumped to 3.1.8.
 
 ## [3.1.7]
@@ -62,7 +61,6 @@
 ## [3.1.6]
 
 - Feature: "Loot reroll" tab — resets loot records for all containers in a radius (default 10), reopened containers get re-rolled by the server, gun cabinets/ammo boxes can yield weapons and ammo; F9 hotkey; multiplayer only.
-- Feature: "Fishing rod spawn" section (self-hosted servers only) — inject any item via fishing rod, ~5-8 s per item.
 - Fixed: "server sync protection" toggle not working.
 - UI: full panel restyle — RE2 remake style + frosted glass (main window, sidebar, buttons, tables, floating windows, popups); fixed glass dimming and text overlap.
 

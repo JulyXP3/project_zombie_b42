@@ -19,9 +19,12 @@ import zombie.scripting.objects.CharacterTrait;
  *
  * 2026-08-26 扩展 (创建角色选项卡):
  *  - 自定义特性名单 (charCreateCustomTraits): 逐项追加进包内 characterTraits;
- *  - 自定义技能等级 (charCreateCustomSkillLevels): xpBoostMap 逐项覆盖,
- *    应用在「建号技能满级」之后 (手工设定优先于一键全满);
+ *  - 自定义技能等级 (charCreateCustomSkillLevels): xpBoostMap 逐项加算
+ *    (在职业/既有加成之上累加, 封顶 10), 应用在「建号技能满级」之后
+ *    (手工增量在全满之上再加);
  *  - 「解锁全部服装」不再走本类 —— 由 Lua 覆盖建号界面 shouldShowAllOutfits 实现。
+ * 2026-08-27: 技能等级语义由「覆盖」改为「加算」(用户实测: 覆盖会把职业初始
+ * 等级顶掉, 如建筑工短棍 2 级 + 设定 1 反而变 1 级; 加算后 = 3 级)。
  */
 public class CharacterCreationBoost {
     public static void apply(Object packet) {
@@ -118,8 +121,9 @@ public class CharacterCreationBoost {
 
     /*
      * 自定义技能等级: 按枚举名查 Perk (Perks 非枚举, 遍历 fromIndex 比较
-     * toString), xpBoostMap 覆盖 (0..10, 服务端再钳)。
-     * 在 boostSkills 之后应用 → 手工设定优先于一键全满。
+     * toString), xpBoostMap 加算 —— 设定值 = 增量, 叠加在职业/既有加成
+     * 之上 (建筑工短棍 2 + 设定 1 = 3), 结果 0..10 (服务端再钳)。
+     * 在 boostSkills 之后应用 → 手工增量在全满之上再加 (封顶 10)。
      */
     private static void applyCustomSkillLevels(SurvivorDesc desc) {
         EtherAPI api = EtherMain.getInstance().etherAPI;
@@ -134,6 +138,11 @@ public class CharacterCreationBoost {
             if (level == null) continue;
             int v = level.intValue();
             if (v < 0) v = 0;
+            if (v > 10) v = 10;
+            Integer existing = desc.getXPBoostMap().get(perk);
+            if (existing != null) {
+                v += existing.intValue();
+            }
             if (v > 10) v = 10;
             desc.getXPBoostMap().put(perk, v);
         }
