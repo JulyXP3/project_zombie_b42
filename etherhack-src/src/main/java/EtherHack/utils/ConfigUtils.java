@@ -16,6 +16,11 @@ public class ConfigUtils {
         return var3 != null ? Boolean.parseBoolean(var3) : var2;
     }
 
+    public static String getStringFromConfig(Properties var0, String var1, String var2) {
+        String var3 = var0.getProperty(var1);
+        return var3 != null ? var3 : var2;
+    }
+
     public static Color getColorFromConfig(Properties var0, String var1, Color var2) {
         String var3 = var0.getProperty(var1);
         return var3 != null ? ColorUtils.stringToColor(var3) : var2;

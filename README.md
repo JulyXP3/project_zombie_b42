@@ -15,7 +15,6 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 - **Combat**: One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / Increase Fire Rate / Group-Hit on zombies / Zombies don't attack the player (MP-ready) / Infinite ammo (auto-refill, ammo count configurable) / No jamming / Infinite durability for held items / Auto-repair inventory items
 - **Survival**: Unlimited carry / Infinite stamina / Fast health regen (not godmode) / Disable muscle strain / Disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / Keep optimal calories & weight
 - **Special modes**: Creative mode (high risk) / Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / God mode / NoClip / Invisible (last three: SP only, requires "Unlock debug privileges (SP)")
-- **Character boost**: all traits / max skills / starting outfit (applies to newly created characters)
 
 ### Items
 
@@ -53,6 +52,12 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 - **Crop management**: adjustable N×N range (default 3×3) — grow to next stage / grow to harvest / water to max / remove water / cure all / infect +25 / harvest / destroy / clear remains; live plant counter distinguishing stubble/empty tiles; growth applies by the next 10-minute in-game tick
 - **Sowing**: full seed list with name/ID search, tool-free digging, seed-free sowing, auto-watered after sowing
+
+### Create Char
+
+- **Custom Edit**: freely add/remove traits (searchable list, click to toggle) and set skill levels (0-10) for your new character; lists are persisted
+- **Creation Boost**: all traits / max skills / unlock all clothing (the game's own full outfit picker appears at character creation — dress freely) / trait points (slider)
+- Everything applies the moment you confirm creation; untick before confirming to opt out
 
 ### Other changes / fixes
 

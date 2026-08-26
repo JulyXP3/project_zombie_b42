@@ -18,8 +18,8 @@ require "ISUI/ISPanel"
 --*      target=-1 服务端零校验采纳 —— 多人可用, 不再需要调试权限);
 --*   - 状态与需求: 无限耐力 + 各类负面状态禁用 + 维持最佳体重/卡路里
 --*     + 禁用肌肉拉伤/高速回血 (同走 PlayerDamage 自报通道);
---*   - 建号增强: 全特性/技能满级/自带服装 (CreatePlayerPacket.set 注入,
---*     建号包零校验, 下次建号生效)。
+--*   - 建号增强已于 2026-08-26 迁入独立「创建角色」选项卡
+--*     (EtherCharacterBoostPanel, 含自定义编辑/角色特性点数)。
 --* 模块内复选框按模块内宽自适应 1~3 列 (planGrid 预排一次, 高度预算与
 --* 实际摆放共用同一份布局; 长标签折行按行内最大行数增高)。
 --*
@@ -301,15 +301,6 @@ function EtherCharacterPanel:build()
                 { key = "UI_CharacterPanel_OptimalWeight",      on = toggleOptimalWeight,      get = isOptimalWeight },
                 { key = "UI_CharacterPanel_NoMuscleStrain",     on = toggleNoMuscleStrain,     get = isNoMuscleStrain },
                 { key = "UI_CharacterPanel_FullBodyRestore",    on = toggleFullBodyRestore,    get = isFullBodyRestore },
-            },
-        },
-        {
-            title = "UI_CharacterPanel_Group_CharCreate",
-            hint = "UI_CharacterPanel_CharCreateHint",
-            items = {
-                { key = "UI_CharacterPanel_CharCreateAllTraits",  on = toggleCharCreateAllTraits,  get = isCharCreateAllTraits },
-                { key = "UI_CharacterPanel_CharCreateMaxSkills",  on = toggleCharCreateMaxSkills,  get = isCharCreateMaxSkills },
-                { key = "UI_CharacterPanel_CharCreateClothing",   on = toggleCharCreateClothing,   get = isCharCreateClothing },
             },
         },
     };

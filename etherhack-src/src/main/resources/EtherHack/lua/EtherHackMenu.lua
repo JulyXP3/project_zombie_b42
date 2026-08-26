@@ -29,6 +29,7 @@ local etherModules = {
     "EtherHack/lua/components/ui/UIItemTables.lua",
     "EtherHack/lua/components/ui/EtherItemSearch.lua",
     "EtherHack/lua/components/ui/EtherTrapPOC.lua",
+    "EtherHack/lua/components/ui/EtherFishSpawn.lua",
     "EtherHack/lua/components/ui/EtherAmmoFarm.lua",
     "EtherHack/lua/components/ui/UIMap.lua",
     "EtherHack/lua/components/ui/UISkillTable.lua",
@@ -43,6 +44,8 @@ local etherModules = {
     "EtherHack/lua/components/panels/EtherExploitPanel.lua",
     "EtherHack/lua/components/panels/EtherLootRollPanel.lua",
     "EtherHack/lua/components/panels/EtherVehiclePanel.lua",
+    "EtherHack/lua/components/override/EtherCharacterCreation.lua",
+    "EtherHack/lua/components/panels/EtherCharacterBoostPanel.lua",
     "EtherHack/lua/components/panels/EtherFarmingPanel.lua",
     "EtherHack/lua/components/panels/EtherSettingsPanel.lua"
 }
@@ -101,6 +104,8 @@ function EtherMain:createChildren()
     self.buttonsPanel:addButton("EtherHack/media/ui/vehicle.png", "UI_Nav_Vehicle", EtherVehiclePanel);
     -- 「耕种」: 原角色页「作弊耕种模式」开关的面板化替代, 位于「载具」之后
     self.buttonsPanel:addButton("EtherHack/media/ui/farming.png", "UI_Nav_Farming", EtherFarmingPanel);
+    -- 「创建角色」: 建号相关功能集中页 (自定义编辑/建号增强), 位于「耕种」与「其他」之间。
+    self.buttonsPanel:addButton("EtherHack/media/ui/characterBoost.png", "UI_Nav_CharacterBoost", EtherCharacterBoostPanel);
     -- 「其他」(原「漏洞」): 位置固定在「耕种」与「设置」之间。
     self.buttonsPanel:addButton("EtherHack/media/ui/exploit.png", "UI_Nav_Exploit", EtherExploitPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/settings.png", "UI_Nav_Settings", EtherSettingsPanel);
@@ -234,6 +239,9 @@ local function onGameStart()
     UIMovableMiniMap.instance = nil; -- 上一场游戏的旧实例已失效, 避免 openPanel 误判为已打开
     EtherMain.instance = nil; -- 同上: 旧菜单实例已失效, 下次按键重新构建
     loadConfig("startup");
+    if clearCharacterBoostCustom ~= nil then
+        clearCharacterBoostCustom(); -- 建号名单一次性使用: 进入游戏即清空 (须在 loadConfig 之后, 否则被重新加载)
+    end
     if isMinimapOpen() and getPlayer() ~= nil then
         UIMovableMiniMap.openPanel();
     end

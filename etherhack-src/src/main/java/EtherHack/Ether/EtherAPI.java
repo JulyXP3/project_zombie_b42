@@ -164,7 +164,14 @@ public class EtherAPI {
     public boolean isFullBodyRestore;
     public boolean isCharCreateAllTraits;
     public boolean isCharCreateMaxSkills;
-    public boolean isCharCreateClothing;
+    public boolean isCharCreateAllClothes;
+    public final java.util.ArrayList<String> charCreateCustomTraits = new java.util.ArrayList<String>();
+    public final java.util.HashMap<String, Integer> charCreateCustomSkillLevels = new java.util.HashMap<String, Integer>();
+
+    public void clearCharCreateCustom() {
+        this.charCreateCustomTraits.clear();
+        this.charCreateCustomSkillLevels.clear();
+    }
     public boolean isVehicleInstantStart;
     public boolean isFullbright;
     private boolean fullbrightApplied;
@@ -239,7 +246,19 @@ public class EtherAPI {
         var3.setProperty("isFullBodyRestore", Boolean.toString(this.isFullBodyRestore));
         var3.setProperty("isCharCreateAllTraits", Boolean.toString(this.isCharCreateAllTraits));
         var3.setProperty("isCharCreateMaxSkills", Boolean.toString(this.isCharCreateMaxSkills));
-        var3.setProperty("isCharCreateClothing", Boolean.toString(this.isCharCreateClothing));
+        var3.setProperty("isCharCreateAllClothes", Boolean.toString(this.isCharCreateAllClothes));
+        StringBuilder ctSb = new StringBuilder();
+        for (String t : this.charCreateCustomTraits) {
+            if (ctSb.length() > 0) ctSb.append(',');
+            ctSb.append(t);
+        }
+        var3.setProperty("charCreateCustomTraits", ctSb.toString());
+        StringBuilder csSb = new StringBuilder();
+        for (java.util.Map.Entry<String, Integer> e : this.charCreateCustomSkillLevels.entrySet()) {
+            if (csSb.length() > 0) csSb.append(',');
+            csSb.append(e.getKey()).append('=').append(e.getValue());
+        }
+        var3.setProperty("charCreateCustomSkillLevels", csSb.toString());
         var3.setProperty("isVehicleInstantStart", Boolean.toString(this.isVehicleInstantStart));
         var3.setProperty("isFullbright", Boolean.toString(this.isFullbright));
         new File("EtherHack/config").mkdirs();
@@ -325,7 +344,28 @@ public class EtherAPI {
         this.isFullBodyRestore = ConfigUtils.getBooleanFromConfig(var3, "isFullBodyRestore", false);
         this.isCharCreateAllTraits = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateAllTraits", false);
         this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateMaxSkills", false);
-        this.isCharCreateClothing = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateClothing", false);
+        this.isCharCreateAllClothes = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateAllClothes", false);
+        this.charCreateCustomTraits.clear();
+        String ctStr = ConfigUtils.getStringFromConfig(var3, "charCreateCustomTraits", "");
+        if (ctStr != null && !ctStr.isEmpty()) {
+            for (String t : ctStr.split(",")) {
+                if (!t.isEmpty() && !this.charCreateCustomTraits.contains(t)) this.charCreateCustomTraits.add(t);
+            }
+        }
+        this.charCreateCustomSkillLevels.clear();
+        String csStr = ConfigUtils.getStringFromConfig(var3, "charCreateCustomSkillLevels", "");
+        if (csStr != null && !csStr.isEmpty()) {
+            for (String pair : csStr.split(",")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0) {
+                    try {
+                        this.charCreateCustomSkillLevels.put(pair.substring(0, eq),
+                            Integer.valueOf(pair.substring(eq + 1)));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
         this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var3, "isVehicleInstantStart", false);
         this.isFullbright = ConfigUtils.getBooleanFromConfig(var3, "isFullbright", false);
     }
@@ -408,7 +448,28 @@ public class EtherAPI {
         this.isFullBodyRestore = ConfigUtils.getBooleanFromConfig(var1, "isFullBodyRestore", false);
         this.isCharCreateAllTraits = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateAllTraits", false);
         this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateMaxSkills", false);
-        this.isCharCreateClothing = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateClothing", false);
+        this.isCharCreateAllClothes = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateAllClothes", false);
+        this.charCreateCustomTraits.clear();
+        String ctStr = ConfigUtils.getStringFromConfig(var1, "charCreateCustomTraits", "");
+        if (ctStr != null && !ctStr.isEmpty()) {
+            for (String t : ctStr.split(",")) {
+                if (!t.isEmpty() && !this.charCreateCustomTraits.contains(t)) this.charCreateCustomTraits.add(t);
+            }
+        }
+        this.charCreateCustomSkillLevels.clear();
+        String csStr = ConfigUtils.getStringFromConfig(var1, "charCreateCustomSkillLevels", "");
+        if (csStr != null && !csStr.isEmpty()) {
+            for (String pair : csStr.split(",")) {
+                int eq = pair.indexOf('=');
+                if (eq > 0) {
+                    try {
+                        this.charCreateCustomSkillLevels.put(pair.substring(0, eq),
+                            Integer.valueOf(pair.substring(eq + 1)));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+            }
+        }
         this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var1, "isVehicleInstantStart", false);
         this.isFullbright = ConfigUtils.getBooleanFromConfig(var1, "isFullbright", false);
     }
@@ -432,6 +493,7 @@ public class EtherAPI {
         SafeEtherLuaMethods protectedMethods = this.createProtectedMethods();
         this.exposer.exposeAPI(protectedMethods);
         this.exposer.exposeServerSyncBlocker();
+        this.exposer.exposeFishingSpawn();
         this.initializeProtectedState();
     }
 
@@ -1107,6 +1169,21 @@ public class EtherAPI {
                 // attaches to the class metatable and never became a Lua global)
                 this.exposeGlobalClassFunction(LuaManager.env, ServerSyncBlocker.class, method, name);
                 Logger.printLog("Exposed ServerSyncBlocker method: " + name);
+            }
+        }
+
+        public void exposeFishingSpawn() {
+            for (Method method : FishingSpawnAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                // static method -> global function: use exposeGlobalClassFunction,
+                // NOT exposeMethod (the latter only attaches to the class metatable)
+                this.exposeGlobalClassFunction(LuaManager.env, FishingSpawnAPI.class, method, name);
+                Logger.printLog("Exposed FishingSpawnAPI method: " + name);
             }
         }
 

@@ -592,16 +592,61 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
-    @LuaMethod(name="isCharCreateClothing", global=true)
-    public static boolean isCharCreateClothing() {
-        return EtherMain.getInstance().etherAPI.isCharCreateClothing;
-    }
+    @LuaMethod(name="isCharCreateAllClothes", global=true) public static boolean isCharCreateAllClothes() { return EtherMain.getInstance().etherAPI.isCharCreateAllClothes; }
 
-    @LuaMethod(name="toggleCharCreateClothing", global=true)
-    public static void toggleCharCreateClothing(boolean var0) {
-        EtherMain.getInstance().etherAPI.isCharCreateClothing = var0;
-        saveConfig("startup");
-    }
+    @LuaMethod(name="toggleCharCreateAllClothes", global=true) public static void toggleCharCreateAllClothes(boolean var0) { EtherMain.getInstance().etherAPI.isCharCreateAllClothes = var0; saveConfig("startup"); }
+
+      @LuaMethod(name="getCharacterBoostCustomTraits", global=true)
+     public static se.krka.kahlua.vm.KahluaTable getCharacterBoostCustomTraits() {
+         se.krka.kahlua.vm.KahluaTable table = LuaManager.platform.newTable();
+         ArrayList<String> list = EtherMain.getInstance().etherAPI.charCreateCustomTraits;
+         for (int i = 0; i < list.size(); ++i) {
+             table.rawset((Object)(i + 1), (Object)list.get(i));
+         }
+         return table;
+     }
+
+      @LuaMethod(name="addCharacterBoostCustomTrait", global=true)
+     public static void addCharacterBoostCustomTrait(String traitType) {
+         if (traitType == null || traitType.isEmpty()) return;
+         ArrayList<String> list = EtherMain.getInstance().etherAPI.charCreateCustomTraits;
+         if (!list.contains(traitType)) {
+             list.add(traitType);
+             saveConfig("startup");
+         }
+     }
+
+      @LuaMethod(name="removeCharacterBoostCustomTrait", global=true)
+     public static void removeCharacterBoostCustomTrait(String traitType) {
+         if (traitType == null) return;
+         EtherMain.getInstance().etherAPI.charCreateCustomTraits.remove(traitType);
+         saveConfig("startup");
+     }
+
+      @LuaMethod(name="getCharacterBoostCustomSkillLevels", global=true)
+     public static se.krka.kahlua.vm.KahluaTable getCharacterBoostCustomSkillLevels() {
+         se.krka.kahlua.vm.KahluaTable table = LuaManager.platform.newTable();
+         for (java.util.Map.Entry<String, Integer> e : EtherMain.getInstance().etherAPI.charCreateCustomSkillLevels.entrySet()) {
+             table.rawset((Object)e.getKey(), (Object)e.getValue());
+         }
+         return table;
+     }
+
+      @LuaMethod(name="setCharacterBoostCustomSkillLevel", global=true)
+     public static void setCharacterBoostCustomSkillLevel(String perkName, int level) {
+         if (perkName == null || perkName.isEmpty()) return;
+         if (level <= 0) {
+             EtherMain.getInstance().etherAPI.charCreateCustomSkillLevels.remove(perkName);
+         } else {
+             if (level > 10) level = 10;
+             EtherMain.getInstance().etherAPI.charCreateCustomSkillLevels.put(perkName, level);
+         }
+         saveConfig("startup");
+     }
+      @LuaMethod(name="clearCharacterBoostCustom", global=true)
+     public static void clearCharacterBoostCustom() {
+         EtherMain.getInstance().etherAPI.clearCharCreateCustom();
+     }
 
     @LuaMethod(name="isVehicleInstantStart", global=true)
     public static boolean isVehicleInstantStart() {

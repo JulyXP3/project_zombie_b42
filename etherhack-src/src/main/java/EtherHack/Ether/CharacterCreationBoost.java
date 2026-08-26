@@ -7,8 +7,6 @@ import java.lang.reflect.Method;
 import java.util.List;
 import zombie.characters.SurvivorDesc;
 import zombie.characters.skills.PerkFactory;
-import zombie.inventory.InventoryItem;
-import zombie.inventory.InventoryItemFactory;
 import zombie.scripting.objects.CharacterTrait;
 
 /*
@@ -19,23 +17,22 @@ import zombie.scripting.objects.CharacterTrait;
  * 此处改写的数据随原版建号包上传, 服务端 processServer/applyTraits/SurvivorDesc.load
  * 零校验照单全收 (特性无点数上限, xpBoostMap 直采后按 Math.min(10, level) 封顶)。
  *
- * 通道限制: 注入的"全服装"只出服装类物品 —— 服务端 WornItems.load 会对非服装
- * (无 ClothingItem 资产, getVisual() 为 null) 在 tint 赋值处 NPE, 炸掉自己的
- * 建号包, 因此服装清单必须全部是 ClothingItem 类型。
+ * 2026-08-26 扩展 (创建角色选项卡):
+ *  - 自定义特性名单 (charCreateCustomTraits): 逐项追加进包内 characterTraits;
+ *  - 自定义技能等级 (charCreateCustomSkillLevels): xpBoostMap 逐项覆盖,
+ *    应用在「建号技能满级」之后 (手工设定优先于一键全满);
+ *  - 「解锁全部服装」不再走本类 —— 由 Lua 覆盖建号界面 shouldShowAllOutfits 实现。
  */
 public class CharacterCreationBoost {
-    private static final String[] DEFAULT_OUTFIT = new String[]{
-        "Base.Hat_BaseballCap", "Base.Jacket_Leather", "Base.Tshirt_ArmyGreen",
-        "Base.Trousers", "Base.Socks_Ankle", "Base.Shoes_ArmyBoots"
-    };
-
     public static void apply(Object packet) {
         try {
             EtherAPI api = EtherMain.getInstance().etherAPI;
             if (api == null) {
                 return;
             }
-            if (!(api.isCharCreateAllTraits || api.isCharCreateMaxSkills || api.isCharCreateClothing)) {
+            boolean hasCustom = !api.charCreateCustomTraits.isEmpty()
+                || !api.charCreateCustomSkillLevels.isEmpty();
+            if (!(api.isCharCreateAllTraits || api.isCharCreateMaxSkills || api.isCharCreateAllClothes || hasCustom)) {
                 return;
             }
             Field descField = FieldCache.getField(packet.getClass(), "survivorDescriptor");
@@ -43,14 +40,23 @@ public class CharacterCreationBoost {
             if (desc == null) {
                 return;
             }
+            Logger.printLog("[CreateChar] apply fired: allTraits=" + api.isCharCreateAllTraits
+                + " maxSkills=" + api.isCharCreateMaxSkills
+                + " customTraits=" + api.charCreateCustomTraits.size()
+                + " customSkills=" + api.charCreateCustomSkillLevels.size());
             if (api.isCharCreateMaxSkills) {
                 boostSkills(desc);
             }
             if (api.isCharCreateAllTraits) {
                 boostTraits(packet);
             }
-            if (api.isCharCreateClothing) {
-                boostClothing(desc);
+            if (!api.charCreateCustomTraits.isEmpty()) {
+                applyCustomTraits(packet);
+                Logger.printLog("[CreateChar] custom traits now: " + fieldTraits(packet));
+            }
+            if (!api.charCreateCustomSkillLevels.isEmpty()) {
+                applyCustomSkillLevels(desc);
+                Logger.printLog("[CreateChar] xpBoostMap now: " + desc.getXPBoostMap());
             }
         }
         catch (Throwable t) {
@@ -92,13 +98,121 @@ public class CharacterCreationBoost {
         }
     }
 
-    private static void boostClothing(SurvivorDesc desc) {
-        for (String type : DEFAULT_OUTFIT) {
-            InventoryItem item = InventoryItemFactory.CreateItem(type);
-            // 只接受带 ClothingItem 资产且有穿戴位的物品, 防止 NPE 炸包
-            if (item == null || item.getVisual() == null || item.getBodyLocation() == null) continue;
-            desc.getWornItems().setItem(item.getBodyLocation(), item);
+    /*
+     * 自定义特性名单: 按 CharacterTrait 类型名逐项追加 (contains 判重)。
+     */
+    private static void applyCustomTraits(Object packet) {
+        Field traitsField = FieldCache.getField(packet.getClass(), "characterTraits");
+        List<Object> traits = (List<Object>)FieldCache.getFieldValue(packet, traitsField);
+        if (traits == null) {
+            return;
         }
+        EtherAPI api = EtherMain.getInstance().etherAPI;
+        for (String typeName : api.charCreateCustomTraits) {
+            CharacterTrait trait = findTraitByType(typeName);
+            if (trait != null && !traits.contains(trait)) {
+                traits.add(trait);
+            }
+        }
+    }
+
+    /*
+     * 自定义技能等级: 按枚举名查 Perk (Perks 非枚举, 遍历 fromIndex 比较
+     * toString), xpBoostMap 覆盖 (0..10, 服务端再钳)。
+     * 在 boostSkills 之后应用 → 手工设定优先于一键全满。
+     */
+    private static void applyCustomSkillLevels(SurvivorDesc desc) {
+        EtherAPI api = EtherMain.getInstance().etherAPI;
+        if (api.charCreateCustomSkillLevels.isEmpty()) {
+            return;
+        }
+        int maxIndex = PerkFactory.Perks.getMaxIndex();
+        for (int i = 0; i < maxIndex; ++i) {
+            PerkFactory.Perk perk = PerkFactory.Perks.fromIndex(i);
+            if (perk == null) continue;
+            Integer level = api.charCreateCustomSkillLevels.get(perk.getName());
+            if (level == null) continue;
+            int v = level.intValue();
+            if (v < 0) v = 0;
+            if (v > 10) v = 10;
+            desc.getXPBoostMap().put(perk, v);
+        }
+    }
+
+    private static String fieldTraits(Object packet) {
+        try {
+            Field traitsField = FieldCache.getField(packet.getClass(), "characterTraits");
+            List<Object> traits = (List<Object>)FieldCache.getFieldValue(packet, traitsField);
+            return traits == null ? "null" : String.valueOf(traits);
+        }
+        catch (Throwable t) {
+            return "err:" + t;
+        }
+    }
+
+    private static CharacterTrait findTraitByType(String typeName) {
+        for (Object definition : getTraitDefinitions()) {
+            try {
+                Method getType = definition.getClass().getMethod("getType");
+                CharacterTrait trait = (CharacterTrait)getType.invoke(definition);
+                if (trait != null && typeName.equals(trait.getName())) {
+                    return trait;
+                }
+            }
+            catch (Throwable ignored) {
+            }
+        }
+        return null;
+    }
+
+    /*
+     * SP 建号钩子: 单人不走 CreatePlayerPacket (IsoWorld.init 直接
+     * new IsoPlayer(luaDesc) + applyTraits(luaTraits)), 包注入在 SP 永远
+     * 不会被调 —— 本方法由 GamePatcher 注入 IsoGameCharacter.applyTraits
+     * 头部, 就地改写 luaTraits 名单与玩家 descriptor 的 xpBoostMap。
+     * MP 下客户端不调 applyTraits (服务端才调, 而 dedicated 服无本 mod),
+     * 故此钩子天然只影响 SP。
+     */
+    public static void applySP(zombie.characters.IsoGameCharacter player, List<CharacterTrait> luaTraits) {
+        try {
+            EtherAPI api = EtherMain.getInstance().etherAPI;
+            if (api == null || luaTraits == null) {
+                return;
+            }
+            if (!(api.isCharCreateAllTraits || api.isCharCreateMaxSkills || hasCustom(api))) {
+                return;
+            }
+            if (!api.charCreateCustomTraits.isEmpty()) {
+                for (String typeName : api.charCreateCustomTraits) {
+                    CharacterTrait trait = findTraitByType(typeName);
+                    if (trait != null && !luaTraits.contains(trait)) {
+                        luaTraits.add(trait);
+                    }
+                }
+            }
+            SurvivorDesc desc = player.getDescriptor();
+            Logger.printLog("[CreateChar][SP] applySP fired: allTraits=" + api.isCharCreateAllTraits
+                + " maxSkills=" + api.isCharCreateMaxSkills
+                + " customTraits=" + api.charCreateCustomTraits.size()
+                + " customSkills=" + api.charCreateCustomSkillLevels.size()
+                + " luaTraits=" + luaTraits.size());
+            if (desc == null) {
+                return;
+            }
+            if (api.isCharCreateMaxSkills) {
+                boostSkills(desc);
+            }
+            if (!api.charCreateCustomSkillLevels.isEmpty()) {
+                applyCustomSkillLevels(desc);
+            }
+        }
+        catch (Throwable t) {
+            Logger.printLog("CharacterCreationBoost.applySP failed: " + t);
+        }
+    }
+
+    private static boolean hasCustom(EtherAPI api) {
+        return !api.charCreateCustomTraits.isEmpty() || !api.charCreateCustomSkillLevels.isEmpty();
     }
 
     /*

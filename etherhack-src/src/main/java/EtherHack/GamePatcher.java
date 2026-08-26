@@ -591,6 +591,38 @@ public class GamePatcher {
     }
 
     /*
+     * SP 建号增强: 单人不走 CreatePlayerPacket (IsoWorld.init 直接 new IsoPlayer +
+     * applyTraits(luaTraits)), 包注入在 SP 永远不会触发。改为在
+     * IsoGameCharacter.applyTraits(List) 头部调 CharacterCreationBoost.applySP:
+     * 就地改写 luaTraits 与 descriptor.xpBoostMap。MP 客户端不调 applyTraits
+     * (服务端才调且无本 mod), 该钩子天然只影响 SP; EtherMain 为空时直通。
+     */
+    private void patchApplyTraitsSP() {
+        Logger.print("Patching IsoGameCharacter.applyTraits with SP creation boost hook...");
+        try {
+            Patch.injectIntoClass("zombie/characters/IsoGameCharacter", "applyTraits", false, method -> {
+                InsnList hookInstructions = new InsnList();
+                LabelNode continueLabel = new LabelNode();
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new JumpInsnNode(198, continueLabel));
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                hookInstructions.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                hookInstructions.add(new JumpInsnNode(198, continueLabel));
+                hookInstructions.add(new VarInsnNode(25, 0));
+                hookInstructions.add(new VarInsnNode(25, 1));
+                hookInstructions.add(new MethodInsnNode(184, "EtherHack/Ether/CharacterCreationBoost", "applySP", "(Lzombie/characters/IsoGameCharacter;Ljava/util/List;)V", false));
+                hookInstructions.add(continueLabel);
+                method.instructions.insert(hookInstructions);
+                Logger.print("  [OK] Injected SP creation boost hook into IsoGameCharacter.applyTraits()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: applyTraits injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
+    /*
      * Fullbright 真全亮 (功能 9, 纯客户端渲染, 零上行包)。B42 光照计算在 native
      * (Lighting64.dll), 但渲染取值全部经 Java 单点回读:
      *  ① IsoGridSquare.getVertLight(I,I) —— 全树 23 处调用全在渲染方法内 (墙/地板/
@@ -883,6 +915,7 @@ public class GamePatcher {
         this.patchZombieSpotted();
         this.patchZombieShouldAttack();
         this.patchCharacterCreationBoost();
+         this.patchApplyTraitsSP();
         this.patchFullbright();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");
