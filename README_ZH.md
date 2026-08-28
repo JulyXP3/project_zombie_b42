@@ -121,5 +121,5 @@ temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main
 
 ## 声明
 
-- 本项目开发**仅使用了 Deepseek V4F 模型**, 如果采用 GPT 或 Claude, 效果将会更好。
+- 本项目开发使用了 AI 辅助。
 - 本项目只是临时维护, 有需要的朋友可以自行拉取仓库做后续更新, 感谢!
