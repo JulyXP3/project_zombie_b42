@@ -19,6 +19,9 @@
 - Renamed: "Full limb restore" → "Fast health regen (not godmode)"; "No muscle strain" → "Disable muscle strain"; "Creation Boost" hint shortened.
 - Fixed: "Auto-repair inventory items" not working in multiplayer; also auto-maxes item sharpness (full damage).
 - Added: "Repair worn clothing" toggle — cleans blood/dirt/holes and restores condition on clothing, synced server-side in multiplayer.
+- Fixed: "Repair worn clothing" only restored condition without cleaning blood/dirt; in multiplayer other players now also see clean clothing.
+- Fixed: right-click context menu crash in some mods (e.g. Skill Recovery Journal).
+- Improved: the three execution-block toggles in the "Other" tab now persist across restarts; "Block files containing suspicious words" now defaults to off.
 - Added: "Unlimited ammo" now covers magazines in your backpack — all magazines auto-refill, no manual reloading.
 - Build: version bumped to 3.2.0.
 

@@ -433,6 +433,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleBlockCompileLuaWithBadWords", global=true)
     public static void toggleBlockCompileLuaWithBadWords(boolean var0) {
         EtherLuaCompiler.getInstance().isBlockCompileLuaWithBadWords = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isBlockCompileLuaAboutEtherHack", global=true)
@@ -443,6 +444,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleBlockCompileLuaAboutEtherHack", global=true)
     public static void toggleBlockCompileLuaAboutEtherHack(boolean var0) {
         EtherLuaCompiler.getInstance().isBlockCompileLuaAboutEtherHack = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isBlockCompileDefaultLua", global=true)
@@ -453,6 +455,7 @@ public class EtherLuaMethods {
     @LuaMethod(name="toggleBlockCompileDefaultLua", global=true)
     public static void toggleBlockCompileDefaultLua(boolean var0) {
         EtherLuaCompiler.getInstance().isBlockCompileDefaultLua = var0;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="isEnableInvisible", global=true)

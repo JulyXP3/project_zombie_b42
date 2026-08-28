@@ -210,6 +210,9 @@ public class EtherAPI {
         var3.setProperty("combatSpeedMultiplier", Float.toString(this.combatSpeedMultiplier));
         var3.setProperty("isAutoRepairItems", Boolean.toString(this.isAutoRepairItems));
         var3.setProperty("isRepairClothing", Boolean.toString(this.isRepairClothing));
+        var3.setProperty("isBlockCompileLuaWithBadWords", Boolean.toString(EtherLuaCompiler.getInstance().isBlockCompileLuaWithBadWords));
+        var3.setProperty("isBlockCompileLuaAboutEtherHack", Boolean.toString(EtherLuaCompiler.getInstance().isBlockCompileLuaAboutEtherHack));
+        var3.setProperty("isBlockCompileDefaultLua", Boolean.toString(EtherLuaCompiler.getInstance().isBlockCompileDefaultLua));
         var3.setProperty("isDisableFatigue", Boolean.toString(this.isDisableFatigue));
         var3.setProperty("isDisableHunger", Boolean.toString(this.isDisableHunger));
         var3.setProperty("isDisableThirst", Boolean.toString(this.isDisableThirst));
@@ -309,6 +312,9 @@ public class EtherAPI {
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var3, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var3, "isAutoRepairItems", false);
         this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var3, "isRepairClothing", false);
+        EtherLuaCompiler.getInstance().isBlockCompileLuaWithBadWords = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileLuaWithBadWords", false);
+        EtherLuaCompiler.getInstance().isBlockCompileLuaAboutEtherHack = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileLuaAboutEtherHack", true);
+        EtherLuaCompiler.getInstance().isBlockCompileDefaultLua = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileDefaultLua", true);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var3, "isDisableFatigue", false);
         this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var3, "isDisableHunger", false);
         this.isDisableThirst = ConfigUtils.getBooleanFromConfig(var3, "isDisableThirst", false);
@@ -414,6 +420,9 @@ public class EtherAPI {
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var1, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var1, "isAutoRepairItems", false);
         this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var1, "isRepairClothing", false);
+        EtherLuaCompiler.getInstance().isBlockCompileLuaWithBadWords = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileLuaWithBadWords", false);
+        EtherLuaCompiler.getInstance().isBlockCompileLuaAboutEtherHack = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileLuaAboutEtherHack", true);
+        EtherLuaCompiler.getInstance().isBlockCompileDefaultLua = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileDefaultLua", true);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var1, "isDisableFatigue", false);
         this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var1, "isDisableHunger", false);
         this.isDisableThirst = ConfigUtils.getBooleanFromConfig(var1, "isDisableThirst", false);
