@@ -2,8 +2,9 @@ require "ISUI/ISPanel"
 
 --*********************************************************
 --* 陷阱刷物品面板 (trap-spawn items, multiplayer)
---* 列出所有陷阱链能生成的物品 (食物, hungerChange < 0),
---* 搜索 + 点击生成; 需站在已放置的陷阱旁。
+--* 双链: 食物链(动物陷阱 addAnimalDebug, hungerChange<0) 与
+--* 武器链(爆炸陷阱 AddExplosiveTrapPacket, ItemType.WEAPON),
+--* 模式切换钮二选一; 搜索 + 点击生成, 数量循环。
 --*********************************************************
 EtherTrapSpawn = ISPanel:derive("EtherTrapSpawn");
 
@@ -17,15 +18,18 @@ function EtherTrapSpawn:_group(gx, gy, gw, gh)
     table.insert(self.groups, { x = gx, y = gy, w = gw, h = gh });
 end
 
-function EtherTrapSpawn:_text(tx, ty, text, col, font, hint)
+function EtherTrapSpawn:_text(tx, ty, text, col, font, hint, mode)
     table.insert(self.texts, {
         x = tx, y = ty, text = text,
         col = col or EtherTheme.text, font = font or UIFont.Small,
         -- hint=true: 说明文字, prerender 里走 EtherTheme.drawHintText 缩放绘制。
         -- 不能在 createChildren 里即时画: 此时面板还没挂到父节点, getAbsoluteX
         -- 拿到的是错误坐标, 而且 createChildren 只执行一次, 画完即丢 (实机:
-        -- 陷阱页提示消失、render 里逐帧画的钓鱼提示却正常, 即此因)。
+        -- 陷阱页提示消失、render 里逐帧画的其它页提示却正常, 即此因)。
         hint = hint or false,
+        -- mode: 可选, "food"/"weapon" —— 仅该模式下绘制 (两种模式的说明/标签
+        -- 都在同一位置注册, 按当前模式二选一, 免去重建布局)。
+        mode = mode,
     });
 end
 
@@ -46,7 +50,9 @@ function EtherTrapSpawn:prerender()
     end
     for i = 1, #self.texts do
         local t = self.texts[i];
-        if t.hint then
+        if t.mode ~= nil and t.mode ~= self.mode then
+            -- 另一模式的静态文案: 跳过不画
+        elseif t.hint then
             EtherTheme.drawHintText(self, t.text, t.x, t.y, t.col);
         else
             self:drawText(t.text, t.x, t.y, t.col.r, t.col.g, t.col.b, t.col.a or 1, t.font);
@@ -125,26 +131,46 @@ function EtherTrapSpawn:drawDatas(y, item, alt)
 end
 
 --*********************************************************
---* Инициализация списка (только食物: hungerChange < 0)
+--* 模式切换按钮标题 (食物链/武器链共用一枚切换钮)
+--*********************************************************
+local function modeTitle(mode)
+    return getTranslate("UI_TrapSpawn_Mode") .. ": " ..
+        getTranslate(mode == "weapon" and "UI_TrapSpawn_ModeWeapon" or "UI_TrapSpawn_ModeFood");
+end
+
+--*********************************************************
+--* Инициализация списка (按模式: 食物 hungerChange<0 / 武器 ItemType.WEAPON)
 --*********************************************************
 function EtherTrapSpawn:initList()
     local items = getAllItems();
-    local foodList = {};
+    local list = {};
+    local wantWeapon = (self.mode == "weapon");
     for i = 0, items:size() - 1 do
         local item = items:get(i);
-        if not item:getObsolete() and not item:isHidden() and item:getHungerChange() < 0 then
-            table.insert(foodList, { item = item });
+        if not item:getObsolete() and not item:isHidden() then
+            local pass = false;
+            if wantWeapon then
+                -- ItemType.WEAPON 含枪械/近战/投掷物; TrapSpawnAPI 会统一伪造
+                -- 安全引信, 投掷物也能落成可回收陷阱
+                pass = item:isItemType(ItemType.WEAPON);
+            else
+                pass = item:getHungerChange() < 0;
+            end
+            if pass then
+                table.insert(list, { item = item });
+            end
         end
     end
-    table.sort(foodList, function(a, b) return not string.sort(a.item:getDisplayName(), b.item:getDisplayName()); end);
+    table.sort(list, function(a, b) return not string.sort(a.item:getDisplayName(), b.item:getDisplayName()); end);
 
-    self.fullList = foodList;
+    self.fullList = list;
     self.totalResult = 0;
     self.datas:clear();
-    for i, v in ipairs(foodList) do
+    for i, v in ipairs(list) do
         self.datas:addItem(v.item:getDisplayName(), v.item);
         self.totalResult = self.totalResult + 1;
     end
+    self:applyFilter();
 end
 
 --*********************************************************
@@ -175,8 +201,10 @@ function EtherTrapSpawn:createChildren()
     -- 左右/底部用的 PAD=16 更小, 搜索盒明显比面板其它内容贴近上边缘, 观感上
     -- 就是"冲出了背景框"。
     local sy = PAD;
-    local searchText = getTranslate("UI_TrapSpawn_SearchLabel");
-    local slW = tm:MeasureStringX(UIFont.Small, searchText);
+    -- 两种模式各自的搜索标签都注册 (mode 过滤二选一绘制), 布局按较宽者预留
+    local searchFoodText = getTranslate("UI_TrapSpawn_SearchLabel");
+    local searchWeaponText = getTranslate("UI_TrapSpawn_SearchWeapon");
+    local slW = math.max(tm:MeasureStringX(UIFont.Small, searchFoodText), tm:MeasureStringX(UIFont.Small, searchWeaponText));
 
     -- 标签 + 输入框同排的可用宽度。放不下(长翻译)就把标签移到输入框上方另起一行。
     -- 绝不能像原先那样把 sbW 硬撑到最小 80 —— sbX 已经被长标签推到右边,
@@ -199,7 +227,8 @@ function EtherTrapSpawn:createChildren()
         sbW = sbAvail;
         searchH = EtherTheme.entryH + IP * 2;
     end
-    self:_text(innerX, slY, searchText, EtherTheme.text, UIFont.Small);
+    self:_text(innerX, slY, searchFoodText, EtherTheme.text, UIFont.Small, nil, "food");
+    self:_text(innerX, slY, searchWeaponText, EtherTheme.text, UIFont.Small, nil, "weapon");
 
     self.searchBox = ISTextEntryBox:new("", sbX, sbY, sbW, EtherTheme.entryH);
     EtherTheme.styleEntry(self.searchBox);
@@ -212,6 +241,42 @@ function EtherTrapSpawn:createChildren()
     self:addChild(self.searchBox);
     self:_group(PAD, sy, boxW, searchH);
 
+    -- ================= 模式 + 数量行 =================
+    -- 单枚切换钮 (食物/武器) + 数量输入框 (右锚固定宽); 两链循环次数通用 (1..50)。
+    -- 极端字号/长翻译下: 按钮钳到"输入框以左"的可用宽 (UIButton render 自带
+    -- 超宽缩字), 数量标签放不下就整段不画 (输入框默认值 1 已自明)。
+    local modeY = sy + searchH + GAP;
+    local modeH = ctrlH + IP * 2;
+    local countEntryW = 70;
+    local countEntryX = innerX + innerW - countEntryW;
+    local modeMax = (countEntryX - GAP) - innerX;
+    local modeW = math.max(UIButton.measureWidth(modeTitle("food")), UIButton.measureWidth(modeTitle("weapon")));
+    if modeW > modeMax then modeW = modeMax; end
+    if modeW < 100 then modeW = 100; end
+    local countW = tm:MeasureStringX(UIFont.Small, getTranslate("UI_TrapSpawn_Count"));
+    local countLabelX = countEntryX - countW - math.floor(GAP / 2);
+    self.modeBtn = UIButton:new(innerX, modeY + IP, modeW, ctrlH, modeTitle(self.mode),
+    function()
+        self.mode = (self.mode == "weapon") and "food" or "weapon";
+        self.modeBtn.title = modeTitle(self.mode);
+        self:initList();
+    end, modeW)
+    self.modeBtn:initialise();
+    self.modeBtn:instantiate();
+    self.modeBtn.isOnlyInGame = true;
+    self:addChild(self.modeBtn);
+
+    if countLabelX >= (innerX + modeW + GAP) then
+        self:_text(countLabelX, modeY + IP + EtherTheme.entryLabelDY, getTranslate("UI_TrapSpawn_Count"), EtherTheme.text, UIFont.Small);
+    end
+    self.countEntry = ISTextEntryBox:new("1", countEntryX, modeY + IP, countEntryW, EtherTheme.entryH);
+    EtherTheme.styleEntry(self.countEntry);
+    self.countEntry:initialise();
+    self.countEntry:instantiate();
+    self.countEntry.isOnlyInGame = true;
+    self:addChild(self.countEntry);
+    self:_group(PAD, modeY, boxW, modeH);
+
     -- ================= 底部: 生成 + 提示 + 状态 =================
     -- 先算底部块, 列表再吃掉中间剩余高度
     local spawnTitle = getTranslate("UI_TrapSpawn_Button");
@@ -221,8 +286,10 @@ function EtherTrapSpawn:createChildren()
     local hintX = PAD + IP + spawnW + GAP * 2;
     local hintW = (PAD + boxW - IP) - hintX;
     if hintW < 60 then hintW = 60; end
-    local hintLines = EtherTheme.wrapHint(getTranslate("UI_TrapSpawn_Hint"), hintW);
-    local hintH = #hintLines * EtherTheme.fontHgtHint;
+    -- 两种模式的说明都按可用宽度折行注册, 高度取较髙者, 显示按模式二选一
+    local foodHintLines = EtherTheme.wrapHint(getTranslate("UI_TrapSpawn_Hint"), hintW);
+    local weaponHintLines = EtherTheme.wrapHint(getTranslate("UI_TrapSpawn_HintWeapon"), hintW);
+    local hintH = math.max(#foodHintLines, #weaponHintLines) * EtherTheme.fontHgtHint;
     local actH = math.max(ctrlH, hintH) + fhS + GAP;      -- 操作行 + 状态行
     local actY = H - PAD - (actH + IP * 2);
 
@@ -235,9 +302,14 @@ function EtherTrapSpawn:createChildren()
         end
         local scriptItem = self.datas.items[sel].item;
         if scriptItem == nil then return end
+        local count = tonumber(self.countEntry:getInternalText()) or 1;
         EtherTrapPOC.setTarget(scriptItem:getFullName());
-        EtherTrapPOC.count = 1;
-        EtherTrapPOC.trigger();
+        EtherTrapPOC.count = count;
+        if self.mode == "weapon" then
+            EtherTrapPOC.triggerWeapon(count);
+        else
+            EtherTrapPOC.trigger();
+        end
     end, spawnW)
     self.spawnBtn:initialise();
     self.spawnBtn:instantiate();
@@ -245,11 +317,15 @@ function EtherTrapSpawn:createChildren()
     self:addChild(self.spawnBtn);
 
     -- 提示: 按可用宽度折行, 与按钮竖直居中对齐 (说明文字按 hintScale 缩小绘制,
-    -- 与其他静态文案一样走 _text 记录 + prerender 每帧绘制)
+    -- 与其他静态文案一样走 _text 记录 + prerender 每帧绘制; 两套说明按模式二选一)
     local hintY0 = actY + IP + math.floor((ctrlH - hintH) / 2);
-    for i = 1, #hintLines do
-        self:_text(hintX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, hintLines[i],
-            EtherTheme.textDim, nil, true);
+    for i = 1, #foodHintLines do
+        self:_text(hintX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, foodHintLines[i],
+            EtherTheme.textDim, nil, true, "food");
+    end
+    for i = 1, #weaponHintLines do
+        self:_text(hintX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, weaponHintLines[i],
+            EtherTheme.textDim, nil, true, "weapon");
     end
 
     -- 状态行 (动态, 由 render 绘制)
@@ -258,11 +334,11 @@ function EtherTrapSpawn:createChildren()
     self:_group(PAD, actY, boxW, actH + IP * 2);
 
     -- ================= 中部: 列表 =================
-    -- 列表紧贴搜索盒之下 (仅隔 GAP), 不再预留表头带: ISScrollingListBox 的
+    -- 列表紧贴模式行之下 (仅隔 GAP), 不再预留表头带: ISScrollingListBox 的
     -- 表头(连同 alpha=1 的描边)只在 #columns > 0 时绘制, 本页不 addColumn,
     -- 表头彻底不画 —— 之前的空列会让表头画到列表 y 之上压住搜索盒, 而为它
     -- 预留的 listHeaderH 又变成一条纯空白带 (实机两轮反馈的来源)。
-    local listY = sy + searchH + GAP;
+    local listY = modeY + modeH + GAP;
     local listH = (actY - GAP) - listY;
     if listH < 80 then listH = 80; end
 
@@ -294,6 +370,7 @@ function EtherTrapSpawn:new(posX, posY, width, height)
     menuTableData.moveWithMouse = true;
     menuTableData.workInGameText = getTranslate("UI_TrapSpawn_WorkInGame");
     menuTableData.localPlayer = getPlayer();
+    menuTableData.mode = "food";       -- 生成链: food(动物陷阱链) / weapon(爆炸陷阱链)
     menuTableData.groups = {};        -- 分组盒矩形 (createChildren 填充)
     menuTableData.texts = {};         -- 静态文案 (createChildren 填充)
     self.__index = self;

@@ -73,6 +73,7 @@
 ## [3.1.5]
 
 - Feature: "Trap" tab — search and spawn food (must stand next to a placed trap).
+- Feature: "Trap" tab now has a weapon category — mode switch spawns weapon-type items (auto-placed and collected, batch count), and is written to the server log.
 - Feature: F10 hotkey for container loot reset.
 - Changed: multi-hit, 360° vision and three anti-detection toggles now enabled by default.
 - Removed: item swapping — no viable server-side channel.

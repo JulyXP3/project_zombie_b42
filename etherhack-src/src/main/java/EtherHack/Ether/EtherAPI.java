@@ -508,6 +508,7 @@ public class EtherAPI {
         SafeEtherLuaMethods protectedMethods = this.createProtectedMethods();
         this.exposer.exposeAPI(protectedMethods);
         this.exposer.exposeServerSyncBlocker();
+        this.exposer.exposeTrapSpawn();
         this.initializeProtectedState();
     }
 
@@ -1266,6 +1267,19 @@ public class EtherAPI {
                 // attaches to the class metatable and never became a Lua global)
                 this.exposeGlobalClassFunction(LuaManager.env, ServerSyncBlocker.class, method, name);
                 Logger.printLog("Exposed ServerSyncBlocker method: " + name);
+            }
+        }
+
+        public void exposeTrapSpawn() {
+            for (Method method : TrapSpawnAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, TrapSpawnAPI.class, method, name);
+                Logger.printLog("Exposed TrapSpawnAPI method: " + name);
             }
         }
 

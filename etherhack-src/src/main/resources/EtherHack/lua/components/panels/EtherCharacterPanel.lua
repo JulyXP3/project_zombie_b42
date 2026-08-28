@@ -235,6 +235,18 @@ function EtherCharacterPanel:build()
                 { key = "UI_CharacterPanel_NoClip",          on = toggleNoclip,            get = isEnableNoclip },
                 { key = "UI_CharacterPanel_Invisible",       on = toggleInvisible,         get = isEnableInvisible },
                 { key = "UI_CharacterPanel_TimedActionCheat", on = toggleTimedActionCheat, get = isTimedActionCheat },
+                -- 创造模式: 双写 ISBuildMenu.cheat (Lua 全局, 放行菜单/免走位/免锤子/免材料判定)
+                -- + player:setBuildCheat (Java 位, 新建造窗口"建造"按钮 canBuild or isBuildCheat()
+                --   与服务端 ISBuildIsoEntity:create 免消耗判定读的就是它)。
+                -- setBuildCheat 被 Role.hasCapability(UseBuildCheat) 门禁: SP 下本 mod 的 Role 补丁
+                -- 无条件放行 → 生效; MP 管理员 → 生效; MP 非管理员 → 静默拒绝 (无害, 不发包不触反作弊)。
+                { key = "UI_CharacterPanel_BuildCheat",
+                  on = function(c)
+                      ISBuildMenu.cheat = c;
+                      local p = getPlayer();
+                      if p ~= nil then p:setBuildCheat(c); end
+                  end,
+                  get = function() return ISBuildMenu.cheat; end },
             },
         },
         {
@@ -265,10 +277,6 @@ function EtherCharacterPanel:build()
         {
             title = "UI_CharacterPanel_Group_Special",
             items = {
-                -- 特例: 直接写 vanilla 全局标志 (非 toggleX)
-                { key = "UI_CharacterPanel_BuildCheat",
-                  on = function(c) ISBuildMenu.cheat = c; end,
-                  get = function() return ISBuildMenu.cheat; end },
                 { key = "UI_CharacterPanel_NightVision", on = toggleNightVision, get = isEnableNightVision },
                 -- 真-夜视 (Fullbright): 与夜视同模块, 渲染级全亮 (见 GamePatcher.patchFullbright)
                 { key = "UI_VisualsPanel_Fullbright", on = toggleFullbright, get = isFullbright },
