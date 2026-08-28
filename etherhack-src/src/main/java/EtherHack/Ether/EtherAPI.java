@@ -601,6 +601,26 @@ public class EtherAPI {
         }
     }
 
+    // 无限弹药(背包弹匣扩展): 弹匣 = 非武器且 getMaxAmmo()>0 的物品(InventoryItem:836
+    // 官方 tooltip 同款判定)。背包内弹匣打空自动回满 + SyncItemFields 上行
+    // (服务端 processServer 零校验采纳 currentAmmoCount), 免去手动装填;
+    // 与手持锁同款"变化才发", 静止时零包。
+    private void applyUnlimitedAmmoToInventory(IsoPlayer player) {
+        ArrayList<InventoryItem> items = player.getInventory().getItems();
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        for (InventoryItem item : items) {
+            if (item == null || item instanceof HandWeapon || item.getContainer() == null || item.getMaxAmmo() <= 0) {
+                continue;
+            }
+            if (item.getCurrentAmmoCount() != item.getMaxAmmo()) {
+                item.setCurrentAmmoCount(item.getMaxAmmo());
+                INetworkPacket.send(PacketTypes.PacketType.SyncItemFields, player, item);
+            }
+        }
+    }
+
     public void farmSetWeaponAmmo() {
         IsoPlayer player = IsoPlayer.getInstance();
         if (player == null) {
@@ -738,6 +758,7 @@ public class EtherAPI {
         if (this.isUnlimitedAmmo) {
             this.applyUnlimitedAmmo(var1, var1.getPrimaryHandItem());
             this.applyUnlimitedAmmo(var1, var1.getSecondaryHandItem());
+            this.applyUnlimitedAmmoToInventory(var1);
         }
         if (this.isUnlimitedCondition && var2 != null) {
             if (var2.getHaveBeenRepaired() > 1) {
@@ -795,6 +816,14 @@ public class EtherAPI {
                 GameClient.sendPlayerDamage(var1);
             }
         }
+        // 自动修理背包物品: 本地修复 + 变化时 SyncItemFields 上行(多人化, 2026-08-28)。
+        // 服务端 processMaintenanceCheck 每次近战命中 roll 扣耐久(服务端专属), 下行推回;
+        // 此处检测 condition 变化即拉满并上行覆盖(last-writer-wins, 与手持无限耐久同款)。
+        // 包为裸网络包不走 ClientCommand 通道 → 零 cmd 日志; 背包物品不广播他人
+        // (SyncItemFieldsPacket:520 仅地面容器转发) —— 详见 analysis/物品字段锁定链-分析.md。
+        // 锋利度: 上行锁不了(processServer 不应用 sharpness)也无须锁 —— 伤害在客户端
+        // 计算后随命中包上传, AC 只校验 damage<=100; 本地 applyMaxSharpness 拉满即可
+        // (上限=condition/conditionMax, 先修耐久再拉锋利正好吃到满上限)。
         if (this.isAutoRepairItems && (var7 = var1.getInventory().getItems()) != null && !var7.isEmpty()) {
             for (InventoryItem var5 : var7) {                if (var5 == null) continue;
                 if (var5.isBroken()) {
@@ -810,7 +839,16 @@ public class EtherAPI {
                 }
                 var5.setWet(false);
                 var5.setInfected(false);
-                var5.setCondition(var5.getConditionMax());
+                boolean conditionChanged = var5.getCondition() != var5.getConditionMax();
+                if (conditionChanged) {
+                    var5.setCondition(var5.getConditionMax());
+                }
+                if (var5.hasSharpness() && var5.getSharpness() < var5.getMaxSharpness()) {
+                    var5.applyMaxSharpness();
+                }
+                if (conditionChanged && GameClient.client) {
+                    var5.syncItemFields();
+                }
             }
         }
         if (this.isUnlimitedEndurance) {
@@ -1170,7 +1208,6 @@ public class EtherAPI {
                 Logger.printLog("Exposed ServerSyncBlocker method: " + name);
             }
         }
-
 
         private void exposeGlobalFunction(Method method, String name) {
             this.exposeMethod(method.getDeclaringClass(), method, name, LuaManager.env);
