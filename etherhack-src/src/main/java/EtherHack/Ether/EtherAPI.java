@@ -830,10 +830,17 @@ public class EtherAPI {
         // 锋利度: 上行锁不了(processServer 不应用 sharpness)也无须锁 —— 伤害在客户端
         // 计算后随命中包上传, AC 只校验 damage<=100; 本地 applyMaxSharpness 拉满即可
         // (上限=condition/conditionMax, 先修耐久再拉锋利正好吃到满上限)。
-        // 修复身上衣物(isRepairClothing)独立开关: 仅对 Clothing —— 清血污/污渍/破洞
-        // (含补丁)+修补耐久; 视觉清理结果随同一 SyncItemFields 包的 itemVisual/patches
-        // 字段同步(服务端 processClothing 应用)。自动修理不碰衣物视觉(语义分离)。
+        // 修复身上衣物(isRepairClothing)独立开关: 仅对 Clothing, 清两层 ——
+        // ① 渲染层 ItemVisual(血污/污渍/破洞/补丁); ② 标量层 dirtyness/bloodLevel
+        // (tooltip "肮脏的/血淋淋的"前缀读的就是标量, Clothing.java:370-377 isDirty>15/isBloody>25;
+        // vanilla 洗衣 ISWashClothing.lua:136-156 也是两层都清)。
+        // 多人通道: ① 渲染层+耐久随 SyncItemFields itemVisual/patches 上行(服务端 processClothing
+        // copyBlood/copyDirt/copyHoles 全盘采纳); ② 标量层 SyncItemFields 不带 Clothing 分支 →
+        // 改用 SyncVisualsPacket: 服务端 parse(:93-104) 零校验采纳 visual+标量+condition
+        // (setConditionNoSound), processServer 再广播周围玩家 —— 变化帧一次上行即全图生效。
+        // 注意 SyncVisuals 只覆盖穿戴中衣物(wornItems), 背包未穿戴衣物的标量不进该包(已知边界)。
         if ((this.isAutoRepairItems || this.isRepairClothing) && (var7 = var1.getInventory().getItems()) != null && !var7.isEmpty()) {
+            boolean anyClothingChanged = false;
             for (InventoryItem var5 : var7) {                if (var5 == null) continue;
                 boolean isClothingTarget = this.isRepairClothing && var5 instanceof Clothing && var5.getVisual() instanceof ItemVisual;
                 boolean conditionChanged = (this.isAutoRepairItems || isClothingTarget) && var5.getCondition() != var5.getConditionMax();
@@ -850,32 +857,49 @@ public class EtherAPI {
                 }
                 boolean visualChanged = false;
                 if (isClothingTarget) {
+                    Clothing clothingItem = (Clothing)var5;
                     ItemVisual visual = (ItemVisual)var5.getVisual();
-                    boolean dirty = visual.getTotalBlood() > 0.0f || visual.getHolesNumber() > 0;
-                    if (!dirty) {
+                    boolean visualDirty = visual.getTotalBlood() > 0.0f || visual.getHolesNumber() > 0;
+                    if (!visualDirty) {
                         for (int var6 = 0; var6 < BloodBodyPartType.MAX.index(); ++var6) {
                             if (visual.getDirt(BloodBodyPartType.FromIndex(var6)) > 0.0f) {
-                                dirty = true;
+                                visualDirty = true;
                                 break;
                             }
                         }
                     }
-                    if (dirty) {
+                    boolean scalarDirty = clothingItem.getDirtiness() > 0.0f || clothingItem.getBloodLevel() > 0.0f;
+                    if (visualDirty || scalarDirty) {
                         visualChanged = true;
-                        for (int var6 = 0; var6 < BloodBodyPartType.MAX.index(); ++var6) {
-                            visual.removeHole(var6);
-                            visual.removePatch(var6);
+                        if (visualDirty) {
+                            for (int var6 = 0; var6 < BloodBodyPartType.MAX.index(); ++var6) {
+                                visual.removeHole(var6);
+                                visual.removePatch(var6);
+                            }
+                            visual.removeBlood();
+                            visual.removeDirt();
                         }
-                        visual.removeBlood();
-                        visual.removeDirt();
+                        if (scalarDirty) {
+                            clothingItem.setDirtiness(0.0f);
+                            clothingItem.setBloodLevel(0.0f);
+                        }
                     }
                 }
                 if (conditionChanged) {
                     var5.setCondition(var5.getConditionMax());
                 }
+                if (visualChanged) {
+                    anyClothingChanged = true;
+                }
                 if ((conditionChanged || visualChanged) && GameClient.client) {
                     var5.syncItemFields();
                 }
+            }
+            if (anyClothingChanged) {
+                if (GameClient.client) {
+                    INetworkPacket.send(PacketTypes.PacketType.SyncVisuals, var1);
+                }
+                var1.resetModelNextFrame();
             }
         }
         if (this.isUnlimitedEndurance) {

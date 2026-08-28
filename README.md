@@ -121,5 +121,5 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 ## Disclaimer
 
-- This project was developed **using only the Deepseek V4F model**. Using GPT or Claude models would likely produce better results.
+- This project was developed with AI assistance.
 - This is a temporary maintenance fork. If you find it useful, feel free to fork and continue development. Thanks!
