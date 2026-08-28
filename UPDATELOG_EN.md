@@ -17,7 +17,8 @@
 - UI: the "Exploit" nav tab renamed "Other" and moved between "Vehicles" and "Settings"; the Players tab gained a multiplayer sync-protection hint.
 - Removed: "No corpse sickness" — it only hid the noxious-smell moodle.
 - Renamed: "Full limb restore" → "Fast health regen (not godmode)"; "No muscle strain" → "Disable muscle strain"; "Creation Boost" hint shortened.
-- Fixed: "Auto-repair inventory items" now works in multiplayer — condition changes are synced upstream and accepted server-side; also auto-maxes item sharpness (full damage).
+- Fixed: "Auto-repair inventory items" not working in multiplayer; also auto-maxes item sharpness (full damage).
+- Added: "Repair worn clothing" toggle — cleans blood/dirt/holes and restores condition on clothing, synced server-side in multiplayer.
 - Added: "Unlimited ammo" now covers magazines in your backpack — all magazines auto-refill, no manual reloading.
 - Build: version bumped to 3.2.0.
 

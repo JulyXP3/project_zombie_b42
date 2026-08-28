@@ -258,6 +258,7 @@ function EtherCharacterPanel:build()
             items = {
                 { key = "UI_CharacterPanel_UnlimitedCondition", on = toggleUnlimitedCondition,   get = isUnlimitedCondition },
                 { key = "UI_CharacterPanel_AutoRepairsItems",   on = toggleAutoRepairItems,      get = isAutoRepairItems },
+                { key = "UI_CharacterPanel_RepairClothing",     on = toggleRepairClothing,       get = isRepairClothing },
                 { key = "UI_CharacterPanel_UnlimitedCarry",     on = toggleEnableUnlimitedCarry, get = isEnableUnlimitedCarry },
             },
         },

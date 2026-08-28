@@ -74,8 +74,10 @@ import zombie.characters.IsoZombie;
 import zombie.core.Color;
 import zombie.core.Core;
 import zombie.core.PerformanceSettings;
+import zombie.core.skinnedmodel.visual.ItemVisual;
 import zombie.core.textures.Texture;
 import zombie.inventory.InventoryItem;
+import zombie.inventory.types.Clothing;
 import zombie.inventory.types.HandWeapon;
 import zombie.iso.IsoGridSquare;
 import zombie.iso.IsoWorld;
@@ -124,6 +126,7 @@ public class EtherAPI {
     public boolean isCritMax;
     public float combatSpeedMultiplier = 1.0f;
     public boolean isAutoRepairItems;
+    public boolean isRepairClothing;
     public boolean isDisableFatigue;
     public boolean isDisableHunger;
     public boolean isDisableThirst;
@@ -206,6 +209,7 @@ public class EtherAPI {
         var3.setProperty("isCritMax", Boolean.toString(this.isCritMax));
         var3.setProperty("combatSpeedMultiplier", Float.toString(this.combatSpeedMultiplier));
         var3.setProperty("isAutoRepairItems", Boolean.toString(this.isAutoRepairItems));
+        var3.setProperty("isRepairClothing", Boolean.toString(this.isRepairClothing));
         var3.setProperty("isDisableFatigue", Boolean.toString(this.isDisableFatigue));
         var3.setProperty("isDisableHunger", Boolean.toString(this.isDisableHunger));
         var3.setProperty("isDisableThirst", Boolean.toString(this.isDisableThirst));
@@ -304,6 +308,7 @@ public class EtherAPI {
         this.isCritMax = ConfigUtils.getBooleanFromConfig(var3, "isCritMax", false);
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var3, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var3, "isAutoRepairItems", false);
+        this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var3, "isRepairClothing", false);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var3, "isDisableFatigue", false);
         this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var3, "isDisableHunger", false);
         this.isDisableThirst = ConfigUtils.getBooleanFromConfig(var3, "isDisableThirst", false);
@@ -408,6 +413,7 @@ public class EtherAPI {
         this.isCritMax = ConfigUtils.getBooleanFromConfig(var1, "isCritMax", false);
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var1, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var1, "isAutoRepairItems", false);
+        this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var1, "isRepairClothing", false);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var1, "isDisableFatigue", false);
         this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var1, "isDisableHunger", false);
         this.isDisableThirst = ConfigUtils.getBooleanFromConfig(var1, "isDisableThirst", false);
@@ -816,37 +822,58 @@ public class EtherAPI {
                 GameClient.sendPlayerDamage(var1);
             }
         }
-        // 自动修理背包物品: 本地修复 + 变化时 SyncItemFields 上行(多人化, 2026-08-28)。
+        // 自动修理背包物品 / 修复身上衣物: 本地修复 + 变化时 SyncItemFields 上行(多人化, 2026-08-28)。
         // 服务端 processMaintenanceCheck 每次近战命中 roll 扣耐久(服务端专属), 下行推回;
         // 此处检测 condition 变化即拉满并上行覆盖(last-writer-wins, 与手持无限耐久同款)。
         // 包为裸网络包不走 ClientCommand 通道 → 零 cmd 日志; 背包物品不广播他人
-        // (SyncItemFieldsPacket:520 仅地面容器转发) —— 详见 analysis/物品字段锁定链-分析.md。
+        // (SyncItemFieldsPacket:520 仅地面容器转发) —— 详见 analysis/物品字段锁定链-分析(已实施完成).md。
         // 锋利度: 上行锁不了(processServer 不应用 sharpness)也无须锁 —— 伤害在客户端
         // 计算后随命中包上传, AC 只校验 damage<=100; 本地 applyMaxSharpness 拉满即可
         // (上限=condition/conditionMax, 先修耐久再拉锋利正好吃到满上限)。
-        if (this.isAutoRepairItems && (var7 = var1.getInventory().getItems()) != null && !var7.isEmpty()) {
+        // 修复身上衣物(isRepairClothing)独立开关: 仅对 Clothing —— 清血污/污渍/破洞
+        // (含补丁)+修补耐久; 视觉清理结果随同一 SyncItemFields 包的 itemVisual/patches
+        // 字段同步(服务端 processClothing 应用)。自动修理不碰衣物视觉(语义分离)。
+        if ((this.isAutoRepairItems || this.isRepairClothing) && (var7 = var1.getInventory().getItems()) != null && !var7.isEmpty()) {
             for (InventoryItem var5 : var7) {                if (var5 == null) continue;
-                if (var5.isBroken()) {
-                    var5.setBroken(false);
-                }
-                var5.setHaveBeenRepaired(1);
-                if (var5.getVisual() != null) {
-                    for (int var6 = 0; var6 < BloodBodyPartType.MAX.index(); ++var6) {
-                        var5.getVisual().removeHole(var6);
-                        var5.getVisual().removeDirt();
-                        var5.getVisual().removeBlood();
+                boolean isClothingTarget = this.isRepairClothing && var5 instanceof Clothing && var5.getVisual() instanceof ItemVisual;
+                boolean conditionChanged = (this.isAutoRepairItems || isClothingTarget) && var5.getCondition() != var5.getConditionMax();
+                if (this.isAutoRepairItems) {
+                    if (var5.isBroken()) {
+                        var5.setBroken(false);
+                    }
+                    var5.setHaveBeenRepaired(1);
+                    var5.setWet(false);
+                    var5.setInfected(false);
+                    if (var5.hasSharpness() && var5.getSharpness() < var5.getMaxSharpness()) {
+                        var5.applyMaxSharpness();
                     }
                 }
-                var5.setWet(false);
-                var5.setInfected(false);
-                boolean conditionChanged = var5.getCondition() != var5.getConditionMax();
+                boolean visualChanged = false;
+                if (isClothingTarget) {
+                    ItemVisual visual = (ItemVisual)var5.getVisual();
+                    boolean dirty = visual.getTotalBlood() > 0.0f || visual.getHolesNumber() > 0;
+                    if (!dirty) {
+                        for (int var6 = 0; var6 < BloodBodyPartType.MAX.index(); ++var6) {
+                            if (visual.getDirt(BloodBodyPartType.FromIndex(var6)) > 0.0f) {
+                                dirty = true;
+                                break;
+                            }
+                        }
+                    }
+                    if (dirty) {
+                        visualChanged = true;
+                        for (int var6 = 0; var6 < BloodBodyPartType.MAX.index(); ++var6) {
+                            visual.removeHole(var6);
+                            visual.removePatch(var6);
+                        }
+                        visual.removeBlood();
+                        visual.removeDirt();
+                    }
+                }
                 if (conditionChanged) {
                     var5.setCondition(var5.getConditionMax());
                 }
-                if (var5.hasSharpness() && var5.getSharpness() < var5.getMaxSharpness()) {
-                    var5.applyMaxSharpness();
-                }
-                if (conditionChanged && GameClient.client) {
+                if ((conditionChanged || visualChanged) && GameClient.client) {
                     var5.syncItemFields();
                 }
             }

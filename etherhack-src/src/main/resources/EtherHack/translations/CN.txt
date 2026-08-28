@@ -48,6 +48,7 @@
     UI_CharacterPanel_AmmoFarmStop = "自动刷(关)",
     UI_CharacterPanel_UnlimitedCondition = "手中物品无限耐久",
     UI_CharacterPanel_AutoRepairsItems = "自动修理背包中的物品",
+    UI_CharacterPanel_RepairClothing = "修复身上衣物",
     UI_CharacterPanel_Invisible = "隐身模式(SP)",
     UI_CharacterPanel_GodMode = "上帝模式(SP)",
     UI_CharacterPanel_NoClip = "穿墙模式(SP)",

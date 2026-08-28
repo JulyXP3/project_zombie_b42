@@ -681,6 +681,17 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="isRepairClothing", global=true)
+    public static boolean isRepairClothing() {
+        return EtherMain.getInstance().etherAPI.isRepairClothing;
+    }
+
+    @LuaMethod(name="toggleRepairClothing", global=true)
+    public static void toggleRepairClothing(boolean var0) {
+        EtherMain.getInstance().etherAPI.isRepairClothing = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="resetWeaponsStats", global=true)
     public static void resetWeaponsStats() {
         EtherMain.getInstance().etherAPI.resetWeaponsStats();
