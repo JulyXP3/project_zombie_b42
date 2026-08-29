@@ -17,8 +17,9 @@ local TOGGLE_COLOR_OFF = { r = 0.35, g = 0.35, b = 0.35, a = 1 };
 function UIMovableMiniMap:createChildren()
     ISPanel.createChildren(self);
 
-    -- 快捷开关按钮行 (我/玩家/载具/僵尸/物品/世界), 白=开, 灰=关
-    -- 6 枚按钮宽 46 步进 48 (300 宽内放下, 原 48/50 只容 5 枚)
+    -- 快捷开关按钮行 (我/玩家/载具/僵尸/物品), 白=开, 灰=关
+    -- 注: 世界画面物品标记的开关在 ESP 页「物品信息」与雷达页「在地图上显示」
+    -- (同一总开关), 小地图不放第 6 枚 —— 与小地图标记绑死同一状态, 单独开关无意义
     UIMap.ensureDrawFlags();
     self.toggleButtons = {};
     local defs = {
@@ -27,11 +28,10 @@ function UIMovableMiniMap:createChildren()
         { "UI_Map_Toggle_Vehicles", "drawVehicles" },
         { "UI_Map_Toggle_Zombies", "drawZombies" },
         { "UI_Map_Toggle_Items", "drawItems" },
-        { "UI_Map_Toggle_World", "drawWorld" },
     }
     local bx = 6;
     for _, d in ipairs(defs) do
-        local b = ISButton:new(bx, 20, 46, 18, getTranslate(d[1]), self, function(self, button)
+        local b = ISButton:new(bx, 20, 48, 18, getTranslate(d[1]), self, function(self, button)
             if button.toggleKey == "drawItems" then
                 -- 物品标记 = 雷达总开关唯一入口: 小地图标记/世界标记/雷达页勾选三处同步
                 EtherItemSearch.setEnabled(not UIMap.drawItems);
@@ -53,7 +53,7 @@ function UIMovableMiniMap:createChildren()
         b.textColor = UIMap[d[2]] and TOGGLE_COLOR_ON or TOGGLE_COLOR_OFF;
         self:addChild(b);
         table.insert(self.toggleButtons, b);
-        bx = bx + 48;
+        bx = bx + 50;
     end
 
     self.map = UIMap:new(10, 40, self.width - 20, self.height - 50)

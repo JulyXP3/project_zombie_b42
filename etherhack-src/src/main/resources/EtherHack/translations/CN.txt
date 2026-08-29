@@ -254,7 +254,6 @@
     UI_Map_Toggle_Vehicles = "载具",
     UI_Map_Toggle_Zombies = "僵尸",
     UI_Map_Toggle_Items = "物品",
-    UI_Map_Toggle_World = "世界",
     UI_ItemSearch_NoResults = "未找到该物品",
     UI_Settings_Language = "界面语言",
     UI_Settings_ResetLuaLabel = "重载所有 Lua 元素",
