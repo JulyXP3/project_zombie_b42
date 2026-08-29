@@ -6,6 +6,11 @@ require "ISUI/ISPanel"
 UIMovableMiniMap = ISPanel:derive("UIMovableMiniMap"); -- Наследование от ISPanel
 UIMovableMiniMap.instance = nil;
 
+-- 快捷按钮开/关两态文字色: render 每帧给 5 个按钮重涂, 提为常量避免每帧新建表
+-- (ISButton 对 textColor 只读不写, 共享同一表实例安全, 值与原字面量完全一致)
+local TOGGLE_COLOR_ON = { r = 1, g = 1, b = 1, a = 1 };
+local TOGGLE_COLOR_OFF = { r = 0.35, g = 0.35, b = 0.35, a = 1 };
+
 --*********************************************************
 --* Создание дочерних элементов
 --*********************************************************
@@ -34,7 +39,7 @@ function UIMovableMiniMap:createChildren()
             };
             local mirror = toggles[button.toggleKey];
             if mirror ~= nil then mirror(UIMap[button.toggleKey]) end
-            button.textColor = UIMap[button.toggleKey] and { r = 1, g = 1, b = 1, a = 1 } or { r = 0.35, g = 0.35, b = 0.35, a = 1 };
+            button.textColor = UIMap[button.toggleKey] and TOGGLE_COLOR_ON or TOGGLE_COLOR_OFF;
             if button.toggleKey == "drawItems" then
                 EtherItemSearch.setEnabled(UIMap.drawItems);
                 setMapDrawItems(UIMap.drawItems);
@@ -42,7 +47,7 @@ function UIMovableMiniMap:createChildren()
         end);
         b:initialise();
         b.toggleKey = d[2];
-        b.textColor = UIMap[d[2]] and { r = 1, g = 1, b = 1, a = 1 } or { r = 0.35, g = 0.35, b = 0.35, a = 1 };
+        b.textColor = UIMap[d[2]] and TOGGLE_COLOR_ON or TOGGLE_COLOR_OFF;
         self:addChild(b);
         table.insert(self.toggleButtons, b);
         bx = bx + 50;
@@ -93,7 +98,7 @@ function UIMovableMiniMap:render()
 
     if self.toggleButtons ~= nil then
         for _, b in ipairs(self.toggleButtons) do
-            b.textColor = UIMap[b.toggleKey] and { r = 1, g = 1, b = 1, a = 1 } or { r = 0.35, g = 0.35, b = 0.35, a = 1 }
+            b.textColor = UIMap[b.toggleKey] and TOGGLE_COLOR_ON or TOGGLE_COLOR_OFF
         end
     end
 

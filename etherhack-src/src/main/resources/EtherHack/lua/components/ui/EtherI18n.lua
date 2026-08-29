@@ -24,6 +24,11 @@ local function escapeRepl(s)
     return (string.gsub(s, "%%", "%%%%"));
 end
 
+--- 无参数调用的结果缓存: 键=翻译键, 值={ src=本次取到的原串, out=替换后文本 }。
+--- 以 src 是否一致判定失效 —— 语言切换/翻译表重载后 src 变化即自动重算, 无需感知语言。
+--- 参数化路径占位符各异(计数/数值), 不缓存, 保持逐次替换。
+local trCache = {};
+
 --- 翻译并可选参数化替换占位符。
 -- @param key    翻译键 (如 "UI_CharacterPanel_GodMode")
 -- @param params 可选; { name = value } 形式, 替换翻译串中的 {name}
@@ -37,9 +42,15 @@ function tr(key, params)
             -- "{" "}" 在 Lua 模式里不是魔法字符, 可直接当字面量匹配
             s = string.gsub(s, "{" .. k .. "}", escapeRepl(tostring(v)));
         end
+        -- 与 Java 侧一致: <br> 视为换行
+        local out = string.gsub(s, "<br>", "\n");
+        return out;
     end
 
-    -- 与 Java 侧一致: <br> 视为换行
-    s = string.gsub(s, "<br>", "\n");
-    return s;
+    -- 无参数路径是每帧渲染热点: 命中缓存则零 gsub 零新串
+    local e = trCache[key];
+    if e ~= nil and e.src == s then return e.out; end
+    local out = string.gsub(s, "<br>", "\n");
+    trCache[key] = { src = s, out = out };
+    return out;
 end
