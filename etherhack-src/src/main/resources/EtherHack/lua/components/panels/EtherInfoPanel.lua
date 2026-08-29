@@ -137,7 +137,7 @@ function EtherInfoPanel:buildLines()
     self.blocks = blocks;
     self.cacheW = self.width;
     self.cacheLang = getLanguage();
-    self.cacheStatus = self:statusSignature();
+    self.cacheFlags = self:statusFlags();
 
     -- 内容总高 (供滚动范围用)
     local total = 12;
@@ -148,7 +148,7 @@ function EtherInfoPanel:buildLines()
 end
 
 --*********************************************************
---* 反作弊/日志检测状态 (布尔数组) 与其签名 (用于缓存失效判断)
+--* 反作弊/日志检测状态 (布尔数组) 与变更检测 (用于缓存失效判断)
 --*********************************************************
 function EtherInfoPanel:statusFlags()
     local customLogger = PARP ~= nil or LogExtenderClient ~= nil or LogExtenderServer ~= nil or AVCS ~= nil;
@@ -162,11 +162,16 @@ function EtherInfoPanel:statusFlags()
     };
 end
 
-function EtherInfoPanel:statusSignature()
+--- 变更检测去字符串化: render 每帧调用, 直接逐位比较特征布尔
+--- (替代旧的拼 "1"/"0" 签名串; 两个反作弊状态均返回 boolean, 元素比对与签名比对等价)
+function EtherInfoPanel:statusFlagsChanged()
+    local c = self.cacheFlags;
+    if c == nil then return true; end
     local f = self:statusFlags();
-    local s = "";
-    for i = 1, #f do s = s .. (f[i] and "1" or "0"); end
-    return s;
+    for i = 1, #f do
+        if c[i] ~= f[i] then return true; end
+    end
+    return false;
 end
 
 --*********************************************************
@@ -177,7 +182,7 @@ function EtherInfoPanel:render()
 
     -- 缓存失效则重建折行 (宽度/语言/状态变化)
     if self.lines == nil or self.cacheW ~= self.width
-        or self.cacheLang ~= getLanguage() or self.cacheStatus ~= self:statusSignature() then
+        or self.cacheLang ~= getLanguage() or self:statusFlagsChanged() then
         self:buildLines();
     end
 
