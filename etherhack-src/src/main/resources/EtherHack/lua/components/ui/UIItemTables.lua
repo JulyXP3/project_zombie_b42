@@ -408,17 +408,14 @@ end
 --*********************************************************
 function UIItemTables:initList(module)
     self.totalResult = 0;
-    local displayCategoryNames = {}
-    local displayCategoryMap = {}
     for _, v in ipairs(module) do
         self.datas:addItem(v:getDisplayName(), v);
-        if not displayCategoryMap[v:getDisplayCategory()] then
-            displayCategoryMap[v:getDisplayCategory()] = true
-            table.insert(displayCategoryNames, v:getDisplayCategory())
-        end
         self.totalResult = self.totalResult + 1;
     end
-    table.sort(self.datas.items, function(a,b) return not string.sort(a.item:getDisplayName(), b.item:getDisplayName()); end);
+    -- 排序必须用 addItem 已存的 text (纯 Lua 字符串): 原比较器每次比较调两次
+    -- getDisplayName(), N log N 次 Java 跨界 (全物品库数千条 ≈ 数万次) 是
+    -- 物品页点开卡顿的主因; 原 displayCategoryNames/Map 收集后无人使用, 一并删除
+    table.sort(self.datas.items, function(a,b) return not string.sort(a.text, b.text); end);
 end
 
 --*********************************************************
