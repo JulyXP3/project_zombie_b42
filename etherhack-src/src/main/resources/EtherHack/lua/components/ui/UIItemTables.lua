@@ -47,34 +47,6 @@ function UIItemTables:render()
             self:drawText(l.text, l.x, l.y, tc.r, tc.g, tc.b, 1, UIFont.Small);
         end
     end
-
-    -- 按钮显隐: 搜索有结果, 或直接选中了某项物品时显示 (每帧计算, 覆盖列表点击)
-    self:refreshShowOnMap();
-end
-
---*********************************************************
---* "在地图上显示"按钮显隐: 搜索有结果, 或直接选中了某项物品时显示 (每帧计算, 覆盖列表点击)
---*********************************************************
-function UIItemTables:refreshShowOnMap()
-    local hasFilter = false;
-    for j = 1, #self.filterWidgets do
-        if self.filterWidgets[j]:getInternalText() ~= "" then
-            hasFilter = true;
-            break;
-        end
-    end
-    local show = false;
-    if hasFilter then
-        show = self.totalResult > 0;
-    else
-        show = self.datas.selected > 0 and self.datas.items ~= nil and self.datas.selected <= #self.datas.items;
-    end
-    if show ~= self.showOnMap:getIsVisible() then
-        self.showOnMap:setVisible(show);
-        if not show then
-            EtherItemSearch.clear();
-        end
-    end
 end
 
 --*********************************************************
@@ -140,7 +112,6 @@ function UIItemTables:createChildren()
     local GAP = EtherTheme.ctrlGap;
     local ctrlH = EtherTheme.ctrlH;
     local fhS = EtherTheme.fontHgtSmall;
-    local hdrH = EtherTheme.listHeaderH;  -- 列表列头画在列表 y 之上, 需预留(与 itemheight 同源)
     local boxW = self.width - PAD * 2;
     local innerX = PAD + IP;
     local innerW = boxW - IP * 2;
@@ -171,13 +142,7 @@ function UIItemTables:createChildren()
     if giveW > maxGiveW then giveW = maxGiveW; end
     local giveRowW = giveW * #specs + GAP * (#specs - 1);
 
-    -- 2) 地图按钮: 与给物品按钮同排放不下就独占一行
-    local mapTitle = getTranslate("UI_ItemSearch_ShowOnMap");
-    local mapW = UIButton.measureWidth(mapTitle);
-    if mapW > innerW then mapW = innerW; end
-    local mapWraps = (giveRowW + GAP + mapW) > innerW;
-
-    -- 3) 过滤区排布。三种形态, 必须在算块高之前定下来:
+    -- 2) 过滤区排布。三种形态, 必须在算块高之前定下来:
     --      同排     : 名称 + ID 挤在一行
     --      各占一行 : 每个过滤器一行, 标签在左输入框在右
     --      标签上置 : 标签太宽(长翻译)时标签独占一行, 输入框在下一行占满宽度
@@ -208,11 +173,10 @@ function UIItemTables:createChildren()
         end
     end
 
-    -- 4) 分支全部确定后才能定块高与块顶
+    -- 3) 分支全部确定后才能定块高与块顶
     -- 过滤输入框行按 entryH 留位 (UITextBox2 最小渲染高, 见 EtherTheme;
     -- 按 ctrlH 留位时游戏会把框撑高 10px, 实机表现即"输入框冲出控制块")
     local blockH = IP + fhS + GAP + ctrlH;                   -- 计数行 + 给物品按钮行
-    if mapWraps then blockH = blockH + GAP + ctrlH; end      -- 地图按钮独占一行
     for _ = 1, filterCtrlRows do
         blockH = blockH + GAP + EtherTheme.entryH;           -- 过滤输入框行
     end
@@ -223,15 +187,14 @@ function UIItemTables:createChildren()
 
     local rowTotalY  = blockY + IP;
     local rowBtnY    = rowTotalY + fhS + GAP;
-    local rowMapY    = mapWraps and (rowBtnY + ctrlH + GAP) or rowBtnY;
-    local rowFilterY = rowMapY + ctrlH + GAP;
+    local rowFilterY = rowBtnY + ctrlH + GAP;
     self.totalTextX = innerX;
     self.totalTextY = rowTotalY;
 
     -- ================= 列表 (填满顶部到控制块之间) =================
-    -- 列表下移让出分类标签栏(ISTabPanel 标签画在视图顶部)的视觉空间,
-    -- 底部与控制块保持双倍间隙, 杜绝与搜索行贴边/重叠 (实机缺陷)
-    local listY = PAD + hdrH + 6;
+    -- 耕种-播种同款列表: 无列头带 (不 addColumn), 行内 图标+名称;
+    -- 底部与控制块保持 44px 分离带, 矮窗口压缩列表绝不反撑
+    local listY = PAD + 4;
     -- 与控制块 44px 分离带 (实机仍显贴边, 加大); 矮窗口压缩列表绝不反撑
     local listH = blockY - 44 - listY;
     if listH < 40 then listH = 40; end
@@ -245,9 +208,6 @@ function UIItemTables:createChildren()
     self.datas.font = UIFont.NewSmall;
     self.datas.doDrawItem = self.drawDatas;
     EtherTheme.styleList(self.datas);
-    self.datas.listHeaderColor = EtherTheme.listHeaderBG;   -- 暗青表头(取代默认暗红)
-    self.datas:addColumn(getTranslate("UI_ItemCreator_Title_ItemName"), 0);
-    self.datas:addColumn(getTranslate("UI_ItemCreator_Title_ItemCategory"), math.floor(boxW * 0.55))
     self:addChild(self.datas);
 
     -- ================= 按钮行 (给物品 x1/x2/x5/x10 + 地图标记) =================
@@ -275,60 +235,6 @@ function UIItemTables:createChildren()
         table.insert(self.buttonList, btn);
         bx = bx + giveW + GAP;
     end
-
-    -- 换行时地图按钮独占一行 (rowMapY 已在块高计算里预留过这一行)
-    if mapWraps then bx = innerX; end
-
-    self.showOnMap = UIButton:new(bx, rowMapY, mapW, ctrlH, mapTitle,
-    function() 
-        -- 搜索词非空: 扫描当前过滤列表里的全部物品; 否则: 扫描选中的单个物品
-        local hasFilter = false;
-        for j = 1, #self.filterWidgets do
-            if self.filterWidgets[j]:getInternalText() ~= "" then
-                hasFilter = true;
-                break;
-            end
-        end
-
-        -- 追踪语义 (2026-08-30 用户反馈: 过滤词非空时选中具体物品仍追踪整列表):
-        -- 优先级 = 选中项 > 过滤列表 —— 选了哪本就追哪本;
-        -- 无选中且有过滤词时才追踪整个过滤列表 (短词批量追踪的既有用法保留)
-        local targetTypes = {};
-        local nTargets = 0;
-        local sel = self.datas.selected;
-        if self.datas.items ~= nil and sel >= 1 and sel <= #self.datas.items and self.datas.items[sel].item ~= nil then
-            targetTypes[self.datas.items[sel].item:getFullName()] = true;
-            nTargets = nTargets + 1;
-        elseif hasFilter then
-            if self.datas.items == nil or #self.datas.items == 0 then return end
-            for i = 1, #self.datas.items do
-                local scriptItem = self.datas.items[i].item;
-                if scriptItem ~= nil then
-                    targetTypes[scriptItem:getFullName()] = true;
-                    nTargets = nTargets + 1;
-                end
-            end
-        end
-        if nTargets == 0 then return end
-
-        self.showOnMap.title = getTranslate("UI_ItemSearch_Scanning");
-        -- scan 是同步的, 返回命中数; 0 命中时把结果反馈到按钮标题上
-        -- (UI_ItemSearch_NoResults 此前已翻译但从未被使用)。
-        local nHits = EtherItemSearch.scan(targetTypes);
-        if nHits == nil or nHits == 0 then
-            self.showOnMap.title = getTranslate("UI_ItemSearch_NoResults");
-            self.noResultAt = getTimestampMs();
-        else
-            self.showOnMap.title = getTranslate("UI_ItemSearch_ShowOnMap");
-            self.noResultAt = nil;
-        end
-    end, mapW)
-    self.showOnMap:initialise();
-    self.showOnMap:instantiate();
-    self.showOnMap:setVisible(false);
-    self.showOnMap.isOnlyInGame = true;
-    self:addChild(self.showOnMap);
-    table.insert(self.buttonList, self.showOnMap);
 
     -- ================= 过滤区 =================
     -- 形态(同排 / 各占一行 / 标签上置)与宽度已在块高计算处定好, 这里只摆放。
@@ -420,20 +326,8 @@ end
 --*********************************************************
 --* Обновление таблицы
 --*********************************************************
-UIItemTables.NO_RESULT_MS = 2000;   -- "未找到物品" 提示在按钮上停留时长
-
 function UIItemTables:update()
     self.datas.doDrawItem = self.drawDatas;
-
-    -- 扫描 0 命中时按钮标题会临时变成提示语, 到点自动恢复
-    if self.noResultAt ~= nil then
-        if getTimestampMs() - self.noResultAt >= UIItemTables.NO_RESULT_MS then
-            self.noResultAt = nil;
-            if self.showOnMap ~= nil then
-                self.showOnMap.title = getTranslate("UI_ItemSearch_ShowOnMap");
-            end
-        end
-    end
 end
 
 --*********************************************************
@@ -474,22 +368,12 @@ function UIItemTables.onFilterChange(widget)
             end
         end
         if add then
-            datas:addItem(i, v.item);
+            -- 用条目预存的 text (显示名): 旧代码传数字 i, 过滤后条目 text 会变成序号
+            datas:addItem(v.text, v.item);
             widget.parent.totalResult = widget.parent.totalResult + 1;
         end
     end
-
-    -- 按钮显隐统一交给 render() 里的 refreshShowOnMap 计算; 清空搜索词时清除标记
-    local hasFilter = false;
-    for j = 1, #widget.parent.filterWidgets do
-        if widget.parent.filterWidgets[j]:getInternalText() ~= "" then
-            hasFilter = true;
-            break;
-        end
-    end
-    if not hasFilter then
-        EtherItemSearch.clear();
-    end
+    -- 物品标记状态已迁「雷达」页统一管理, 物品页过滤不再触碰 EtherItemSearch
 end
 
 --*********************************************************
@@ -499,32 +383,15 @@ function UIItemTables:drawDatas(y, item, alt)
     if y + self:getYScroll() + self.itemheight < 0 or y + self:getYScroll() >= self.height then
         return y + self.itemheight
     end
-    
+
     local a = 0.9;
     local th = EtherTheme;
 
+    -- 耕种-播种同款列表行: 无列头/无分栏, 图标 + 名称 (名称取条目预存 text, 零逐帧跨界)
     EtherTheme.drawRowUnderlay(self, y, self.selected == item.index, alt, self.itemheight)
-    EtherTheme.drawColumnLines(self, y, self.itemheight)
 
-    local iconX = 4
     local iconSize = fontHeightSmall;
-
-    local clipX = self.columns[1].size
-    local clipX2 = self.columns[2].size
-    local clipY = math.max(0, y + self:getYScroll())
-    local clipY2 = math.min(self.height, y + self:getYScroll() + self.itemheight)
-    
-    self:setStencilRect(clipX, clipY, clipX2 - clipX, clipY2 - clipY)
-    self:drawText(item.item:getDisplayName(), 25, y + 4, 1, 1, 1, a, self.font);
-    self:clearStencilRect()
-
-    if item.item:getDisplayCategory() ~= nil then
-        self:drawText(getText("IGUI_ItemCat_" .. item.item:getDisplayCategory()), self.columns[2].size + 10, y + 4, 1, 1, 1, a, self.font);
-    else
-        self:drawText(getTranslate("UI_Common_None"), self.columns[2].size + 10, y + 4, 1, 1, 1, a, self.font);
-    end
-    
-    self:repaintStencilRect(0, clipY, self.width - 20, clipY2 - clipY)
+    self:drawText(item.text, 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
 
     local icon = item.item:getIcon()
     if item.item:getIconsForTexture() and not item.item:getIconsForTexture():isEmpty() then
@@ -533,10 +400,10 @@ function UIItemTables:drawDatas(y, item, alt)
     if icon then
         local texture = getTexture("Item_" .. icon)
         if texture then
-            self:drawTextureScaledAspect2(texture, self.columns[1].size + iconX, y + (self.itemheight - iconSize) / 2, iconSize, iconSize,  1, 1, 1, 1);
+            self:drawTextureScaledAspect2(texture, 4, y + (self.itemheight - iconSize) / 2, iconSize, iconSize, 1, 1, 1, 1);
         end
     end
-    
+
     return y + self.itemheight;
 end
 

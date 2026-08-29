@@ -33,54 +33,30 @@ function EtherItemCreator:createChildren()
 
     if self.localPlayer == nil then return end;
 
-    self.panel = ISTabPanel:new(15, 10, self.width - 15 * 2, self.height - 30);
-    self.panel:initialise();
-    self.panel.borderColor = { r = 0, g = 0, b = 0, a = 0};
-    self.panel.target = self;
-    self.panel.equalTabWidth = false
-    self:addChild(self.panel);
-
     self:initList();
 end
 
 --*********************************************************
 --* Инициализация таблиц с предметами
+--* 2026-08-30 重构: 移除按模块分页的 ISTabPanel —— 原实现为每个模块各建
+--* 一套完整 UIItemTables (列表+按钮+过滤), "All" 视图再把全库建一遍,
+--* 数千条 ×2 次填充+排序是物品页点开卡顿的另一半来源; 雷达相关功能
+--* 已迁「雷达」选项卡。现在只有一个全库列表 (耕种-播种同款展示)。
 --*********************************************************
 function EtherItemCreator:initList()
-    self.items = getAllItems();
-    self.module = {};
-
-    local moduleNames = {}
+    local items = getAllItems();
     local allItems = {}
-    for i=0,self.items:size()-1 do
-        local item = self.items:get(i);
+    for i=0,items:size()-1 do
+        local item = items:get(i);
         if not item:getObsolete() and not item:isHidden() then
-            if not self.module[item:getModuleName()] then
-                self.module[item:getModuleName()] = {}
-                table.insert(moduleNames, item:getModuleName())
-            end
-            table.insert(self.module[item:getModuleName()], item);
             table.insert(allItems, item)
         end
     end
 
-    table.sort(moduleNames, function(a,b) return not string.sort(a, b) end)
-
-    local listBox = UIItemTables:new(0, 0, self.panel.width, self.panel.height - self.panel.tabHeight);
+    local listBox = UIItemTables:new(0, 0, self.width, self.height);
     listBox:initialise();
-    self.panel:addView("All", listBox);
+    self:addChild(listBox);
     listBox:initList(allItems);
-
-    for _,moduleName in ipairs(moduleNames) do
-        if moduleName ~= "Moveables" then
-            local categoryTable = UIItemTables:new(0, 0, self.panel.width, self.panel.height - self.panel.tabHeight);
-            categoryTable:initialise();
-            self.panel:addView(moduleName, categoryTable);
-            categoryTable:initList(self.module[moduleName]);
-        end
-    end
-
-    self.panel:activateView("All");
 end
 
 --*********************************************************
