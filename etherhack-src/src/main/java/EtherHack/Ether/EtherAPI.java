@@ -1043,12 +1043,15 @@ public class EtherAPI {
             if (var2 != null && !var2.isEmpty()) {
                 float scale = Rendering.espTextScale();
                 int lineH = Rendering.getEspLineH();
+                // 翻译键为常量, 提到循环外查一次 (getTranslate 每次都走语言解析+映射查找, 逐实体重复查表纯浪费)
+                String vehiclePowerLabel = this.isVisualsVehiclesEnable ? EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_VehiclePower") : null;
+                String vehicleSpeedLabel = this.isVisualsVehiclesEnable ? EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_VehicleSpeed") : null;
                 for (BaseVehicle var10 : var2) {
                     float var11 = VehicleUtils.getScreenPositionX(var10);
                     float var12 = VehicleUtils.getScreenPositionY(var10);
                     if (this.isVisualsVehiclesEnable) {
-                        Rendering.drawEspTextCenter(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_VehiclePower") + var10.getEnginePower() / 10.0f, scale, var11, var12, var6, var7, var8, var5);
-                        Rendering.drawEspTextCenter(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_VehicleSpeed") + var10.getMaxSpeed(), scale, var11, var12 + (float)lineH, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter(vehiclePowerLabel + var10.getEnginePower() / 10.0f, scale, var11, var12, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter(vehicleSpeedLabel + var10.getMaxSpeed(), scale, var11, var12 + (float)lineH, var6, var7, var8, var5);
                     }
                     if (!this.isVisualDrawLineToVehicle) continue;
                     int var13 = (int)PlayerUtils.getDistanceBetweenPlayerAndVehicle(var1, var10);
@@ -1110,6 +1113,8 @@ public class EtherAPI {
             if (var2 != null && !var2.isEmpty()) {
                 float scale = Rendering.espTextScale();
                 int lineH = Rendering.getEspLineH();
+                String primaryHandLabel = this.isVisualDrawPlayerInfo ? EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_PrimaryHand") : null;
+                String secondaryHandLabel = this.isVisualDrawPlayerInfo ? EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_SecondaryHand") : null;
                 Iterator var9 = var2.iterator();
                 while (true) {
                     if (!var9.hasNext()) {
@@ -1125,8 +1130,8 @@ public class EtherAPI {
                     if (this.isVisualDrawPlayerInfo) {
                         String var13 = var10.getPrimaryHandItem() != null ? var10.getPrimaryHandItem().getDisplayName() : "None";
                         String var14 = var10.getSecondaryHandItem() != null ? var10.getSecondaryHandItem().getDisplayName() : "None";
-                        Rendering.drawEspTextCenter(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_PrimaryHand") + var13, scale, var11, var12 + 70.0f, var6, var7, var8, var5);
-                        Rendering.drawEspTextCenter(EtherMain.getInstance().etherTranslator.getTranslate("UI_VisualsDraws_SecondaryHand") + var14, scale, var11, var12 + 70.0f + (float)lineH, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter(primaryHandLabel + var13, scale, var11, var12 + 70.0f, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter(secondaryHandLabel + var14, scale, var11, var12 + 70.0f + (float)lineH, var6, var7, var8, var5);
                     }
                     if (var10.isLocalPlayer() || !this.isVisualDrawLineToPlayers || !(PlayerUtils.getDistanceBetweenPlayers(var1, var10) < 150.0f)) continue;
                     int var19 = (int)PlayerUtils.getDistanceBetweenPlayers(var10, var1);
