@@ -41,6 +41,9 @@ public class ServerSyncBlocker {
     private volatile boolean blockTraitsSync = false;
     private volatile boolean blockVehicleSync = false;
     private long lastFilterLogTime = 0L;
+    // filterPackets 每 tick 调用 (EtherAPI.updateAPI 与 Lua onTick, 均主线程), 复用缓冲免每 tick 两次 ArrayList 分配
+    private final ArrayList<ZomboidNetData> keptBuffer = new ArrayList<ZomboidNetData>();
+    private final ArrayList<ZomboidNetData> removeBuffer = new ArrayList<ZomboidNetData>();
     private final Map<CharacterStat, Float> protectedStats = new ConcurrentHashMap<CharacterStat, Float>();
     private final Map<String, Integer> protectedSkillLevels = new ConcurrentHashMap<String, Integer>();
     private final Map<String, Float> protectedSkillXP = new ConcurrentHashMap<String, Float>();
@@ -253,7 +256,9 @@ public class ServerSyncBlocker {
     }
 
     private void filterPackets() {
-        if (!(this.blockStatsSync || this.blockSkillsSync || this.blockInventorySync || this.blockVehicleSync)) {
+        // 门控不含 blockInventorySync: shouldFilterPacket 只过滤 stats/skills/xp/vehicle 四类包,
+        // 仅 inventory/traits 开启时全量 drain 必然零命中 (纯空转+缓冲分配), 直接跳过输出等价
+        if (!(this.blockStatsSync || this.blockSkillsSync || this.blockVehicleSync)) {
             return;
         }
         try {
@@ -263,7 +268,8 @@ public class ServerSyncBlocker {
             int removed = 0;
             java.util.Queue<ZomboidNetData> queue = this.wrapper.getIncomingNetDataQueue();
             if (queue != null && !queue.isEmpty()) {
-                ArrayList<ZomboidNetData> kept = new ArrayList<ZomboidNetData>();
+                ArrayList<ZomboidNetData> kept = this.keptBuffer;
+                kept.clear();
                 ZomboidNetData data;
                 while ((data = queue.poll()) != null) {
                     if (this.shouldFilterPacket(data)) {
@@ -277,7 +283,8 @@ public class ServerSyncBlocker {
             }
             ArrayList<ZomboidNetData> netData = this.wrapper.getIncomingNetData();
             if (netData != null && !netData.isEmpty()) {
-                ArrayList<ZomboidNetData> toRemove = new ArrayList<ZomboidNetData>();
+                ArrayList<ZomboidNetData> toRemove = this.removeBuffer;
+                toRemove.clear();
                 for (ZomboidNetData packet : netData) {
                     if (packet == null || !this.shouldFilterPacket(packet)) continue;
                     toRemove.add(packet);
