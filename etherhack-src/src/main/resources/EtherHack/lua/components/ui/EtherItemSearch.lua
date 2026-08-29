@@ -272,9 +272,16 @@ end
 --* 小地图"物品"开关: 关闭时清掉标记并停止事件开销 (保留搜索目标),
 --* 重新开启时立即按上次目标静默重扫
 --*********************************************************
-EtherItemSearch.showOnMap = true; -- 小地图物品标记显示开关 (UIMap 渲染时判断)
+--*********************************************************
+--* 物品标记总开关 (唯一入口): 小地图标记渲染 + 世界标记 + 小地图「物品」快捷按钮
+--* + ESP「物品信息」模块 + 雷达页「在地图上显示」勾选, 全部镜像同一状态;
+--* Java 侧 setMapDrawItems 持久化, 重启记忆
+--*********************************************************
 function EtherItemSearch.setEnabled(enabled)
-    EtherItemSearch.showOnMap = enabled;
+    UIMap.ensureDrawFlags();
+    UIMap.drawItems = enabled;   -- 小地图标记渲染 + 快捷按钮灰白 (逐帧读取, 天然同步)
+    UIMap.drawWorld = enabled;   -- 世界标记 (drawWorldMarkers 逐帧读取)
+    setMapDrawItems(enabled);    -- Java 持久化
     if enabled then
         if EtherItemSearch.lastTargets ~= nil then
             EtherItemSearch.scan(EtherItemSearch.lastTargets, true);
@@ -286,8 +293,8 @@ function EtherItemSearch.setEnabled(enabled)
 end
 
 --*********************************************************
---* 世界标记开关的全局封装: ESP 页「物品信息」勾选模块与小地图快捷按钮
---* 共用同一状态 (UIMap.drawWorld), 两处任意切换另一处即时同步 (各自逐帧读取)
+--* 物品标记总开关的全局封装: ESP 页「物品信息」勾选模块 / 雷达页「在地图上显示」
+--* 勾选 / 小地图「物品」快捷按钮 三处共用同一状态, 任意一处切换全部实时同步
 --*********************************************************
 function isMapDrawWorld()
     UIMap.ensureDrawFlags();
@@ -295,8 +302,7 @@ function isMapDrawWorld()
 end
 
 function toggleMapDrawWorld(v)
-    UIMap.ensureDrawFlags();
-    UIMap.drawWorld = v and true or false;
+    EtherItemSearch.setEnabled(v and true or false);
 end
 
 --*********************************************************

@@ -69,7 +69,7 @@ function UIMap.ensureDrawFlags()
     UIMap.drawAllPlayers = isMapDrawAllPlayers();
     UIMap.drawLocalPlayer = isMapDrawLocalPlayer();
     UIMap.drawItems = isMapDrawItems();
-    UIMap.drawWorld = false; -- 世界标记(ESP)开关: 会话级默认关, 仅小地图快捷按钮控制 (无 Java 持久化镜像)
+    UIMap.drawWorld = UIMap.drawItems; -- 世界标记与物品标记同一总开关 (雷达页勾选/ESP 模块/小地图按钮三处同步)
 end
 
 function UIMap:render() 
@@ -161,7 +161,7 @@ function UIMap:render()
 	end
 
 	-- Отрисовка найденных предметов (поиск по миру); 刷新由事件驱动 (EtherItemSearch.refresh)
-	if EtherItemSearch.showOnMap and EtherItemSearch.results ~= nil then
+	if UIMap.drawItems and EtherItemSearch.results ~= nil then
 		for _, p in pairs(EtherItemSearch.results) do
 			local x = self.mapAPI:worldToUIX(p.x, p.y);
 			local y = self.mapAPI:worldToUIY(p.x, p.y);

@@ -32,6 +32,11 @@ function UIMovableMiniMap:createChildren()
     local bx = 6;
     for _, d in ipairs(defs) do
         local b = ISButton:new(bx, 20, 46, 18, getTranslate(d[1]), self, function(self, button)
+            if button.toggleKey == "drawItems" then
+                -- 物品标记 = 雷达总开关唯一入口: 小地图标记/世界标记/雷达页勾选三处同步
+                EtherItemSearch.setEnabled(not UIMap.drawItems);
+                return
+            end
             UIMap[button.toggleKey] = not UIMap[button.toggleKey];
             local toggles = {
                 drawLocalPlayer = toggleMapDrawLocalPlayer,
@@ -42,10 +47,6 @@ function UIMovableMiniMap:createChildren()
             local mirror = toggles[button.toggleKey];
             if mirror ~= nil then mirror(UIMap[button.toggleKey]) end
             button.textColor = UIMap[button.toggleKey] and TOGGLE_COLOR_ON or TOGGLE_COLOR_OFF;
-            if button.toggleKey == "drawItems" then
-                EtherItemSearch.setEnabled(UIMap.drawItems);
-                setMapDrawItems(UIMap.drawItems);
-            end
         end);
         b:initialise();
         b.toggleKey = d[2];
