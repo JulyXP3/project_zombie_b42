@@ -92,8 +92,9 @@ function EtherTrapSpawn:applyFilter()
     self.datas:clear();
     self.totalResult = 0;
     for i, v in ipairs(full) do
-        local name = string.lower(v.item:getDisplayName());
-        if filterTxt == "" or (checkStringPattern(filterTxt) and string.match(name, filterTxt)) then
+        -- 纯子串匹配 (与 UIItemTables 修复同款): 物品名含 ( ) : . 等时
+        -- Lua 模式匹配会把括号当捕获组, 完整名称失配
+        if filterTxt == "" or string.find(v.lname, filterTxt, 1, true) then
             self.datas:addItem(i, v.item);
             self.totalResult = self.totalResult + 1;
         end
@@ -157,17 +158,18 @@ function EtherTrapSpawn:initList()
                 pass = item:getHungerChange() < 0;
             end
             if pass then
-                table.insert(list, { item = item });
+                -- 名称与折用小写各预取一次: 排序/过滤全程纯 Lua, 零逐键 Java 跨界
+                table.insert(list, { item = item, name = item:getDisplayName(), lname = string.lower(item:getDisplayName()) });
             end
         end
     end
-    table.sort(list, function(a, b) return not string.sort(a.item:getDisplayName(), b.item:getDisplayName()); end);
+    table.sort(list, function(a, b) return not string.sort(a.lname, b.lname); end);
 
     self.fullList = list;
     self.totalResult = 0;
     self.datas:clear();
     for i, v in ipairs(list) do
-        self.datas:addItem(v.item:getDisplayName(), v.item);
+        self.datas:addItem(v.name, v.item);
         self.totalResult = self.totalResult + 1;
     end
     self:applyFilter();
@@ -318,7 +320,10 @@ function EtherTrapSpawn:createChildren()
 
     -- 提示: 按可用宽度折行, 与按钮竖直居中对齐 (说明文字按 hintScale 缩小绘制,
     -- 与其他静态文案一样走 _text 记录 + prerender 每帧绘制; 两套说明按模式二选一)
-    local hintY0 = actY + IP + math.floor((ctrlH - hintH) / 2);
+    -- 提示块在"按钮+提示"内容行内垂直居中: 参照必须是 max(ctrlH, hintH)。
+    -- 原来只对 ctrlH 居中, 说明折行高于按钮时 (ctrlH-hintH)/2 为负, 整块文字
+    -- 顶到内容区上沿之外 —— 即实机"提示太靠上" (多行长提示必现)
+    local hintY0 = actY + IP + math.floor((math.max(ctrlH, hintH) - hintH) / 2);
     for i = 1, #foodHintLines do
         self:_text(hintX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, foodHintLines[i],
             EtherTheme.textDim, nil, true, "food");
