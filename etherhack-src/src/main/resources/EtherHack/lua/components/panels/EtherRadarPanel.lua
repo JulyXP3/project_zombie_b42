@@ -85,7 +85,8 @@ function EtherRadarPanel:initList()
                 name = name,
                 lname = string.lower(name),
                 lfid = string.lower(item:getFullName() or ""),
-                lid = string.lower(item:getType() or ""),
+                -- 注意: ScriptItem 没有 getType() (那是 InventoryItem 的), 短名用 getName()
+                lid = string.lower(item:getName() or ""),
             });
         end
     end
