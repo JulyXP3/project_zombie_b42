@@ -220,6 +220,8 @@
     UI_VisualsPanel_Group_Standalone = "Standalone Features",
     UI_VisualsPanel_Group_Vehicles = "Vehicle Info",
     UI_VisualsPanel_Group_Zombies = "Zombie Info",
+    UI_VisualsPanel_Group_ItemInfo = "Item Info",
+    UI_VisualsPanel_DrawItemInfo = "Show world markers for searched items (search on Items tab first)",
     UI_VisualsPanel_IsVisualsEnable = "ESP master switch",
     UI_VisualsPanel_IsVisualsVehiclesEnable = "Show vehicle power/top speed",
     UI_VisualsPanel_IsVisualsZombiesEnable = "Show zombie HP",

@@ -111,6 +111,14 @@ function EtherVisualsPanel:build()
                 { key = "UI_VisualsPanel_DrawLineToZombies",      on = toggleVisualDrawLineToZombies,  get = isVisualDrawLineToZombies },
             },
         },
+        {
+            -- 物品信息 (2026-08-30): 物品雷达搜索结果的世界标记开关,
+            -- 状态与小地图快捷按钮「世界」共用 (UIMap.drawWorld), 需先在物品页搜索
+            title = "UI_VisualsPanel_Group_ItemInfo",
+            items = {
+                { key = "UI_VisualsPanel_DrawItemInfo", on = toggleMapDrawWorld, get = isMapDrawWorld },
+            },
+        },
     };
 
     for mi = 1, #modules do
