@@ -446,7 +446,10 @@ end
 function UIItemTables:filterName(widget, scriptItem)
     local txtToCheck = string.lower(scriptItem:getDisplayName())
     local filterTxt = string.lower(widget:getInternalText())
-    return checkStringPattern(filterTxt) and string.match(txtToCheck, filterTxt)
+    -- 纯子串匹配 (plain): 物品名普遍含 ( ) : . 等字符, 走 Lua 模式会把括号当捕获组,
+    -- 完整名称过滤匹配不到自身 -> 只能用短词过滤 -> 追踪按钮连带追踪同系列其它物品
+    -- (原版 ISItemsListTable 同款缺陷, 此处有意偏离: 物品搜索要的是字面量不是模式)
+    return string.find(txtToCheck, filterTxt, 1, true) ~= nil
 end
 
 --*********************************************************
@@ -455,7 +458,7 @@ end
 function UIItemTables:filterType(widget, scriptItem)
     local txtToCheck = string.lower(scriptItem:getName())
     local filterTxt = string.lower(widget:getInternalText())
-    return checkStringPattern(filterTxt) and string.match(txtToCheck, filterTxt)
+    return string.find(txtToCheck, filterTxt, 1, true) ~= nil
 end
 
 --*********************************************************
