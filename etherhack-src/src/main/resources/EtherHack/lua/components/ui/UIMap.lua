@@ -69,6 +69,7 @@ function UIMap.ensureDrawFlags()
     UIMap.drawAllPlayers = isMapDrawAllPlayers();
     UIMap.drawLocalPlayer = isMapDrawLocalPlayer();
     UIMap.drawItems = isMapDrawItems();
+    UIMap.drawWorld = false; -- 世界标记(ESP)开关: 会话级默认关, 仅小地图快捷按钮控制 (无 Java 持久化镜像)
 end
 
 function UIMap:render() 

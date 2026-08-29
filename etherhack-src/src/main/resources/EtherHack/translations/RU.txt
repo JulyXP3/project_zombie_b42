@@ -252,6 +252,7 @@
     UI_Map_Toggle_Vehicles = "ТС",
     UI_Map_Toggle_Zombies = "Зомби",
     UI_Map_Toggle_Items = "Вещи",
+    UI_Map_Toggle_World = "Мир",
     UI_ItemSearch_Scanning = "Поиск...",
     UI_ItemSearch_NoResults = "Предметы не найдены",
     UI_Settings_Language = "Язык интерфейса",

@@ -252,6 +252,7 @@
     UI_Map_Toggle_Vehicles = "Veh",
     UI_Map_Toggle_Zombies = "Zeds",
     UI_Map_Toggle_Items = "Item",
+    UI_Map_Toggle_World = "ESP",
     UI_ItemSearch_Scanning = "Searching...",
     UI_ItemSearch_NoResults = "No items found",
     UI_Settings_Language = "UI Language",

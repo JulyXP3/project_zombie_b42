@@ -20,7 +20,7 @@
 --*********************************************************
 EtherItemSearch = EtherItemSearch or {};
 
-EtherItemSearch.results = nil; -- { {x=.., y=.., count=..}, ... } 命中位置列表
+EtherItemSearch.results = nil; -- { {x=.., y=.., z=.., name=.., count=..}, ... } 命中位置列表 (z=楼层, name=首个命中物品显示名, 与世界标记共用)
 EtherItemSearch.radius = 48;   -- 扫描半径(格), 仅覆盖玩家周围已加载区域
 EtherItemSearch.lastTargets = nil;    -- 上次扫描目标, 供自动刷新复用
 EtherItemSearch.debounceMs = 1000;    -- 防抖: 背包变动后安静满 1 秒才重扫
@@ -53,31 +53,34 @@ function EtherItemSearch.scan(targetTypes, silent)
     local out, key, n = {}, {}, 0;
     local stats = { squares = 0, floor = 0, containers = 0, bags = 0, items = 0 };
 
-    local function addAt(x, y)
-        local k = math.floor(x) * 100000 + math.floor(y);
+    local function addAt(x, y, z, name)
+        local k = math.floor(x) .. "," .. math.floor(y) .. "," .. math.floor(z);
         if key[k] ~= nil then
             out[key[k]].count = out[key[k]].count + 1;
         else
             n = n + 1;
             key[k] = n;
-            out[n] = { x = math.floor(x), y = math.floor(y), count = 1 };
+            out[n] = { x = math.floor(x), y = math.floor(y), z = math.floor(z), name = name, count = 1 };
         end
     end
 
     local function itemHits(item)
-        if item == nil then return false end
+        if item == nil then return nil end
         stats.items = stats.items + 1;
         local t = item:getFullType();
-        if targetTypes[t] then return true end
-        return targetTypes[item:getType()] == true;
+        -- 命中返回显示名 (真值), 未命中返回 nil —— 名称供世界标记文字使用
+        if targetTypes[t] then return item:getDisplayName() end
+        if targetTypes[item:getType()] == true then return item:getDisplayName() end
+        return nil;
     end
 
-    local function scanItems(items, px, py)
+    local function scanItems(items, px, py, pz)
         if items == nil then return end
         for i = 1, items:size() do
             local item = items:get(i - 1);
-            if itemHits(item) then
-                addAt(px, py);
+            local name = itemHits(item);
+            if name then
+                addAt(px, py, pz, name);
             end
         end
     end
@@ -89,7 +92,7 @@ function EtherItemSearch.scan(targetTypes, silent)
             local c = obj:getContainerByIndex(j);
             if c ~= nil then
                 stats.containers = stats.containers + 1;
-                scanItems(c:getItems(), obj:getX(), obj:getY());
+                scanItems(c:getItems(), obj:getX(), obj:getY(), obj:getZ());
             end
         end
     end
@@ -99,15 +102,16 @@ function EtherItemSearch.scan(targetTypes, silent)
         stats.floor = stats.floor + 1;
         local item = w:getItem();
         if item == nil then return end
-        if itemHits(item) then
-            addAt(w:getX(), w:getY());
+        local name = itemHits(item);
+        if name then
+            addAt(w:getX(), w:getY(), w:getZ(), name);
         end
         -- 仅当物品是容器 (包/箱子) 时才取内部物品; IsInventoryContainer 所有物品都有, 不会抛异常
         if item:IsInventoryContainer() then
             local inv = item:getInventory();
             if inv ~= nil then
                 stats.bags = stats.bags + 1;
-                scanItems(inv:getItems(), w:getX(), w:getY());
+                scanItems(inv:getItems(), w:getX(), w:getY(), w:getZ());
             end
         end
     end
@@ -143,7 +147,7 @@ function EtherItemSearch.scan(targetTypes, silent)
                     local c = body:getContainer();
                     if c ~= nil then
                         stats.containers = stats.containers + 1;
-                        scanItems(c:getItems(), body:getX(), body:getY());
+                        scanItems(c:getItems(), body:getX(), body:getY(), body:getZ());
                     end
                 end
             end
@@ -181,8 +185,8 @@ function EtherItemSearch.scan(targetTypes, silent)
                     if part ~= nil then
                         local c = part:getItemContainer();
                         if c ~= nil then
-                            stats.containers = stats.containers + 1;
-                            scanItems(c:getItems(), part:getX(), part:getY());
+                        stats.containers = stats.containers + 1;
+                        scanItems(c:getItems(), part:getX(), part:getY(), v:getZ());
                         end
                     end
                 end
@@ -279,4 +283,108 @@ function EtherItemSearch.setEnabled(enabled)
         EtherItemSearch.results = nil;
         EtherItemSearch.refreshPending = false;
     end
+end
+
+--*********************************************************
+--* 世界标记 (ESP): 搜索结果存续期间, 把每个命中位置画在世界画面上
+--* 开关: UIMap.drawWorld (小地图快捷按钮「世界」, 会话级默认关)
+--* 通道: Events.OnPostUIDraw 逐帧事件 —— 与 Java 版 ESP (EtherAPI.updateVisuals)
+--*       同一事件; 原版 LastStand/TutorialSetup 有 Lua 订阅先例, 无需任何面板
+--* 投影: IsoUtils.XToScreen/YToScreen + getZoom/相机偏移/瓦片高度修正,
+--*       与 Java 侧 ZombieUtils.getScreenPositionX/Y 完全同一套公式
+--* 性能: 开关关或无结果时单布尔早退 (空闲零开销); 只画 worldDrawRadius 格内
+--*       命中; 命中数超过 worldMaxMarkers 才排序取最近 (常规路径零排序);
+--*       暂存数组跨帧复用, 仅结果清空时重建
+--* 留痕: 纯客户端渲染, 零网络包零日志
+--*********************************************************
+EtherItemSearch.worldDrawRadius = 32;  -- 世界标记绘制半径(格), 太远的在屏幕外画了也看不见
+EtherItemSearch.worldMaxMarkers = 60;  -- 单帧最多绘制条数, 命中洪峰时取最近的
+EtherItemSearch._worldProbe = nil;     -- nil=未探测; true=投影可用; false=投影原语不可达(自动禁用, 不影响其它功能)
+EtherItemSearch._playerIndex = nil;    -- 渲染玩家索引 (启动后探测一次, 失败回退 0, 单人/多人客户端均正确)
+
+local scratchD2 = {};  -- 可见命中距离平方暂存 (跨帧复用)
+local scratchP = {};   -- 可见命中结果引用暂存
+
+local function worldProbeOk()
+    if EtherItemSearch._worldProbe ~= nil then return EtherItemSearch._worldProbe end
+    local ok = pcall(function()
+        local v = IsoCamera.frameState.playerIndex;  -- 类/字段不可达会在此抛错
+        IsoUtils.XToScreen(0.5, 0.5, 0, 0);
+        IsoUtils.YToScreen(0.5, 0.5, 0, 0);
+        IsoCamera.getOffX();
+        IsoCamera.getOffY();
+        getCore():getZoom(0);
+        Core.getTileScale();
+        EtherItemSearch._playerIndex = (type(v) == "number") and v or 0;
+    end);
+    EtherItemSearch._worldProbe = ok;
+    if not ok then
+        print("[EtherHack] 世界标记: 投影原语不可用, 功能自动禁用 (其余功能不受影响)");
+    end
+    return ok;
+end
+
+local function worldToScreen(x, y, z, pi)
+    local sx = IsoUtils.XToScreen(x, y, z, pi);
+    local sy = IsoUtils.YToScreen(x, y, z, pi);
+    local zoom = getCore():getZoom(pi);
+    sx = (sx - IsoCamera.getOffX()) / zoom;
+    sy = (sy - IsoCamera.getOffY() - 128 / (2 / Core.getTileScale())) / zoom;
+    return sx, sy;
+end
+
+local function drawWorldMarkers()
+    if not UIMap.drawWorld then return end
+    local results = EtherItemSearch.results;
+    if results == nil or next(results) == nil then return end
+    local player = getPlayer();
+    if player == nil then return end
+    if not worldProbeOk() then return end
+
+    local pi = EtherItemSearch._playerIndex or 0;
+    local px, py = player:getX(), player:getY();
+    local r2max = EtherItemSearch.worldDrawRadius * EtherItemSearch.worldDrawRadius;
+    local maxN = EtherItemSearch.worldMaxMarkers;
+
+    local cnt = 0;
+    for _, p in pairs(results) do
+        local dx, dy = p.x + 0.5 - px, p.y + 0.5 - py;
+        local d2 = dx * dx + dy * dy;
+        if d2 <= r2max then
+            cnt = cnt + 1;
+            scratchD2[cnt] = d2;
+            scratchP[cnt] = p;
+        end
+    end
+    if cnt == 0 then return end
+
+    -- 洪峰才排序取最近; 常规路径按结果顺序画 (顺序无关)
+    local order = nil;
+    if cnt > maxN then
+        order = {};
+        for i = 1, cnt do order[i] = i; end
+        table.sort(order, function(a, b) return scratchD2[a] < scratchD2[b] end);
+    end
+
+    local n = math.min(cnt, maxN);
+    local tm = getTextManager();
+    local sw, sh = getCore():getScreenWidth(), getCore():getScreenHeight();
+    for i = 1, n do
+        local idx = (order ~= nil) and order[i] or i;
+        local p = scratchP[idx];
+        local sx, sy = worldToScreen(p.x + 0.5, p.y + 0.5, (p.z or 0) + 0.4, pi);
+        if sx > -160 and sy > -20 and sx < sw and sy < sh then
+            local dist = math.floor(math.sqrt(scratchD2[idx]));
+            local text = p.name .. " ×" .. p.count .. " (" .. dist .. "m)";
+            local tx = sx - tm:MeasureStringX(UIFont.Small, text) / 2;
+            -- 阴影 + 主字双层, 与 ESP 文字同款画法; 琥珀色区别于僵尸红/载具白
+            tm:DrawString(UIFont.Small, tx + 1, sy + 1, 1, text, 0, 0, 0, 0.9);
+            tm:DrawString(UIFont.Small, tx, sy, 1, text, 1, 0.78, 0.35, 1);
+        end
+    end
+    for i = 1, cnt do scratchD2[i] = nil; scratchP[i] = nil; end
+end
+
+if Events ~= nil then
+    Events.OnPostUIDraw.Add(drawWorldMarkers);
 end
