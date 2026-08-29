@@ -163,9 +163,23 @@ function EtherTheme.drawHintText(parent, text, x, y, col, a)
         EtherTheme.hintScale, text, col.r, col.g, col.b, a or col.a or 1);
 end
 
+-- hintWidth 记忆化: 每帧逐行调用 (标签侧为静态文本), 同串重复测量纯浪费。
+-- hintFontEnum/hintScale 仅装载期赋值, 文件重执行时缓存随局部变量一并重建, 无跨档位脏读;
+-- 缓存封顶 256 条防动态数值串 (等级/经验等) 无限增长, 清空只影响一次回源测量, 不影响正确性。
+local hintWidthCache = {};
+local hintWidthCount = 0;
 function EtherTheme.hintWidth(text)
-    return math.floor(getTextManager():MeasureStringX(EtherTheme.hintFontEnum, text)
-                      * EtherTheme.hintScale + 0.5);
+    local w = hintWidthCache[text];
+    if w ~= nil then return w; end
+    w = math.floor(getTextManager():MeasureStringX(EtherTheme.hintFontEnum, text)
+                   * EtherTheme.hintScale + 0.5);
+    if hintWidthCount >= 256 then
+        hintWidthCache = {};
+        hintWidthCount = 0;
+    end
+    hintWidthCache[text] = w;
+    hintWidthCount = hintWidthCount + 1;
+    return w;
 end
 
 -- 说明文字折行: 先把可用宽换算回未缩放像素再折 (wrapText 用未缩宽度测量)。

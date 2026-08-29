@@ -310,10 +310,12 @@ function EtherPlayerEditor:renderContent()
         local availW = info.iw - EtherTheme.hintWidth(r.label) - EtherTheme.ctrlGap - rightPad;
         if availW < 40 then availW = 40; end
         local valueText = r.value;
-        if EtherTheme.hintWidth(valueText) > availW then
+        local valueW = EtherTheme.hintWidth(valueText);
+        if valueW > availW then
             valueText = EtherTheme.wrapHint(valueText, availW)[1];
+            valueW = EtherTheme.hintWidth(valueText);
         end
-        local vx = info.right - rightPad - EtherTheme.hintWidth(valueText);
+        local vx = info.right - rightPad - valueW;
         EtherTheme.drawHintText(self, valueText, vx, y, EtherTheme.textDim);
     end
 end

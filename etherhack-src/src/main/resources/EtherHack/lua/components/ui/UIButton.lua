@@ -96,7 +96,17 @@ function UIButton:render()
 	-- 不设缩放下限: 极端组合(俄语长句×窄面板×大字体)下宁可字小(≈说明文字
 	-- 字号)也不允许溢出 —— 溢出正是本次要修的缺陷。
 	local title = self.title or "";
-	local tw = getTextManager():MeasureStringX(self.font, title);
+	-- MeasureStringX 对 (font, title) 是确定值, 标题/字体静态时每帧重测纯浪费;
+	-- 换标题(如模式切换钮)或换字体自动失效重测
+	local tw;
+	if self._mtTitle == title and self._mtFont == self.font then
+		tw = self._mtW;
+	else
+		tw = getTextManager():MeasureStringX(self.font, title);
+		self._mtTitle = title;
+		self._mtFont = self.font;
+		self._mtW = tw;
+	end
 	local availW = self.width - EtherTheme.ctrlPadX * 2;
 	if tw > availW and tw > 0 then
 		local scale = availW / tw;
