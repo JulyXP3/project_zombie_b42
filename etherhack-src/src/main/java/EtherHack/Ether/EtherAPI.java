@@ -858,9 +858,17 @@ public class EtherAPI {
                     if (var5.isBroken()) {
                         var5.setBroken(false);
                     }
-                    var5.setHaveBeenRepaired(1);
-                    var5.setWet(false);
-                    var5.setInfected(false);
+                    // 先判后写: 四个 setter 已反编译核实为纯字段赋值 (setBroken(false) 不走 onBreak 分支),
+                    // 此块每渲染 tick 对全背包执行, 跳过等值写省掉无谓调用
+                    if (var5.getHaveBeenRepaired() != 1) {
+                        var5.setHaveBeenRepaired(1);
+                    }
+                    if (var5.isWet()) {
+                        var5.setWet(false);
+                    }
+                    if (var5.isInfected()) {
+                        var5.setInfected(false);
+                    }
                     if (var5.hasSharpness() && var5.getSharpness() < var5.getMaxSharpness()) {
                         var5.applyMaxSharpness();
                     }
