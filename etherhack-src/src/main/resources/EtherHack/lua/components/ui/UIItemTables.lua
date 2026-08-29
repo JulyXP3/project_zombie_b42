@@ -290,9 +290,16 @@ function UIItemTables:createChildren()
             end
         end
 
+        -- 追踪语义 (2026-08-30 用户反馈: 过滤词非空时选中具体物品仍追踪整列表):
+        -- 优先级 = 选中项 > 过滤列表 —— 选了哪本就追哪本;
+        -- 无选中且有过滤词时才追踪整个过滤列表 (短词批量追踪的既有用法保留)
         local targetTypes = {};
         local nTargets = 0;
-        if hasFilter then
+        local sel = self.datas.selected;
+        if self.datas.items ~= nil and sel >= 1 and sel <= #self.datas.items and self.datas.items[sel].item ~= nil then
+            targetTypes[self.datas.items[sel].item:getFullName()] = true;
+            nTargets = nTargets + 1;
+        elseif hasFilter then
             if self.datas.items == nil or #self.datas.items == 0 then return end
             for i = 1, #self.datas.items do
                 local scriptItem = self.datas.items[i].item;
@@ -300,14 +307,6 @@ function UIItemTables:createChildren()
                     targetTypes[scriptItem:getFullName()] = true;
                     nTargets = nTargets + 1;
                 end
-            end
-        else
-            local sel = self.datas.selected;
-            if self.datas.items == nil or sel < 1 or sel > #self.datas.items then return end
-            local scriptItem = self.datas.items[sel].item;
-            if scriptItem ~= nil then
-                targetTypes[scriptItem:getFullName()] = true;
-                nTargets = nTargets + 1;
             end
         end
         if nTargets == 0 then return end

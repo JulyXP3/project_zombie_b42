@@ -286,6 +286,20 @@ function EtherItemSearch.setEnabled(enabled)
 end
 
 --*********************************************************
+--* 世界标记开关的全局封装: ESP 页「物品信息」勾选模块与小地图快捷按钮
+--* 共用同一状态 (UIMap.drawWorld), 两处任意切换另一处即时同步 (各自逐帧读取)
+--*********************************************************
+function isMapDrawWorld()
+    UIMap.ensureDrawFlags();
+    return UIMap.drawWorld and true or false;
+end
+
+function toggleMapDrawWorld(v)
+    UIMap.ensureDrawFlags();
+    UIMap.drawWorld = v and true or false;
+end
+
+--*********************************************************
 --* 世界标记 (ESP): 搜索结果存续期间, 把每个命中位置画在世界画面上
 --* 开关: UIMap.drawWorld (小地图快捷按钮「世界」, 会话级默认关)
 --* 通道: Events.OnPostUIDraw 逐帧事件 —— 与 Java 版 ESP (EtherAPI.updateVisuals)
@@ -315,11 +329,17 @@ local function worldProbeOk()
         IsoCamera.getOffY();
         getCore():getZoom(0);
         Core.getTileScale();
+        getCore():getScreenWidth();
+        getCore():getScreenHeight();
+        local tm = getTextManager();
+        tm:MeasureStringX(UIFont.Small, "0");
+        -- 8 参无缩放形式 (原版 DebugDemoTime 同款), 不赌 9 参重载的 Kahlua 分派
+        tm:DrawString(UIFont.Small, 0, 0, "0", 0, 0, 0, 0);
         EtherItemSearch._playerIndex = (type(v) == "number") and v or 0;
     end);
     EtherItemSearch._worldProbe = ok;
     if not ok then
-        print("[EtherHack] 世界标记: 投影原语不可用, 功能自动禁用 (其余功能不受影响)");
+        print("[EtherHack] 世界标记: 投影/绘制原语不可用, 功能自动禁用 (其余功能不受影响)");
     end
     return ok;
 end
@@ -336,7 +356,8 @@ end
 local function drawWorldMarkers()
     if not UIMap.drawWorld then return end
     local results = EtherItemSearch.results;
-    if results == nil or next(results) == nil then return end
+    -- 注意: PZ 的 Kahlua 环境没有裸 next(), 只有 pairs/ipairs —— 用 # 判空
+    if results == nil or #results == 0 then return end
     local player = getPlayer();
     if player == nil then return end
     if not worldProbeOk() then return end
@@ -378,8 +399,9 @@ local function drawWorldMarkers()
             local text = p.name .. " ×" .. p.count .. " (" .. dist .. "m)";
             local tx = sx - tm:MeasureStringX(UIFont.Small, text) / 2;
             -- 阴影 + 主字双层, 与 ESP 文字同款画法; 琥珀色区别于僵尸红/载具白
-            tm:DrawString(UIFont.Small, tx + 1, sy + 1, 1, text, 0, 0, 0, 0.9);
-            tm:DrawString(UIFont.Small, tx, sy, 1, text, 1, 0.78, 0.35, 1);
+            -- DrawString 用 8 参无缩放形式 (原版先例), 不赌 9 参重载分派
+            tm:DrawString(UIFont.Small, tx + 1, sy + 1, text, 0, 0, 0, 0.9);
+            tm:DrawString(UIFont.Small, tx, sy, text, 1, 0.78, 0.35, 1);
         end
     end
     for i = 1, cnt do scratchD2[i] = nil; scratchP[i] = nil; end
