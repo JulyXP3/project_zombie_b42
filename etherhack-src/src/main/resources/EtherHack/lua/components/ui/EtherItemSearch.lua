@@ -208,6 +208,8 @@ end
 --*********************************************************
 function EtherItemSearch.refresh()
     if EtherItemSearch.results == nil or EtherItemSearch.lastTargets == nil then return end
+    -- 两组开关全关: 显示门控关闭, 暂停重扫 (结果与目标保留, 重开即恢复)
+    if not UIMap.drawItems and not UIMap.drawItemEsp then return end
     if not EtherItemSearch.refreshPending then return end
     local now = getTimestampMs();
     if now - EtherItemSearch.lastChangeAt < EtherItemSearch.debounceMs then return end
@@ -217,6 +219,8 @@ end
 
 local function onPlayerUpdate(player)
     if EtherItemSearch.results == nil or player == nil then return end
+    -- 两组开关全关: 暂停位置/背包轮询与自动重扫 (结果与目标保留, 重开即恢复)
+    if not UIMap.drawItems and not UIMap.drawItemEsp then return end
     -- 官方写法: getInventory():getItems():size() (ItemContainer 未直接暴露 size)
     local items = player:getInventory():getItems();
     if items ~= nil then
@@ -273,41 +277,32 @@ end
 --* 重新开启时立即按上次目标静默重扫
 --*********************************************************
 --*********************************************************
---* 两组独立开关 (雷达页两个勾选 / ESP 页「物品雷达」勾选 / 小地图「物品」按钮 的落点):
+--* 两组独立开关 (雷达页两个勾选 / 小地图「物品」按钮 / 地图页勾选 的落点):
 --*   setMinimapEnabled = 小地图标记 (UIMap.drawItems, Java setMapDrawItems 持久化)
 --*   setItemEspEnabled = ESP 画线追踪 (UIMap.drawItemEsp, 会话级)
---* 关掉某一组时若另一组仍开, 扫描结果保留 (画线仍需要); 两组全关才清结果停轮询
+--* 开关只是显示门控: 扫描结果与追踪目标保留不清, 两组全关时暂停自动刷新轮询
+--* (onPlayerUpdate/refresh 门控), 重新开启立即恢复上次追踪
+--* (修 bug: 小地图物品按钮关→开后追踪消失 —— 旧清理逻辑把目标一并清掉了)
 --*********************************************************
 function EtherItemSearch.setMinimapEnabled(enabled)
     UIMap.ensureDrawFlags();
     UIMap.drawItems = enabled;   -- 小地图标记渲染 + 快捷按钮灰白 (逐帧读取, 天然同步)
     setMapDrawItems(enabled);    -- Java 持久化
-    if not enabled and not UIMap.drawItemEsp then
-        EtherItemSearch.clear();
-    end
 end
 
 function EtherItemSearch.setItemEspEnabled(enabled)
     UIMap.ensureDrawFlags();
     UIMap.drawItemEsp = enabled; -- 世界画面雷达线 (drawWorldMarkers 逐帧读取)
-    if not enabled and not UIMap.drawItems then
-        EtherItemSearch.clear();
-    end
 end
 
 --*********************************************************
---* 物品追踪两组独立开关的全局封装 (ESP 页「物品雷达」勾选 / 雷达页勾选共用):
---*   小地图标记 = UIMap.drawItems (Java setMapDrawItems 持久化, 小地图「物品」按钮同 flag)
---*   ESP 画线   = UIMap.drawItemEsp (会话级)
+--* ESP 画线开关的全局读取 (雷达页勾选框初始态/逐帧同步用):
+--*   UIMap.drawItemEsp = ESP 画线追踪 (会话级); 小地图标记 = UIMap.drawItems (Java 持久化)
 --* 两组自由组合: 只小地图 / 小地图+画线 / 单独画线
 --*********************************************************
 function isMapDrawItemEsp()
     UIMap.ensureDrawFlags();
     return UIMap.drawItemEsp and true or false;
-end
-
-function toggleMapDrawItemEsp(v)
-    EtherItemSearch.setItemEspEnabled(v and true or false);
 end
 
 --*********************************************************

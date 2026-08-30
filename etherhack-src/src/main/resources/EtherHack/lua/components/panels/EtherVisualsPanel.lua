@@ -111,14 +111,6 @@ function EtherVisualsPanel:build()
                 { key = "UI_VisualsPanel_DrawLineToZombies",      on = toggleVisualDrawLineToZombies,  get = isVisualDrawLineToZombies },
             },
         },
-        {
-            -- 物品雷达 (2026-08-30): 世界画面物品追踪线, 与小地图标记相互独立
-            -- (状态 UIMap.drawItemEsp, 需先在物品雷达页搜索构建追踪目标)
-            title = "UI_VisualsPanel_Group_ItemInfo",
-            items = {
-                { key = "UI_VisualsPanel_DrawItemInfo", on = toggleMapDrawItemEsp, get = isMapDrawItemEsp },
-            },
-        },
     };
 
     for mi = 1, #modules do
