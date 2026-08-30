@@ -69,7 +69,7 @@ Requirements: **JDK 25** and **Gradle 9.1.0**. The build runs through the includ
 
 1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, renamed to `zombie.jar` (it is only read at compile time and never modified).
 2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-3. Take `EtherHack-3.2.0-B42.jar` from the `build` directory.
+3. Take `EtherHack-3.2.1-B42.jar` from the `build` directory.
 4. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
 5. Run `install.bat` to install the mod (requires a JDK on the system).
 
@@ -84,7 +84,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/EtherHack-3.2.0-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
+The output jar is at `etherhack-src/build/EtherHack-3.2.1-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
 
 ## Testing
 
@@ -102,7 +102,7 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/EtherHack-3.2.0-B42.jar` | Ready-to-use build (current release) |
+| `etherhack-src/build/EtherHack-3.2.1-B42.jar` | Ready-to-use build (current release) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `analysis/` | Decompiled class extracts used for verification |

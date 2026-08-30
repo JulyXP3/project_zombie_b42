@@ -25,6 +25,10 @@
 - Added: "Unlimited ammo" now covers magazines in your backpack — all magazines auto-refill, no manual reloading.
 - Feature: "Trap" tab now has a weapon mode — spawn any melee weapon or firearm (multiplayer), with batch count; the original food mode is kept, one-click mode switch.
 - Added: "Pad worn clothing with leather strips" toggle — add max-level leather padding to all worn clothing, greatly improving bite/scratch/bullet protection (no materials or skill needed, SP and MP).
+- Build: version bumped to 3.2.0.
+
+## [3.2.1] - Current
+
 - Added: item-radar "ESP tracking lines" — besides the minimap markers, searched items can be shown in the world view with tracking lines (name/count/floor/distance), drawn even off-screen, the distance labeled on the player's side of the line.
 - Fixed: searching an exact full item name (e.g. magazine titles containing parentheses) failed to match the item itself and could track a different item of the same series; a full name now locks onto exactly that item, and a selected list entry takes priority.
 - Rework: the "Items" page got a lighter single list (icon + name, no module sub-tabs, opens noticeably faster); "Show on map" moved to the new page.
@@ -41,7 +45,7 @@
 - UI: the "Items" nav tile is now labeled "Items(SP)" (all languages) — item spawning on that page is single-player only; use the Trap tab in multiplayer.
 - Fixed: switching the language had no effect — the panel-reuse cache kept the old-language texts; language switching and "Reset to defaults" now redraw every page with the new language and settings.
 - Feature: "Unlimited condition (held item)" and "Auto-repair items" now also restore a weapon's "Head condition" — the second durability bar of axe/hammer-type weapons; previously a head-broken weapon kept working but stayed at 0% head condition with halved damage, now both switches repair it automatically.
-- Build: version bumped to 3.2.0.
+- Build: version bumped to 3.2.1.
 
 ## [3.1.9]
 
