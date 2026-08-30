@@ -271,6 +271,8 @@ function EtherCharacterPanel:build()
                 { key = "UI_CharacterPanel_UnlimitedCondition", on = toggleUnlimitedCondition,   get = isUnlimitedCondition },
                 { key = "UI_CharacterPanel_AutoRepairsItems",   on = toggleAutoRepairItems,      get = isAutoRepairItems },
                 { key = "UI_CharacterPanel_RepairClothing",     on = toggleRepairClothing,       get = isRepairClothing },
+                -- 填充皮革条: 修复衣物的镜像操作 — 对覆盖部位伪造满级皮革衬垫(原版补丁数据), 防御叠加
+                { key = "UI_CharacterPanel_PadClothing",        on = togglePadClothing,          get = isPadClothing },
                 { key = "UI_CharacterPanel_UnlimitedCarry",     on = toggleEnableUnlimitedCarry, get = isEnableUnlimitedCarry },
             },
         },

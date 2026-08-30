@@ -50,6 +50,7 @@
     UI_CharacterPanel_UnlimitedCondition = "Бесконечная прочность предмета в руках",
     UI_CharacterPanel_AutoRepairsItems = "Авто-починка предметов в инвентаре",
     UI_CharacterPanel_RepairClothing = "Ремонт надетой одежды",
+    UI_CharacterPanel_PadClothing = "Заплатки на надетой одежде",
     UI_CharacterPanel_Invisible = "Режим невидимости (SP)",
     UI_CharacterPanel_GodMode = "Режим Бога (SP)",
     UI_CharacterPanel_NoClip = "Режим No Clip (SP)",

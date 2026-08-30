@@ -50,6 +50,7 @@
     UI_CharacterPanel_UnlimitedCondition = "Infinite durability of the object in the hands",
     UI_CharacterPanel_AutoRepairsItems = "Auto-repair of items in the inventory",
     UI_CharacterPanel_RepairClothing = "Repair worn clothing",
+    UI_CharacterPanel_PadClothing = "Pad worn clothing with leather strips",
     UI_CharacterPanel_Invisible = "Invisibility mode (SP)",
     UI_CharacterPanel_GodMode = "God mode (SP)",
     UI_CharacterPanel_NoClip = "No clip mode (SP)",

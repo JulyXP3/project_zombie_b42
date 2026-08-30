@@ -127,6 +127,7 @@ public class EtherAPI {
     public float combatSpeedMultiplier = 1.0f;
     public boolean isAutoRepairItems;
     public boolean isRepairClothing;
+    public boolean isPadClothing;
     public boolean isDisableFatigue;
     public boolean isDisableHunger;
     public boolean isDisableThirst;
@@ -210,6 +211,7 @@ public class EtherAPI {
         var3.setProperty("combatSpeedMultiplier", Float.toString(this.combatSpeedMultiplier));
         var3.setProperty("isAutoRepairItems", Boolean.toString(this.isAutoRepairItems));
         var3.setProperty("isRepairClothing", Boolean.toString(this.isRepairClothing));
+        var3.setProperty("isPadClothing", Boolean.toString(this.isPadClothing));
         var3.setProperty("isBlockCompileLuaWithBadWords", Boolean.toString(EtherLuaCompiler.getInstance().isBlockCompileLuaWithBadWords));
         var3.setProperty("isBlockCompileLuaAboutEtherHack", Boolean.toString(EtherLuaCompiler.getInstance().isBlockCompileLuaAboutEtherHack));
         var3.setProperty("isBlockCompileDefaultLua", Boolean.toString(EtherLuaCompiler.getInstance().isBlockCompileDefaultLua));
@@ -321,6 +323,7 @@ public class EtherAPI {
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var3, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var3, "isAutoRepairItems", false);
         this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var3, "isRepairClothing", false);
+        this.isPadClothing = ConfigUtils.getBooleanFromConfig(var3, "isPadClothing", false);
         EtherLuaCompiler.getInstance().isBlockCompileLuaWithBadWords = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileLuaWithBadWords", false);
         EtherLuaCompiler.getInstance().isBlockCompileLuaAboutEtherHack = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileLuaAboutEtherHack", true);
         EtherLuaCompiler.getInstance().isBlockCompileDefaultLua = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileDefaultLua", true);
@@ -429,6 +432,7 @@ public class EtherAPI {
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var1, "combatSpeedMultiplier", 1.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var1, "isAutoRepairItems", false);
         this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var1, "isRepairClothing", false);
+        this.isPadClothing = ConfigUtils.getBooleanFromConfig(var1, "isPadClothing", false);
         EtherLuaCompiler.getInstance().isBlockCompileLuaWithBadWords = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileLuaWithBadWords", false);
         EtherLuaCompiler.getInstance().isBlockCompileLuaAboutEtherHack = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileLuaAboutEtherHack", true);
         EtherLuaCompiler.getInstance().isBlockCompileDefaultLua = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileDefaultLua", true);
@@ -924,6 +928,57 @@ public class EtherAPI {
                 }
             }
             if (anyClothingChanged) {
+                if (GameClient.client) {
+                    INetworkPacket.send(PacketTypes.PacketType.SyncVisuals, var1);
+                }
+                var1.resetModelNextFrame();
+            }
+        }
+        // 身上衣物填充皮革条(isPadClothing): 修复身上衣物的镜像操作 —— 原版"添加填充物"就是对无洞部位
+        // 打补丁(ISRepairClothing.lua: complete 对补洞/加衬垫都调 Clothing.addPatch), 本质是给每个覆盖
+        // 部位塞一条 ClothingPatch。数据落 Clothing.patches(HashMap<部位,ClothingPatch>), 防御值在构造器
+        // 按 max(1, 类型上限 × tailorLvl/10) 计算(Leather: 刮擦20/咬住10, tailorLvl=10 即满级) —— 免材料
+        // 免针线免技能免时间。生效链: getDefForPart 里部位有洞防御归零(所以先 removeHole), hasHole=false
+        // (衬垫语义)时补丁防御与衣物自身防御相加, getBodyPartClothingDefense 再对覆盖该部位的所有衣物
+        // 求和(消费点 CombatManager.java:3246 / BodyDamage.java:1034)。
+        // 多人通道与修复身上衣物同根: SyncVisuals write 直接序列化客户端 patches map, 服务端 parse
+        // removeAllPatches 后 addPatchForSync 照单全收, 零校验零日志(SyncVisualsPacket.java:96-136)。
+        // tailorLvl 在协议上是裸 byte, 可伪造任意值, 此处固定 10 = 原版满级, 数值不留异常。
+        // 详见 analysis/衣物填充皮革条链-分析(已实施完成).md。
+        if (this.isPadClothing) {
+            boolean anyPaddingChanged = false;
+            for (InventoryItem wornItem : var1.getInventory().getItems()) {
+                if (wornItem == null || !(wornItem instanceof Clothing) || !(wornItem.getVisual() instanceof ItemVisual)
+                        || !var1.isEquippedClothing(wornItem)) {
+                    continue;
+                }
+                Clothing paddedClothing = (Clothing)wornItem;
+                ItemVisual paddedVisual = (ItemVisual)wornItem.getVisual();
+                boolean itemChanged = false;
+                for (BloodBodyPartType part : paddedClothing.getCoveredParts()) {
+                    if (part == null) {
+                        continue;
+                    }
+                    Clothing.ClothingPatch patch = paddedClothing.getPatchType(part);
+                    boolean needPatch = patch == null || patch.fabricType != Clothing.ClothingPatchFabricType.Leather.index
+                            || patch.tailorLvl < 10 || patch.hasHole;
+                    boolean needVisual = paddedVisual.getHole(part) > 0.0f || paddedVisual.getLeatherPatch(part) == 0.0f;
+                    if (!needPatch && !needVisual) {
+                        continue;
+                    }
+                    itemChanged = true;
+                    if (paddedVisual.getHole(part) > 0.0f) {
+                        paddedVisual.removeHole(part.index());
+                    }
+                    paddedVisual.removePatch(part.index());
+                    paddedVisual.setLeatherPatch(part);
+                    paddedClothing.addPatchForSync(part.index(), 10, Clothing.ClothingPatchFabricType.Leather.index, false);
+                }
+                if (itemChanged) {
+                    anyPaddingChanged = true;
+                }
+            }
+            if (anyPaddingChanged) {
                 if (GameClient.client) {
                     INetworkPacket.send(PacketTypes.PacketType.SyncVisuals, var1);
                 }

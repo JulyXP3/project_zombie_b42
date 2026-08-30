@@ -695,6 +695,17 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="isPadClothing", global=true)
+    public static boolean isPadClothing() {
+        return EtherMain.getInstance().etherAPI.isPadClothing;
+    }
+
+    @LuaMethod(name="togglePadClothing", global=true)
+    public static void togglePadClothing(boolean var0) {
+        EtherMain.getInstance().etherAPI.isPadClothing = var0;
+        saveConfig("startup");
+    }
+
     /** 恢复出厂默认设置 (设置页「重置默认设置」按钮): 走 loadConfig 缺省分支, Lua 侧随后 saveConfig("startup") 落盘 */
     @LuaMethod(name="resetConfig", global=true)
     public static void resetConfig() {
