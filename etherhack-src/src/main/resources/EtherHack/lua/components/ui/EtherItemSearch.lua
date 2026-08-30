@@ -348,15 +348,18 @@ local function worldProbeOk()
     return ok;
 end
 
-local function worldToScreen(x, y, z)
+local function worldToScreen(x, y, z, wallOffset)
     -- 玩家索引恒 0: IsoCamera.frameState.playerIndex 是 Java 公开字段, Kahlua 只暴露
     -- 方法不暴露字段 (实测 "attempted index: playerIndex of non-table"); 单人/多人客户端
-    -- 该索引均为 0, 仅分屏非 0 (本 mod 不支持分屏) —— 与 Java 侧 ZombieUtils 行为一致
+    -- 该索引均为 0, 仅分屏非 0 (本 mod 不支持分屏)
+    -- wallOffset: 竖直锚定偏移 —— 人物站立用半墙高 128/(2/tileScale) (胸口锚定,
+    -- 与 Java 侧 ZombieUtils 一致); 物品贴地传 0 (否则线终点/标签整体高出约半格,
+    -- 即实机"追踪线指向过高")
     local sx = IsoUtils.XToScreen(x, y, z, 0);
     local sy = IsoUtils.YToScreen(x, y, z, 0);
     local zoom = getCore():getZoom(0);
     sx = (sx - IsoCamera.getOffX()) / zoom;
-    sy = (sy - IsoCamera.getOffY() - 128 / (2 / Core.getTileScale())) / zoom;
+    sy = (sy - IsoCamera.getOffY() - wallOffset) / zoom;
     return sx, sy;
 end
 
@@ -370,8 +373,8 @@ local function drawWorldMarkers()
     if not worldProbeOk() then return end
 
     local px, py, pz = player:getX(), player:getY(), player:getZ();
-    -- 人物屏幕锚点: 雷达线起点 (与 Java 侧载具/僵尸雷达同款, 线连到人物头顶 +60)
-    local psx, psy = worldToScreen(px, py, pz);
+    -- 人物屏幕锚点: 雷达线起点 (半墙高胸口锚定 + 头顶 60, 与 Java 侧载具/僵尸雷达同款)
+    local psx, psy = worldToScreen(px, py, pz, 128 / (2 / Core.getTileScale()));
     local r2max = EtherItemSearch.worldDrawRadius * EtherItemSearch.worldDrawRadius;
     local maxN = EtherItemSearch.worldMaxMarkers;
 
@@ -401,7 +404,7 @@ local function drawWorldMarkers()
     for i = 1, n do
         local idx = (order ~= nil) and order[i] or i;
         local p = scratchP[idx];
-        local sx, sy = worldToScreen(p.x + 0.5, p.y + 0.5, (p.z or 0) + 0.4);
+        local sx, sy = worldToScreen(p.x + 0.5, p.y + 0.5, p.z or 0, 0);
         -- 雷达线: 物品 → 人物头顶 (+60 垂直偏移), 与载具/僵尸雷达同款 —— 视野外也画
         -- (投影坐标由 GPU 裁剪, 但线的方向可见, 可指引屏幕外物品方位)
         etherDrawThinLine(sx, sy, psx, psy + 60, 1, 0.78, 0.35, 0.8);
