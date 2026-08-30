@@ -794,7 +794,18 @@ public class EtherAPI {
             if (var2.getHaveBeenRepaired() > 1) {
                 var2.setHaveBeenRepaired(1);
             }
-            if (var2.getCondition() != var2.getConditionMax() || var2.getHaveBeenRepaired() > 1) {
+            // 头部状况(Attribute.HeadCondition, 斧/锤类第二耐久条)与 condition 独立存储:
+            // 归零时 vanilla 级联 setCondition(0) 报废武器, 且原版全 jar 无任何恢复途径
+            // (只有生成/合成/管理员面板会写该字段); 服务端每命中独立 roll 掉头
+            // (headConditionCheck), 与握柄耐久同款 last-writer-wins 拉回。
+            // setHeadCondition 对无头部耐久物品内部直接 return, 设 max 不触发归零级联(仅 ≤0 级联)。
+            boolean headRestored = var2.hasHeadCondition() && var2.getHeadCondition() != var2.getHeadConditionMax();
+            if (headRestored) {
+                var2.setHeadCondition(var2.getHeadConditionMax());
+            }
+            // 发包触发必须纳入头部变化: 纯掉头不掉柄时 condition 恒满, 只看 condition 会漏发,
+            // 多人下头部修复不生效(SyncItemFields 两端都携带 headCondition, 服务端零校验采纳)
+            if (headRestored || var2.getCondition() != var2.getConditionMax() || var2.getHaveBeenRepaired() > 1) {
                 var2.setCondition(var2.getConditionMax());
                 var2.syncItemFields();
             }
@@ -868,6 +879,9 @@ public class EtherAPI {
             for (InventoryItem var5 : var7) {                if (var5 == null) continue;
                 boolean isClothingTarget = this.isRepairClothing && var5 instanceof Clothing && var5.getVisual() instanceof ItemVisual;
                 boolean conditionChanged = (this.isAutoRepairItems || isClothingTarget) && var5.getCondition() != var5.getConditionMax();
+                // 头部状况(斧/锤类第二耐久条)与 condition 独立: 归零时 vanilla 级联 setCondition(0)
+                // 报废武器, 原版无任何恢复途径; 服务端每命中独立 roll 掉头, last-writer-wins 拉回
+                boolean headChanged = this.isAutoRepairItems && var5.hasHeadCondition() && var5.getHeadCondition() != var5.getHeadConditionMax();
                 if (this.isAutoRepairItems) {
                     if (var5.isBroken()) {
                         var5.setBroken(false);
@@ -882,6 +896,12 @@ public class EtherAPI {
                     }
                     if (var5.isInfected()) {
                         var5.setInfected(false);
+                    }
+                    // 先修头再拉锋利: 锋利上限 = 头部百分比, 头部未修时拉锋利会被钳在低上限
+                    // (头部归零时甚至直接钳到 0 → 伤害减半); setHeadCondition 对无头部耐久
+                    // 物品内部直接 return, 设 max 不触发归零级联(仅 ≤0 级联)
+                    if (headChanged) {
+                        var5.setHeadCondition(var5.getHeadConditionMax());
                     }
                     if (var5.hasSharpness() && var5.getSharpness() < var5.getMaxSharpness()) {
                         var5.applyMaxSharpness();
@@ -923,7 +943,7 @@ public class EtherAPI {
                 if (visualChanged) {
                     anyClothingChanged = true;
                 }
-                if ((conditionChanged || visualChanged) && GameClient.client) {
+                if ((conditionChanged || headChanged || visualChanged) && GameClient.client) {
                     var5.syncItemFields();
                 }
             }

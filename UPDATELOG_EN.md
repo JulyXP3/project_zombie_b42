@@ -40,6 +40,7 @@
 - UI: the "Attack speed" label shortened to "Attack speed (1-3)"; the input box and buttons now sit right next to the label (matching the crop-management row).
 - UI: the "Items" nav tile is now labeled "Items(SP)" (all languages) — item spawning on that page is single-player only; use the Trap tab in multiplayer.
 - Fixed: switching the language had no effect — the panel-reuse cache kept the old-language texts; language switching and "Reset to defaults" now redraw every page with the new language and settings.
+- Feature: "Unlimited condition (held item)" and "Auto-repair items" now also restore a weapon's "Head condition" — the second durability bar of axe/hammer-type weapons; previously a head-broken weapon kept working but stayed at 0% head condition with halved damage, now both switches repair it automatically.
 - Build: version bumped to 3.2.0.
 
 ## [3.1.9]
