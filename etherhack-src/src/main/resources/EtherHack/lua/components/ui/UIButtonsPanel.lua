@@ -88,7 +88,8 @@ function UIButtonsPanel:openPanel(id)
 
     -- 实例缓存: 同一面板复用实例, 输入框内容/勾选状态/列表选中/拖动位置在切页后保留
     -- (修: 切页再回来输入内容丢失)。仅玩家状态变化 (主菜单 nil ↔ 游戏内对象) 时重建,
-    -- 避免缓存住失效的 localPlayer; 菜单整体重建 (世界↔主菜单/重置设置) 时缓存自然刷新。
+    -- 避免缓存住失效的 localPlayer; 菜单整体重建 (语言切换/重置设置) 时 OnOpenPanel
+    -- 的新建分支清空本缓存 —— 面板文字是构建时按当时语言/配置烘焙的, 必须全量重构建。
     UIButtonsPanel.panelCache = UIButtonsPanel.panelCache or {};
     local panel = UIButtonsPanel.panelCache[panelById];
     if panel ~= nil and panel.localPlayer ~= getPlayer() then

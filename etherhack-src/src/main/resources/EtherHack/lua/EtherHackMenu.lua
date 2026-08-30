@@ -179,6 +179,10 @@ function EtherMain.OnOpenPanel(key)
         end
 
         -- Создаем новую панель
+        -- 菜单重建 => 面板实例缓存全失效: 缓存面板的标题/说明文字是构建时按当时语言
+        -- 与配置烘焙的, 语言切换/重置设置重建菜单后复用旧实例会永远停在旧文案
+        -- (修: 切换语言不生效)。单纯开关菜单走上方可见性分支, 缓存保留 (保输入状态)。
+        UIButtonsPanel.panelCache = nil;
         EtherMain.instance  = EtherMain:new();
         EtherMain.instance:initialise();
         EtherMain.instance:instantiate();
