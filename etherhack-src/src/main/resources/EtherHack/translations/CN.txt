@@ -221,7 +221,7 @@
     UI_VisualsPanel_Group_Vehicles = "载具信息",
     UI_VisualsPanel_Group_Zombies = "僵尸信息",
     UI_VisualsPanel_Group_ItemInfo = "物品信息",
-    UI_VisualsPanel_DrawItemInfo = "显示搜索物品的世界标记 (先在雷达页搜索)",
+    UI_VisualsPanel_DrawItemInfo = "物品雷达 (先在雷达页搜索)",
     UI_VisualsPanel_IsVisualsEnable = "ESP总开关",
     UI_VisualsPanel_IsVisualsVehiclesEnable = "显示载具马力/极速",
     UI_VisualsPanel_IsVisualsZombiesEnable = "显示僵尸HP",

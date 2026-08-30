@@ -221,7 +221,7 @@
     UI_VisualsPanel_Group_Vehicles = "Информация о транспорте",
     UI_VisualsPanel_Group_Zombies = "Информация о зомби",
     UI_VisualsPanel_Group_ItemInfo = "Инфо о предметах",
-    UI_VisualsPanel_DrawItemInfo = "Показывать метки найденных предметов (сначала поиск во вкладке «Радар»)",
+    UI_VisualsPanel_DrawItemInfo = "Радар предметов (сначала поиск во вкладке «Радар»)",
     UI_VisualsPanel_IsVisualsEnable = "Главный выключатель ESP",
     UI_VisualsPanel_IsVisualsVehiclesEnable = "Мощность и макс. скорость транспорта",
     UI_VisualsPanel_IsVisualsZombiesEnable = "Показывать HP зомби",
