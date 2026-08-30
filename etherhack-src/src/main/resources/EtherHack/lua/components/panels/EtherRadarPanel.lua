@@ -60,9 +60,12 @@ function EtherRadarPanel:render()
         return
     end
 
-    -- 三处 UI 共用同一状态: 其它两处 (小地图按钮/ESP 模块) 切换后本页勾选框逐帧跟随
+    -- 两组独立开关: 其它入口 (小地图按钮/ESP 页勾选) 切换后本页勾选框逐帧跟随
     if self.showCb ~= nil then
-        self.showCb:setCheked(isMapDrawWorld());
+        self.showCb:setCheked(UIMap.drawItems and true or false);
+    end
+    if self.espCb ~= nil then
+        self.espCb:setCheked(isMapDrawItemEsp());
     end
     if self.statusText ~= nil and self.statusX ~= nil then
         local td = EtherTheme.textDim;
@@ -148,18 +151,11 @@ function EtherRadarPanel:drawDatas(y, item, alt)
 end
 
 --*********************************************************
---* 「在地图上显示」勾选: 总开关唯一入口 ——
---*   开 = 构建追踪目标 (选中项 > 过滤列表) + 扫描 + 三处 UI 同步生效;
---*   关 = 清标记, 小地图「物品」按钮变灰, ESP「物品信息」模块同步取消。
---* 无可追踪目标时不设开关: render 的逐帧 setCheked 会把勾选框弹回未勾。
+--* 两个勾选 (小地图标记 / ESP 画线追踪) 共用的目标构建 + 扫描:
+--* 选中项 > 过滤列表; 无可追踪目标时状态行提示并返回 false
+--* (render 的逐帧 setCheked 会把勾选框弹回未勾, 自愈)
 --*********************************************************
-function EtherRadarPanel:onShowMapToggled(checked)
-    if not checked then
-        EtherItemSearch.setEnabled(false);
-        self.statusText = nil;
-        return
-    end
-
+function EtherRadarPanel:ensureScan()
     local targetTypes = {};
     local nTargets = 0;
     local sel = self.datas.selected;
@@ -177,15 +173,39 @@ function EtherRadarPanel:onShowMapToggled(checked)
     end
     if nTargets == 0 then
         self.statusText = tr("UI_RadarPanel_SelectFirst");
-        return
+        return false;
     end
 
-    EtherItemSearch.setEnabled(true);   -- 先开总开关 (小地图/世界标记/两处 UI 同步)
     local nHits = EtherItemSearch.scan(targetTypes);
     if nHits == nil or nHits == 0 then
         self.statusText = tr("UI_ItemSearch_NoResults");
     else
         self.statusText = tr("UI_RadarPanel_StatusHits", { count = nHits });
+    end
+    return true;
+end
+
+-- 小地图标记: 与小地图「物品」快捷按钮同一 flag (drawItems, Java 持久化)
+function EtherRadarPanel:onShowMapToggled(checked)
+    if not checked then
+        EtherItemSearch.setMinimapEnabled(false);
+        self.statusText = nil;
+        return
+    end
+    if self:ensureScan() then
+        EtherItemSearch.setMinimapEnabled(true);
+    end
+end
+
+-- ESP 画线追踪: 与 ESP 页「物品雷达」勾选同一 flag (drawItemEsp, 会话级)
+function EtherRadarPanel:onEspToggled(checked)
+    if not checked then
+        EtherItemSearch.setItemEspEnabled(false);
+        self.statusText = nil;
+        return
+    end
+    if self:ensureScan() then
+        EtherItemSearch.setItemEspEnabled(true);
     end
 end
 
@@ -242,16 +262,17 @@ function EtherRadarPanel:createChildren()
     self:_text(innerX, sy + IP + rowH + EtherTheme.entryLabelDY, idT, EtherTheme.text, UIFont.Small);
     self:_group(PAD, sy, boxW, searchH);
 
-    -- ================= 底部: 勾选 + 说明 + 状态 =================
+    -- ================= 底部: 两个勾选 + 说明 + 状态 =================
+    -- 两组开关相互独立, 自由组合: 只小地图 / 小地图+画线 / 单独画线
     local cbTitle = getTranslate("UI_ItemSearch_ShowOnMap");
-    local cbY = 0; -- 占位, actY 定出后回填
+    local espTitle = getTranslate("UI_RadarPanel_EspLines");
     local hintLines = EtherTheme.wrapHint(getTranslate("UI_RadarPanel_Hint"), innerW);
     local hintH = #hintLines * EtherTheme.fontHgtHint;
-    local actH = ctrlH + IP + hintH + IP + fhS + IP;   -- 勾选行 + 说明块 + 状态行 (各带间距)
+    local actH = (ctrlH + GAP) * 2 + IP + hintH + IP + fhS + IP;   -- 勾选×2 + 说明块 + 状态行
     local actY = H - PAD - (actH + IP * 2);
 
-    cbY = actY + IP;
-    self.showCb = UICheckbox:new(innerX, cbY, cbTitle, isMapDrawWorld(), function(v)
+    local cbY = actY + IP;
+    self.showCb = UICheckbox:new(innerX, cbY, cbTitle, UIMap.drawItems and true or false, function(v)
         EtherRadarPanel.onShowMapToggled(self, v);
     end);
     self.showCb:initialise();
@@ -259,7 +280,16 @@ function EtherRadarPanel:createChildren()
     self.showCb.width = innerW;   -- 命中区域 = 整行
     self:addChild(self.showCb);
 
-    local hintY0 = cbY + ctrlH + IP;
+    local espY = cbY + ctrlH + GAP;
+    self.espCb = UICheckbox:new(innerX, espY, espTitle, isMapDrawItemEsp(), function(v)
+        EtherRadarPanel.onEspToggled(self, v);
+    end);
+    self.espCb:initialise();
+    self.espCb:instantiate();
+    self.espCb.width = innerW;
+    self:addChild(self.espCb);
+
+    local hintY0 = espY + ctrlH + IP;
     for i = 1, #hintLines do
         self:_text(innerX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, hintLines[i], EtherTheme.textDim, nil, true);
     end

@@ -69,7 +69,7 @@ function UIMap.ensureDrawFlags()
     UIMap.drawAllPlayers = isMapDrawAllPlayers();
     UIMap.drawLocalPlayer = isMapDrawLocalPlayer();
     UIMap.drawItems = isMapDrawItems();
-    UIMap.drawWorld = UIMap.drawItems; -- 世界标记与物品标记同一总开关 (雷达页勾选/ESP 模块/小地图按钮三处同步)
+    UIMap.drawItemEsp = false; -- ESP 画线追踪 (世界画面雷达线): 会话级, 独立于小地图标记
 end
 
 function UIMap:render() 

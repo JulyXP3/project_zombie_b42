@@ -33,8 +33,8 @@ function UIMovableMiniMap:createChildren()
     for _, d in ipairs(defs) do
         local b = ISButton:new(bx, 20, 48, 18, getTranslate(d[1]), self, function(self, button)
             if button.toggleKey == "drawItems" then
-                -- 物品标记 = 雷达总开关唯一入口: 小地图标记/世界标记/雷达页勾选三处同步
-                EtherItemSearch.setEnabled(not UIMap.drawItems);
+                -- 物品按钮只管小地图标记; ESP 画线在 ESP 页/雷达页独立开关
+                EtherItemSearch.setMinimapEnabled(not UIMap.drawItems);
                 return
             end
             UIMap[button.toggleKey] = not UIMap[button.toggleKey];

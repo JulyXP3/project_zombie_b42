@@ -12,7 +12,7 @@ require "ISUI/ISPanel"
 --*   5 个复选框降为数据表 + 循环; 状态改为实例级。
 --*
 --* 红线 (零功能影响): toggleMapDrawLocalPlayer / isMapDrawLocalPlayer 等开关契约,
---*   setMapDrawItems / EtherItemSearch.setEnabled / UIMap.* / UIMovableMiniMap.openPanel
+--*   setMapDrawItems / EtherItemSearch.setMinimapEnabled / UIMap.* / UIMovableMiniMap.openPanel
 --*   的名称与参数一律未改。
 --*********************************************************
 EtherMapPanel = EtherFormPanel:derive("EtherMapPanel");
@@ -60,9 +60,8 @@ local function drawToggles()
             key = "UI_Map_DrawItems", flag = "drawItems",
             get = function() return UIMap.drawItems; end,
             on = function(isChecked)
-                UIMap.drawItems = isChecked;
-                EtherItemSearch.setEnabled(isChecked);
-                setMapDrawItems(isChecked);
+                -- 与小地图「物品」按钮同一落点: 只管小地图标记 (ESP 画线独立开关)
+                EtherItemSearch.setMinimapEnabled(isChecked);
             end,
         },
     };

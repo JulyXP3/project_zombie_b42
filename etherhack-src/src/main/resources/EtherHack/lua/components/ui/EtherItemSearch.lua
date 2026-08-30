@@ -273,41 +273,46 @@ end
 --* 重新开启时立即按上次目标静默重扫
 --*********************************************************
 --*********************************************************
---* 物品标记总开关 (唯一入口): 小地图标记渲染 + 世界标记 + 小地图「物品」快捷按钮
---* + ESP「物品信息」模块 + 雷达页「在地图上显示」勾选, 全部镜像同一状态;
---* Java 侧 setMapDrawItems 持久化, 重启记忆
+--* 两组独立开关 (雷达页两个勾选 / ESP 页「物品雷达」勾选 / 小地图「物品」按钮 的落点):
+--*   setMinimapEnabled = 小地图标记 (UIMap.drawItems, Java setMapDrawItems 持久化)
+--*   setItemEspEnabled = ESP 画线追踪 (UIMap.drawItemEsp, 会话级)
+--* 关掉某一组时若另一组仍开, 扫描结果保留 (画线仍需要); 两组全关才清结果停轮询
 --*********************************************************
-function EtherItemSearch.setEnabled(enabled)
+function EtherItemSearch.setMinimapEnabled(enabled)
     UIMap.ensureDrawFlags();
     UIMap.drawItems = enabled;   -- 小地图标记渲染 + 快捷按钮灰白 (逐帧读取, 天然同步)
-    UIMap.drawWorld = enabled;   -- 世界标记 (drawWorldMarkers 逐帧读取)
     setMapDrawItems(enabled);    -- Java 持久化
-    if enabled then
-        if EtherItemSearch.lastTargets ~= nil then
-            EtherItemSearch.scan(EtherItemSearch.lastTargets, true);
-        end
-    else
-        EtherItemSearch.results = nil;
-        EtherItemSearch.refreshPending = false;
+    if not enabled and not UIMap.drawItemEsp then
+        EtherItemSearch.clear();
+    end
+end
+
+function EtherItemSearch.setItemEspEnabled(enabled)
+    UIMap.ensureDrawFlags();
+    UIMap.drawItemEsp = enabled; -- 世界画面雷达线 (drawWorldMarkers 逐帧读取)
+    if not enabled and not UIMap.drawItems then
+        EtherItemSearch.clear();
     end
 end
 
 --*********************************************************
---* 物品标记总开关的全局封装: ESP 页「物品信息」勾选模块 / 雷达页「在地图上显示」
---* 勾选 / 小地图「物品」快捷按钮 三处共用同一状态, 任意一处切换全部实时同步
+--* 物品追踪两组独立开关的全局封装 (ESP 页「物品雷达」勾选 / 雷达页勾选共用):
+--*   小地图标记 = UIMap.drawItems (Java setMapDrawItems 持久化, 小地图「物品」按钮同 flag)
+--*   ESP 画线   = UIMap.drawItemEsp (会话级)
+--* 两组自由组合: 只小地图 / 小地图+画线 / 单独画线
 --*********************************************************
-function isMapDrawWorld()
+function isMapDrawItemEsp()
     UIMap.ensureDrawFlags();
-    return UIMap.drawWorld and true or false;
+    return UIMap.drawItemEsp and true or false;
 end
 
-function toggleMapDrawWorld(v)
-    EtherItemSearch.setEnabled(v and true or false);
+function toggleMapDrawItemEsp(v)
+    EtherItemSearch.setItemEspEnabled(v and true or false);
 end
 
 --*********************************************************
 --* 世界标记 (ESP): 搜索结果存续期间, 把每个命中位置画在世界画面上
---* 开关: UIMap.drawWorld (小地图快捷按钮「世界」, 会话级默认关)
+--* 开关: UIMap.drawItemEsp (ESP 页「物品雷达」勾选 / 雷达页「ESP 画线追踪」, 会话级默认关)
 --* 通道: Events.OnPostUIDraw 逐帧事件 —— 与 Java 版 ESP (EtherAPI.updateVisuals)
 --*       同一事件; 原版 LastStand/TutorialSetup 有 Lua 订阅先例, 无需任何面板
 --* 投影: IsoUtils.XToScreen/YToScreen + getZoom/相机偏移/瓦片高度修正,
@@ -317,7 +322,7 @@ end
 --*       暂存数组跨帧复用, 仅结果清空时重建
 --* 留痕: 纯客户端渲染, 零网络包零日志
 --*********************************************************
-EtherItemSearch.worldDrawRadius = 32;  -- 世界标记绘制半径(格), 太远的在屏幕外画了也看不见
+EtherItemSearch.worldDrawRadius = 150; -- 雷达线半径(格), 与僵尸/载具雷达同款 150; 结果本身来自 48 格扫描, 实际不超过 ~53
 EtherItemSearch.worldMaxMarkers = 60;  -- 单帧最多绘制条数, 命中洪峰时取最近的
 EtherItemSearch._worldProbe = nil;     -- nil=未探测; true=投影可用; false=投影原语不可达(自动禁用, 不影响其它功能)
 
@@ -361,7 +366,7 @@ local function worldToScreen(x, y, z)
 end
 
 local function drawWorldMarkers()
-    if not UIMap.drawWorld then return end
+    if not UIMap.drawItemEsp then return end
     local results = EtherItemSearch.results;
     -- 注意: PZ 的 Kahlua 环境没有裸 next(), 只有 pairs/ipairs —— 用 # 判空
     if results == nil or #results == 0 then return end
@@ -402,16 +407,34 @@ local function drawWorldMarkers()
         local idx = (order ~= nil) and order[i] or i;
         local p = scratchP[idx];
         local sx, sy = worldToScreen(p.x + 0.5, p.y + 0.5, (p.z or 0) + 0.4);
+        -- 雷达线: 物品 → 人物头顶 (+60 垂直偏移), 与载具/僵尸雷达同款 —— 视野外也画
+        -- (投影坐标由 GPU 裁剪, 但线的方向可见, 可指引屏幕外物品方位)
+        etherDrawThinLine(sx, sy, psx, psy + 60, 1, 0.78, 0.35, 0.8);
+
         if sx > -160 and sy > -20 and sx < sw and sy < sh then
-            -- 雷达线: 物品 → 人物头顶 (+60 垂直偏移), 与载具/僵尸雷达同款细线, 琥珀色同文字
-            etherDrawThinLine(sx, sy, psx, psy + 60, 1, 0.78, 0.35, 0.8);
-            local dist = math.floor(math.sqrt(scratchD2[idx]));
-            local text = p.name .. " ×" .. p.count .. " (" .. dist .. "m)";
+            -- 物品侧文字: 名称 ×数量 (距离画在人物端线上, 不在此处)
+            local text = p.name .. " ×" .. p.count;
             local tx = sx - tm:MeasureStringX(UIFont.Small, text) / 2;
             -- 阴影 + 主字双层, 与 ESP 文字同款画法; 琥珀色区别于僵尸红/载具白
             -- DrawString 用 8 参无缩放形式 (原版先例), 不赌 9 参重载分派
             tm:DrawString(UIFont.Small, tx + 1, sy + 1, text, 0, 0, 0, 0.9);
             tm:DrawString(UIFont.Small, tx, sy, text, 1, 0.78, 0.35, 1);
+        end
+
+        -- 距离数字: 画在靠近人物端的线上 (公式与 Java 载具/僵尸雷达逐句一致:
+        -- 钳位距离/线长像素 → 沿线比例定位, 数字贴近人物端)
+        local dist = math.floor(math.sqrt(scratchD2[idx]));
+        local dc = math.max(30, math.min(150, dist));
+        local ddx, ddy = sx - psx, sy - (psy + 60);
+        local dlen = math.sqrt(ddx * ddx + ddy * ddy);
+        if dlen > 1 then
+            local ratio = dc / dlen;
+            local nx = psx + ratio * ddx;
+            local ny = (psy + 60) + ratio * ddy;
+            local dtext = tostring(dist);
+            local ntx = nx - tm:MeasureStringX(UIFont.Small, dtext) / 2;
+            tm:DrawString(UIFont.Small, ntx + 1, ny + 1, dtext, 0, 0, 0, 0.9);
+            tm:DrawString(UIFont.Small, ntx, ny, dtext, 1, 0.78, 0.35, 1);
         end
     end
     for i = 1, cnt do scratchD2[i] = nil; scratchP[i] = nil; end

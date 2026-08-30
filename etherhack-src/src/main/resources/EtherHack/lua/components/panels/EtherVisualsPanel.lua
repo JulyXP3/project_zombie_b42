@@ -112,11 +112,11 @@ function EtherVisualsPanel:build()
             },
         },
         {
-            -- 物品信息 (2026-08-30): 物品雷达搜索结果的世界标记开关,
-            -- 状态与小地图快捷按钮「世界」共用 (UIMap.drawWorld), 需先在物品页搜索
+            -- 物品雷达 (2026-08-30): 世界画面物品追踪线, 与小地图标记相互独立
+            -- (状态 UIMap.drawItemEsp, 需先在物品雷达页搜索构建追踪目标)
             title = "UI_VisualsPanel_Group_ItemInfo",
             items = {
-                { key = "UI_VisualsPanel_DrawItemInfo", on = toggleMapDrawWorld, get = isMapDrawWorld },
+                { key = "UI_VisualsPanel_DrawItemInfo", on = toggleMapDrawItemEsp, get = isMapDrawItemEsp },
             },
         },
     };
