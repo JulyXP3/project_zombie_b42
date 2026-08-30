@@ -509,6 +509,7 @@ public class EtherAPI {
         this.exposer.exposeAPI(protectedMethods);
         this.exposer.exposeServerSyncBlocker();
         this.exposer.exposeTrapSpawn();
+        this.exposer.exposeRenderingAPI();
         this.initializeProtectedState();
     }
 
@@ -1293,6 +1294,19 @@ public class EtherAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, TrapSpawnAPI.class, method, name);
                 Logger.printLog("Exposed TrapSpawnAPI method: " + name);
+            }
+        }
+
+        public void exposeRenderingAPI() {
+            for (Method method : RenderingAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, RenderingAPI.class, method, name);
+                Logger.printLog("Exposed RenderingAPI method: " + name);
             }
         }
 

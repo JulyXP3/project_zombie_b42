@@ -320,7 +320,6 @@ end
 EtherItemSearch.worldDrawRadius = 32;  -- 世界标记绘制半径(格), 太远的在屏幕外画了也看不见
 EtherItemSearch.worldMaxMarkers = 60;  -- 单帧最多绘制条数, 命中洪峰时取最近的
 EtherItemSearch._worldProbe = nil;     -- nil=未探测; true=投影可用; false=投影原语不可达(自动禁用, 不影响其它功能)
-EtherItemSearch._playerIndex = nil;    -- 渲染玩家索引 (启动后探测一次, 失败回退 0, 单人/多人客户端均正确)
 
 local scratchD2 = {};  -- 可见命中距离平方暂存 (跨帧复用)
 local scratchP = {};   -- 可见命中结果引用暂存
@@ -328,7 +327,6 @@ local scratchP = {};   -- 可见命中结果引用暂存
 local function worldProbeOk()
     if EtherItemSearch._worldProbe ~= nil then return EtherItemSearch._worldProbe end
     local ok = pcall(function()
-        local v = IsoCamera.frameState.playerIndex;  -- 类/字段不可达会在此抛错
         IsoUtils.XToScreen(0.5, 0.5, 0, 0);
         IsoUtils.YToScreen(0.5, 0.5, 0, 0);
         IsoCamera.getOffX();
@@ -341,7 +339,7 @@ local function worldProbeOk()
         tm:MeasureStringX(UIFont.Small, "0");
         -- 8 参无缩放形式 (原版 DebugDemoTime 同款), 不赌 9 参重载的 Kahlua 分派
         tm:DrawString(UIFont.Small, 0, 0, "0", 0, 0, 0, 0);
-        EtherItemSearch._playerIndex = (type(v) == "number") and v or 0;
+        etherDrawThinLine(0, 0, 0, 0, 0, 0, 0, 0);  -- Java 暴露的画线原语 (RenderingAPI, 雷达线)
     end);
     EtherItemSearch._worldProbe = ok;
     if not ok then
@@ -350,10 +348,13 @@ local function worldProbeOk()
     return ok;
 end
 
-local function worldToScreen(x, y, z, pi)
-    local sx = IsoUtils.XToScreen(x, y, z, pi);
-    local sy = IsoUtils.YToScreen(x, y, z, pi);
-    local zoom = getCore():getZoom(pi);
+local function worldToScreen(x, y, z)
+    -- 玩家索引恒 0: IsoCamera.frameState.playerIndex 是 Java 公开字段, Kahlua 只暴露
+    -- 方法不暴露字段 (实测 "attempted index: playerIndex of non-table"); 单人/多人客户端
+    -- 该索引均为 0, 仅分屏非 0 (本 mod 不支持分屏) —— 与 Java 侧 ZombieUtils 行为一致
+    local sx = IsoUtils.XToScreen(x, y, z, 0);
+    local sy = IsoUtils.YToScreen(x, y, z, 0);
+    local zoom = getCore():getZoom(0);
     sx = (sx - IsoCamera.getOffX()) / zoom;
     sy = (sy - IsoCamera.getOffY() - 128 / (2 / Core.getTileScale())) / zoom;
     return sx, sy;
@@ -368,8 +369,9 @@ local function drawWorldMarkers()
     if player == nil then return end
     if not worldProbeOk() then return end
 
-    local pi = EtherItemSearch._playerIndex or 0;
-    local px, py = player:getX(), player:getY();
+    local px, py, pz = player:getX(), player:getY(), player:getZ();
+    -- 人物屏幕锚点: 雷达线起点 (与 Java 侧载具/僵尸雷达同款, 线连到人物头顶 +60)
+    local psx, psy = worldToScreen(px, py, pz);
     local r2max = EtherItemSearch.worldDrawRadius * EtherItemSearch.worldDrawRadius;
     local maxN = EtherItemSearch.worldMaxMarkers;
 
@@ -399,8 +401,10 @@ local function drawWorldMarkers()
     for i = 1, n do
         local idx = (order ~= nil) and order[i] or i;
         local p = scratchP[idx];
-        local sx, sy = worldToScreen(p.x + 0.5, p.y + 0.5, (p.z or 0) + 0.4, pi);
+        local sx, sy = worldToScreen(p.x + 0.5, p.y + 0.5, (p.z or 0) + 0.4);
         if sx > -160 and sy > -20 and sx < sw and sy < sh then
+            -- 雷达线: 物品 → 人物头顶 (+60 垂直偏移), 与载具/僵尸雷达同款细线, 琥珀色同文字
+            etherDrawThinLine(sx, sy, psx, psy + 60, 1, 0.78, 0.35, 0.8);
             local dist = math.floor(math.sqrt(scratchD2[idx]));
             local text = p.name .. " ×" .. p.count .. " (" .. dist .. "m)";
             local tx = sx - tm:MeasureStringX(UIFont.Small, text) / 2;
