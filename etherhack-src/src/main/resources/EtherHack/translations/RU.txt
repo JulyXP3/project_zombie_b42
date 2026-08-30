@@ -282,6 +282,8 @@
     UI_RadarPanel_StatusHits = "Найдено: {count}",
     UI_RadarPanel_SelectFirst = "Сначала найдите или выберите предмет",
     UI_RadarPanel_EspLines = "Линии ESP",
+    UI_RadarPanel_FloorUp = "этажом выше",
+    UI_RadarPanel_FloorDown = "этажом ниже",
     UI_RadarPanel_Hint = "Два переключателя независимы: «Показать на карте» = метки миникарты, «Линии ESP» = линии радара в мире; цель = выбранный предмет или весь отфильтрованный список; после повторного включения восстанавливается последняя цель",
     UI_LootRoll_RadiusLabel = "Радиус сброса:",
     UI_LootRoll_Button = "Сбросить лут (F9)",

@@ -282,6 +282,8 @@
     UI_RadarPanel_StatusHits = "Hits: {count}",
     UI_RadarPanel_SelectFirst = "Search or select an item first",
     UI_RadarPanel_EspLines = "ESP tracking lines",
+    UI_RadarPanel_FloorUp = "upstairs",
+    UI_RadarPanel_FloorDown = "downstairs",
     UI_RadarPanel_Hint = "The two switches are independent: 'Show on map' = minimap markers, 'ESP tracking lines' = world-view radar lines; tracking target = the selected item, or the whole filtered list if none selected; re-enabling after turning both off restores the last tracking targets",
     UI_LootRoll_RadiusLabel = "Reset radius:",
     UI_LootRoll_Button = "Reset loot (F9)",

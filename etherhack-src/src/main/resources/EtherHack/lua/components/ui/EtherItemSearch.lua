@@ -13,7 +13,7 @@
 --* 刷新: 事件驱动而非定时器 —— OnPlayerUpdate 每 tick:
 --*       1. 比较玩家背包物品数 (getItems():size() 一次调用), 有变化置"脏",
 --*          安静满 1 秒才真正重扫一次 (防抖: 连续转移物品期间 0 次扫描);
---*       2. 比较玩家位置, 走出 5 格且距上次扫描 ≥3 秒即静默重扫 (标记跟随角色)。
+--*       2. 比较玩家位置, 走出 5 格且距上次扫描 ≥4 秒即静默重扫 (标记跟随角色)。
 --*       空闲零开销, 拾取/丢弃物品停手后标记一次性刷新到位。
 --* 注意: 禁止 "obj:getItem ~= nil" 这类索引式方法探测 (Kahlua2 不可靠),
 --*       一律直接调用或 pcall 兜底
@@ -21,14 +21,14 @@
 EtherItemSearch = EtherItemSearch or {};
 
 EtherItemSearch.results = nil; -- { {x=.., y=.., z=.., name=.., count=..}, ... } 命中位置列表 (z=楼层, name=首个命中物品显示名, 与世界标记共用)
-EtherItemSearch.radius = 64;   -- 扫描半径(格), 仅覆盖玩家周围已加载区域 (48→64: 每次扫描耗时 ~1.78 倍, 5 万格/次; 配合移动重扫间隔放宽到 3 秒)
+EtherItemSearch.radius = 56;   -- 扫描半径(格), 仅覆盖玩家周围已加载区域 (48→56→实测回调: 64 卡, 56 + 4 秒重扫间隔定稿)
 EtherItemSearch.lastTargets = nil;    -- 上次扫描目标, 供自动刷新复用
 EtherItemSearch.debounceMs = 1000;    -- 防抖: 背包变动后安静满 1 秒才重扫
 EtherItemSearch.refreshPending = false; -- 待重扫标记
 EtherItemSearch.lastChangeAt = 0;     -- 最后一次背包变动时刻
 EtherItemSearch.lastScanAt = 0;       -- 上次扫描时刻
 EtherItemSearch.moveRefreshTiles = 5; -- 玩家走出 N 格触发移动重扫
-EtherItemSearch.moveRefreshMs = 3000; -- 移动重扫最小间隔 (连续奔跑也不超过 1 次/3 秒; 64 格扫描 ~1.78 倍耗时, 间隔同步放宽)
+EtherItemSearch.moveRefreshMs = 4000; -- 移动重扫最小间隔 (连续奔跑也不超过 1 次/4 秒; 64 格实测卡, 回调 56 后进一步放宽)
 EtherItemSearch._scanX = nil;         -- 上次扫描时的玩家位置
 EtherItemSearch._scanY = nil;
 
@@ -232,7 +232,7 @@ local function onPlayerUpdate(player)
         end
     end
 
-    -- 移动刷新: 走出 5 格且距上次扫描 ≥3 秒 -> 静默重扫, 标记跟随角色
+    -- 移动刷新: 走出 5 格且距上次扫描 ≥4 秒 -> 静默重扫, 标记跟随角色
     if EtherItemSearch._scanX ~= nil then
         local dx = player:getX() - EtherItemSearch._scanX;
         local dy = player:getY() - EtherItemSearch._scanY;
@@ -317,7 +317,7 @@ end
 --*       暂存数组跨帧复用, 仅结果清空时重建
 --* 留痕: 纯客户端渲染, 零网络包零日志
 --*********************************************************
-EtherItemSearch.worldDrawRadius = 150; -- 雷达线半径(格), 与僵尸/载具雷达同款 150; 结果本身来自 64 格扫描, 实际不超过 ~69
+EtherItemSearch.worldDrawRadius = 150; -- 雷达线半径(格), 与僵尸/载具雷达同款 150; 结果本身来自 56 格扫描, 实际不超过 ~61
 EtherItemSearch.worldMaxMarkers = 60;  -- 单帧最多绘制条数, 命中洪峰时取最近的
 EtherItemSearch._worldProbe = nil;     -- nil=未探测; true=投影可用; false=投影原语不可达(自动禁用, 不影响其它功能)
 
@@ -407,8 +407,16 @@ local function drawWorldMarkers()
         etherDrawThinLine(sx, sy, psx, psy + 60, 1, 0.78, 0.35, 0.8);
 
         if sx > -160 and sy > -20 and sx < sw and sy < sh then
-            -- 物品侧文字: 名称 ×数量 (距离画在人物端线上, 不在此处)
-            local text = p.name .. " ×" .. p.count;
+            -- 物品侧文字: 名称 x数量 + 楼层 (z 相对玩家: 楼上/楼下, 同层不标 —— 修"分不清哪层楼")
+            -- 数量分隔用 ASCII x: 游戏 Small 字体缺 × 字形, 实测渲染成空白 (实机截图 "扳手 1")
+            local dz = (p.z or 0) - pz;
+            local floorTag = "";
+            if dz > 0 then
+                floorTag = " " .. tr("UI_RadarPanel_FloorUp");
+            elseif dz < 0 then
+                floorTag = " " .. tr("UI_RadarPanel_FloorDown");
+            end
+            local text = p.name .. " x" .. p.count .. floorTag;
             local tx = sx - tm:MeasureStringX(UIFont.Small, text) / 2;
             -- 阴影 + 主字双层, 与 ESP 文字同款画法; 琥珀色区别于僵尸红/载具白
             -- DrawString 用 8 参无缩放形式 (原版先例), 不赌 9 参重载分派

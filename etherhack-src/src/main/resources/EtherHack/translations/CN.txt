@@ -282,6 +282,8 @@
     UI_RadarPanel_StatusHits = "命中 {count} 处",
     UI_RadarPanel_SelectFirst = "请先搜索或选择物品",
     UI_RadarPanel_EspLines = "ESP 画线追踪",
+    UI_RadarPanel_FloorUp = "楼上",
+    UI_RadarPanel_FloorDown = "楼下",
     UI_RadarPanel_Hint = "两个开关相互独立: 「在地图上显示」= 小地图标记, 「ESP 画线追踪」= 世界画面雷达线; 追踪目标 = 选中的物品, 未选中则为整个过滤列表; 全关后重新开启会恢复上次的追踪目标",
     UI_LootRoll_RadiusLabel = "重置半径:",
     UI_LootRoll_Button = "重置战利品(F9)",
