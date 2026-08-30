@@ -3,7 +3,7 @@
     UI_Title_Notice = "免费开源 · 如果你买了就是被骗了",
     UI_Nav_Info = "信息",
     UI_Nav_Character = "角色",
-    UI_Nav_Items = "物品",
+    UI_Nav_Items = "物品(SP)",
     UI_Nav_Radar = "物品雷达",
     UI_Nav_Traps = "陷阱",
     UI_Nav_Player = "玩家",

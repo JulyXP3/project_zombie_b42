@@ -3,7 +3,7 @@
     UI_Title_Notice = "Free & Open Source · If you paid for it, you got scammed",
     UI_Nav_Info = "Info",
     UI_Nav_Character = "Character",
-    UI_Nav_Items = "Items",
+    UI_Nav_Items = "Items(SP)",
     UI_Nav_Radar = "Item Radar",
     UI_Nav_Traps = "Traps",
     UI_Nav_Player = "Player",

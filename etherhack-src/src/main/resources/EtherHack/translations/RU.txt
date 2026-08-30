@@ -3,7 +3,7 @@
     UI_Title_Notice = "Бесплатно и с открытым кодом · Если вы заплатили — вас обманули",
     UI_Nav_Info = "Инфо",
     UI_Nav_Character = "Персонаж",
-    UI_Nav_Items = "Предметы",
+    UI_Nav_Items = "Предметы(SP)",
     UI_Nav_Radar = "Радар",
     UI_Nav_Traps = "Ловушки",
     UI_Nav_Player = "Игрок",
