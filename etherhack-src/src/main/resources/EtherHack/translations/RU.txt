@@ -261,6 +261,7 @@
     UI_Settings_ConfigSave = "Сохранить",
     UI_Settings_ConfigLoad = "Загрузить",
     UI_Settings_ConfigDelete = "Удалить",
+    UI_Settings_ResetDefaults = "Сброс настроек",
     UI_Settings_AccentColor = "Акцентный цвет",
     UI_Settings_VehicleColor = "Цвет для отрисовки UI элементов транспорта",
     UI_Settings_PlayersColor = "Цвет для отрисовки UI элементов игроков",

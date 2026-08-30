@@ -287,6 +287,15 @@ public class EtherAPI {
             Logger.printLog("The config file was not found. Loading canceled.");
             return;
         }
+        this.applyConfig(var3);
+    }
+
+    /** 恢复出厂默认: 空 Properties → 所有键走缺省分支 (四色/全部开关/编译选项/建号名单) */
+    public void resetConfig() {
+        this.applyConfig(new Properties());
+    }
+
+    private void applyConfig(Properties var3) {
         this.mainUIAccentColor = ConfigUtils.getColorFromConfig(var3, "mainUIAccentColor", new Color(72, 216, 168));
         this.vehiclesUIColor = ConfigUtils.getColorFromConfig(var3, "vehiclesUIColor", new Color(150, 150, 200));
         this.zombiesUIColor = ConfigUtils.getColorFromConfig(var3, "zombiesUIColor", new Color(255, 150, 100));

@@ -695,6 +695,12 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    /** 恢复出厂默认设置 (设置页「重置默认设置」按钮): 走 loadConfig 缺省分支, Lua 侧随后 saveConfig("startup") 落盘 */
+    @LuaMethod(name="resetConfig", global=true)
+    public static void resetConfig() {
+        EtherMain.getInstance().etherAPI.resetConfig();
+    }
+
     @LuaMethod(name="resetWeaponsStats", global=true)
     public static void resetWeaponsStats() {
         EtherMain.getInstance().etherAPI.resetWeaponsStats();

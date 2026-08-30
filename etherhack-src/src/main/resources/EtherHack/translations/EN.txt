@@ -261,6 +261,7 @@
     UI_Settings_ConfigSave = "Save",
     UI_Settings_ConfigLoad = "Load",
     UI_Settings_ConfigDelete = "Delete",
+    UI_Settings_ResetDefaults = "Reset to defaults",
     UI_Settings_AccentColor = "Accent color",
     UI_Settings_VehicleColor = "Color for rendering vehicle UI elements",
     UI_Settings_PlayersColor = "Color for rendering players UI elements",

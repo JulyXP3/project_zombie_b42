@@ -119,6 +119,29 @@ function EtherSettingsPanel:build()
                 end,
                 canRun = function() return self:selectedConfig() ~= nil; end,
             },
+            {
+                -- 重置默认设置: 空配置走 loadConfig 缺省分支 (颜色/全部开关/编译选项/建号名单),
+                -- 写回 startup.properties 持久化; 语言与配置档案文件不动
+                key = "UI_Settings_ResetDefaults",
+                run = function()
+                    resetConfig();
+                    saveConfig("startup");
+                    -- Lua 侧镜像 flag 置空: 菜单重建后 ensureDrawFlags 从 Java 缺省重初始化
+                    UIMap.drawZombies = nil; UIMap.drawVehicles = nil; UIMap.drawAllPlayers = nil;
+                    UIMap.drawLocalPlayer = nil; UIMap.drawItems = nil; UIMap.drawItemEsp = nil;
+                    EtherMain.accentColor = {
+                        r = getAccentUIColor():getR(),
+                        g = getAccentUIColor():getG(),
+                        b = getAccentUIColor():getB(),
+                        a = 1.0,
+                    };
+                    -- 整菜单重建: 所有面板勾选框按默认值重画
+                    EtherMain.instance:removeFromUIManager();
+                    EtherMain.instance = nil;
+                    EtherMain.OnOpenPanel(EtherMain.menuKeyID);
+                end,
+                canRun = function() return true; end,
+            },
         };
 
         -- 实机定稿: 输入框在左吃剩余宽, 三个等宽按钮靠右;

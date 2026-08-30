@@ -261,6 +261,7 @@
     UI_Settings_ConfigSave = "保存",
     UI_Settings_ConfigLoad = "加载",
     UI_Settings_ConfigDelete = "删除",
+    UI_Settings_ResetDefaults = "重置默认设置",
     UI_Settings_AccentColor = "强调色",
     UI_Settings_VehicleColor = "载具 UI 元素渲染颜色",
     UI_Settings_PlayersColor = "玩家 UI 元素渲染颜色",
