@@ -21,14 +21,14 @@
 EtherItemSearch = EtherItemSearch or {};
 
 EtherItemSearch.results = nil; -- { {x=.., y=.., z=.., name=.., count=..}, ... } 命中位置列表 (z=楼层, name=首个命中物品显示名, 与世界标记共用)
-EtherItemSearch.radius = 48;   -- 扫描半径(格), 仅覆盖玩家周围已加载区域
+EtherItemSearch.radius = 56;   -- 扫描半径(格), 仅覆盖玩家周围已加载区域 (48→56 折中: 每次扫描耗时 ~1.36 倍, 换取更远追踪)
 EtherItemSearch.lastTargets = nil;    -- 上次扫描目标, 供自动刷新复用
 EtherItemSearch.debounceMs = 1000;    -- 防抖: 背包变动后安静满 1 秒才重扫
 EtherItemSearch.refreshPending = false; -- 待重扫标记
 EtherItemSearch.lastChangeAt = 0;     -- 最后一次背包变动时刻
 EtherItemSearch.lastScanAt = 0;       -- 上次扫描时刻
 EtherItemSearch.moveRefreshTiles = 5; -- 玩家走出 N 格触发移动重扫
-EtherItemSearch.moveRefreshMs = 2000; -- 移动重扫最小间隔 (连续奔跑也不超过 1 次/2 秒)
+EtherItemSearch.moveRefreshMs = 3000; -- 移动重扫最小间隔 (连续奔跑也不超过 1 次/3 秒; 56 格扫描 ~1.36 倍耗时, 间隔同步放宽)
 EtherItemSearch._scanX = nil;         -- 上次扫描时的玩家位置
 EtherItemSearch._scanY = nil;
 
