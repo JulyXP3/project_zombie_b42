@@ -144,7 +144,8 @@ end
 
 --*********************************************************
 --* 攻速倍率输入行 (标签 + 输入框 + 应用/重置), 摆进战斗模块盒内。
---* 布局与基类 addTextEntry 同规则: 放得下同排, 放不下标签独占一行;
+--* 控件紧贴标签 (作物管理半径行同款): 标签实测宽 + ctrlGap 起排输入框,
+--* 应用/重置依次续排, 不再右对齐到盒内右沿; 放不下时标签独占一行, 控件组贴左换行。
 --* 返回实际占用高度, 供模块高度预算先算一遍 (同一套判定, 结果一致)。
 --*********************************************************
 local function entryRowHeight(innerW)
@@ -154,7 +155,7 @@ local function entryRowHeight(innerW)
     local btnW = UIButton.measureGroupWidth({
         tr("UI_CharacterPanel_ApplyButton"), tr("UI_CharacterPanel_ResetButton") });
     local ctrlW = EtherFormPanel.ENTRY_W + (gap + btnW) * 2;
-    local twoLine = tm:MeasureStringX(UIFont.Small, title) + gap * 2 + ctrlW > innerW;
+    local twoLine = tm:MeasureStringX(UIFont.Small, title) + gap + ctrlW > innerW;
     if twoLine then
         return EtherTheme.fontHgtSmall + 4 + EtherTheme.entryH;
     end
@@ -168,7 +169,8 @@ local function placeEntryRow(panel, bx, by, innerW)
     local btnW = UIButton.measureGroupWidth({
         tr("UI_CharacterPanel_ApplyButton"), tr("UI_CharacterPanel_ResetButton") });
     local ctrlW = EtherFormPanel.ENTRY_W + (gap + btnW) * 2;
-    local twoLine = tm:MeasureStringX(UIFont.Small, title) + gap * 2 + ctrlW > innerW;
+    local labelW = tm:MeasureStringX(UIFont.Small, title);
+    local twoLine = labelW + gap + ctrlW > innerW;
 
     local rowH = EtherTheme.entryH;
     local ctrlY = twoLine and (by + EtherTheme.fontHgtSmall + 4) or by;
@@ -176,14 +178,15 @@ local function placeEntryRow(panel, bx, by, innerW)
     local label = EtherTheme.makeLabel(bx, by, labelRowH, title);
     panel:addChild(label);
 
-    local cx = bx + innerW - ctrlW;
-    if cx < bx then cx = bx; end
+    -- 紧贴排版: 输入框贴在标签右侧 (作物管理半径行同款), 应用/重置依次续排
+    local cx = twoLine and bx or (bx + labelW + gap);
+    local entryW = math.min(EtherFormPanel.ENTRY_W, bx + innerW - cx);
 
     local initial = 1.0;
     if type(getCombatSpeedMultiplier) == "function" then
         initial = getCombatSpeedMultiplier();
     end
-    local entry = ISTextEntryBox:new(tostring(initial), cx, ctrlY, EtherFormPanel.ENTRY_W, rowH);
+    local entry = ISTextEntryBox:new(tostring(initial), cx, ctrlY, entryW, rowH);
     EtherTheme.styleEntry(entry);
     entry:initialise();
     entry:instantiate();
@@ -199,7 +202,7 @@ local function placeEntryRow(panel, bx, by, innerW)
     entry.onTextChange = applyEntry;
     panel:addWidget(entry);
 
-    local bx2 = cx + EtherFormPanel.ENTRY_W + gap;
+    local bx2 = cx + entryW + gap;
     local applyBtn = UIButton:new(bx2, ctrlY + EtherTheme.entryBtnDY, btnW,
         EtherTheme.ctrlH, tr("UI_CharacterPanel_ApplyButton"), applyEntry, btnW);
     applyBtn:initialise();

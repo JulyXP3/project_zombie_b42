@@ -104,7 +104,7 @@
     UI_Exploit_BlockCompileLuaWithBadWords = "禁止执行含可疑词的文件",
     UI_Exploit_DebugBypass = "解锁调试权限(单人)",
     UI_CharacterBoostPanel_TraitPoints = "角色特性点数",
-    UI_Exploit_CombatSpeedMultiplierTitle = "攻速倍率 (1.0-3.0; >2.0有踢出风险)",
+    UI_Exploit_CombatSpeedMultiplierTitle = "攻速倍率(1-3)",
     UI_CharacterPanel_ResetButton = "重置",
     UI_CharacterPanel_ApplyButton = "应用",
     UI_Exploit_AdminAccessTitle = "尝试获取管理员权限(12型)",
