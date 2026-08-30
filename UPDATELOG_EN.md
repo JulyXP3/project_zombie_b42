@@ -23,6 +23,23 @@
 - Fixed: right-click context menu crash in some mods (e.g. Skill Recovery Journal).
 - Improved: the three execution-block toggles in the "Other" tab now persist across restarts; "Block files containing suspicious words" now defaults to off.
 - Added: "Unlimited ammo" now covers magazines in your backpack — all magazines auto-refill, no manual reloading.
+- Feature: "Trap" tab now has a weapon mode — spawn any melee weapon or firearm (multiplayer), with batch count; the original food mode is kept, one-click mode switch.
+- Added: "Pad worn clothing with leather strips" toggle — add max-level leather padding to all worn clothing, greatly improving bite/scratch/bullet protection (no materials or skill needed, SP and MP).
+- Added: item-radar "ESP tracking lines" — besides the minimap markers, searched items can be shown in the world view with tracking lines (name/count/floor/distance), drawn even off-screen, the distance labeled on the player's side of the line.
+- Fixed: searching an exact full item name (e.g. magazine titles containing parentheses) failed to match the item itself and could track a different item of the same series; a full name now locks onto exactly that item, and a selected list entry takes priority.
+- Rework: the "Items" page got a lighter single list (icon + name, no module sub-tabs, opens noticeably faster); "Show on map" moved to the new page.
+- Added: an "Item Radar" tab — browse and search the whole item database (name/ID); "Show on map" (minimap markers) and "ESP tracking lines" (world-view lines) are two independent switches, freely combinable (minimap only / both / lines only); "Show on map" stays in sync with the minimap "Item" button in real time.
+- Fixed: tracking-line endpoints and labels sat too high — they now point exactly at the item's position; cross-floor entries are labeled "upstairs/downstairs"; the count separator rendering blank is fixed.
+- Adjusted: the item radar tracking range is now 56 tiles, and the auto-refresh interval after moving is more relaxed — smoother overall.
+- Fixed: tracking markers disappearing after toggling the minimap "Item" button off and back on.
+- Fixed: the Trap tab hint text sitting too high; searching item names containing special characters on the Trap/Loot tabs failing to match.
+- UI: the Russian navigation label shortened so it no longer overflows the nav bar.
+- Improved: UI runtime overhead (no behavior change).
+- UI: switching to another tab and back no longer loses text input, checkbox states, list selection or minimap drag position.
+- Added: a "Reset to defaults" button in Settings — restores every setting (theme colors and all feature toggles) to defaults in one click.
+- UI: the "Attack speed" label shortened to "Attack speed (1-3)"; the input box and buttons now sit right next to the label (matching the crop-management row).
+- UI: the "Items" nav tile is now labeled "Items(SP)" (all languages) — item spawning on that page is single-player only; use the Trap tab in multiplayer.
+- Fixed: switching the language had no effect — the panel-reuse cache kept the old-language texts; language switching and "Reset to defaults" now redraw every page with the new language and settings.
 - Build: version bumped to 3.2.0.
 
 ## [3.1.9]
@@ -73,7 +90,6 @@
 ## [3.1.5]
 
 - Feature: "Trap" tab — search and spawn food (must stand next to a placed trap).
-- Feature: "Trap" tab now has a weapon category — mode switch spawns weapon-type items (auto-placed and collected, batch count), and is written to the server log.
 - Feature: F10 hotkey for container loot reset.
 - Changed: multi-hit, 360° vision and three anti-detection toggles now enabled by default.
 - Removed: item swapping — no viable server-side channel.
