@@ -231,7 +231,8 @@ function EtherInfoPanel:render()
                         local w = EtherTheme.hintWidth(ln.text);
                         local lx = (self.width - w) / 2;
                         table.insert(self.linkRects, { x = lx, y = iy, w = w, h = lhH, url = ln.url });
-                        self:drawLine(lx, iy + lhH - 1, lx + w, iy + lhH - 1, col.r, col.g, col.b, 0.7);
+                        -- 下划线走 drawRect 1px (B42 drawLine 首参要 Texture, EtherTheme 边线同款画法)
+                        self:drawRect(lx, iy + lhH - 1, w, 1, 0.7, col.r, col.g, col.b);
                     end
                     self:drawHintCentered(ln.text, iy, col);
                 end
