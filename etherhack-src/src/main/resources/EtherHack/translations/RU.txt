@@ -33,6 +33,7 @@
     UI_InformationPanel_AntiCheatStatus_CustomLogger = "Кастомная система логов: ",
     UI_InformationPanel_Contacts_Title = "Контактная информация",
     UI_InformationPanel_Contacts_Donation = "Пожертвования",
+    UI_InformationPanel_Contacts_Hint = "Нажмите на подчёркнутую ссылку, чтобы открыть её",
     UI_InformationPanel_AntiCheatStatus_Enable = "Включен",
     UI_InformationPanel_AntiCheatStatus_Disable = "Отключен",
     UI_InformationPanel_AntiCheatStatus_Format = "{label}[{value}]",
