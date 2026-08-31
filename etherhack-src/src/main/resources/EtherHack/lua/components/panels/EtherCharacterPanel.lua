@@ -9,7 +9,7 @@ require "ISUI/ISPanel"
 --*     盒底附说明: 需在「其他」页开启「解锁调试权限(单人)」, 仅单人有效
 --*     (B42 的 Role.isUsingDebugMode 显式排除联网客户端, 多人开关无效);
 --*   - 战斗强化: 秒杀/暴击Max/枪械只爆头/提高枪械射速/群攻/无限弹药/无卡壳
---*     + 攻速倍率输入行 (应用/重置, 手动摆进盒内);
+--*     + 攻速倍率/攻击距离加成输入行 (应用/重置, 手动摆进盒内);
 --*   - 物品与携带: 手中物品无限耐久/自动修理/无限负重(多人经 PlayerDamage
 --*     自报包周期上报, 服务端每帧重算由 20/s 重发压制);
 --*   - 特殊模式: 创造/夜视/真-夜视/僵尸不理会
@@ -143,14 +143,15 @@ local function placeGrid(panel, rows, bx, by, colW)
 end
 
 --*********************************************************
---* 攻速倍率输入行 (标签 + 输入框 + 应用/重置), 摆进战斗模块盒内。
+--* 数值输入行 (标签 + 输入框 + 应用/重置), 摆进所属模块盒内。
 --* 控件紧贴标签 (作物管理半径行同款): 标签实测宽 + ctrlGap 起排输入框,
 --* 应用/重置依次续排, 不再右对齐到盒内右沿; 放不下时标签独占一行, 控件组贴左换行。
+--* spec = { title, getInitial, minValue, maxValue, resetText, apply }。
 --* 返回实际占用高度, 供模块高度预算先算一遍 (同一套判定, 结果一致)。
 --*********************************************************
-local function entryRowHeight(innerW)
+local function entryRowHeight(innerW, titleKey)
     local tm = getTextManager();
-    local title = tr("UI_Exploit_CombatSpeedMultiplierTitle");
+    local title = tr(titleKey);
     local gap = EtherTheme.ctrlGap;
     local btnW = UIButton.measureGroupWidth({
         tr("UI_CharacterPanel_ApplyButton"), tr("UI_CharacterPanel_ResetButton") });
@@ -162,9 +163,9 @@ local function entryRowHeight(innerW)
     return math.max(EtherTheme.entryH, EtherTheme.ctrlH);
 end
 
-local function placeEntryRow(panel, bx, by, innerW)
+local function placeEntryRow(panel, bx, by, innerW, spec)
     local tm = getTextManager();
-    local title = tr("UI_Exploit_CombatSpeedMultiplierTitle");
+    local title = tr(spec.title);
     local gap = EtherTheme.ctrlGap;
     local btnW = UIButton.measureGroupWidth({
         tr("UI_CharacterPanel_ApplyButton"), tr("UI_CharacterPanel_ResetButton") });
@@ -182,11 +183,7 @@ local function placeEntryRow(panel, bx, by, innerW)
     local cx = twoLine and bx or (bx + labelW + gap);
     local entryW = math.min(EtherFormPanel.ENTRY_W, bx + innerW - cx);
 
-    local initial = 1.0;
-    if type(getCombatSpeedMultiplier) == "function" then
-        initial = getCombatSpeedMultiplier();
-    end
-    local entry = ISTextEntryBox:new(tostring(initial), cx, ctrlY, entryW, rowH);
+    local entry = ISTextEntryBox:new(tostring(spec.getInitial()), cx, ctrlY, entryW, rowH);
     EtherTheme.styleEntry(entry);
     entry:initialise();
     entry:instantiate();
@@ -194,9 +191,9 @@ local function placeEntryRow(panel, bx, by, innerW)
     local function applyEntry()
         local num = tonumber(entry:getText());
         if num ~= nil then
-            if num < 1.0 then num = 1.0; end
-            if num > 3.0 then num = 3.0; end
-            setCombatSpeedMultiplier(num);
+            if num < spec.minValue then num = spec.minValue; end
+            if num > spec.maxValue then num = spec.maxValue; end
+            spec.apply(num);
         end
     end
     entry.onTextChange = applyEntry;
@@ -211,7 +208,7 @@ local function placeEntryRow(panel, bx, by, innerW)
 
     local resetBtn = UIButton:new(bx2 + btnW + gap, ctrlY + EtherTheme.entryBtnDY, btnW,
         EtherTheme.ctrlH, tr("UI_CharacterPanel_ResetButton"), function()
-            entry:setText("1.0");
+            entry:setText(spec.resetText);
             applyEntry();
         end, btnW);
     resetBtn:initialise();
@@ -254,7 +251,26 @@ function EtherCharacterPanel:build()
         },
         {
             title = "UI_CharacterPanel_Group_Combat",
-            entry = true,
+            entries = {
+                {   -- 攻速倍率: IsoGameCharacter.calculateCombatSpeed 返回值乘数 (原版 clamp 之后再乘)
+                    title = "UI_Exploit_CombatSpeedMultiplierTitle",
+                    minValue = 1.0, maxValue = 2.5, resetText = "1.0",
+                    getInitial = function()
+                        if type(getCombatSpeedMultiplier) == "function" then return getCombatSpeedMultiplier(); end
+                        return 1.0;
+                    end,
+                    apply = function(num) setCombatSpeedMultiplier(num); end,
+                },
+                {   -- 攻击距离加成 (格): 近战最远 = 原版maxRange+加成, 服务器复核线+5 之内留 1 格冗余
+                    title = "UI_Exploit_AttackRangeBonusTitle",
+                    minValue = 0.0, maxValue = 4.0, resetText = "0.0",
+                    getInitial = function()
+                        if type(getAttackRangeBonus) == "function" then return getAttackRangeBonus(); end
+                        return 0.0;
+                    end,
+                    apply = function(num) setAttackRangeBonus(num); end,
+                },
+            },
             items = {
                 -- 特例: 关闭时额外还原武器数据 (与原版一致)
                 { key = "UI_CharacterPanel_InstantKill",
@@ -335,8 +351,10 @@ function EtherCharacterPanel:build()
             hintH = #EtherTheme.wrapHint(tr(mod.hint), innerW - 8) * EtherTheme.fontHgtHint + 2;
             contentH = contentH + 6 + hintH;
         end
-        if mod.entry then
-            contentH = contentH + 6 + entryRowHeight(innerW);
+        if mod.entries ~= nil then
+            for ei = 1, #mod.entries do
+                contentH = contentH + 6 + entryRowHeight(innerW, mod.entries[ei].title);
+            end
         end
 
         self:addModule(mod.title, contentH + 2, function(bx, by, bw)
@@ -352,8 +370,11 @@ function EtherCharacterPanel:build()
                 self:_anchor(hint);
                 self:addChild(hint);
             end
-            if mod.entry then
-                placeEntryRow(self, ix, cy + 6, iW);
+            if mod.entries ~= nil then
+                local ey = cy + 6;
+                for ei = 1, #mod.entries do
+                    ey = ey + placeEntryRow(self, ix, ey, iW, mod.entries[ei]) + 6;
+                end
             end
         end);
     end

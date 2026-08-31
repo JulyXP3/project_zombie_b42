@@ -240,6 +240,92 @@ public class GamePatcher {
         });
     }
 
+    //*********************************************************
+    //* 近战攻击距离加成 (EtherAPI.attackRangeBonus, 单位=格, 0=原版):
+    //* 1) HandWeapon.getMaxRange 两个重载: 枪械走 isRanged 提前 return (带参版
+    //*    的首个 freturn), 注入在最后一个 freturn 前 = 只命中近战返回路径;
+    //* 2) CombatManager 两方法里 3 处 "DistToSquared > 9.0f" 3 格硬上限替换为
+    //*    max(getMaxRange(owner), 3.0)^2 —— 加成 0 时精确还原原版 3 格,
+    //*    加成 X 时最远恰为 原版maxRange+X, 恒在服务器复核线 (原版maxRange+5)
+    //*    之内留 1 格冗余, 与武器类型/钝斧 7 级 rangeMod 1.2 均无关。
+    //*********************************************************
+    public void patchAttackRange() {
+        Patch.injectIntoClass("zombie/inventory/types/HandWeapon", "getMaxRange", false, method -> {
+            AbstractInsnNode returnInsn = method.instructions.getLast();
+            while (returnInsn != null && returnInsn.getOpcode() != 174) {
+                returnInsn = returnInsn.getPrevious();
+            }
+            if (returnInsn == null) {
+                throw new IllegalStateException("FRETURN not found in HandWeapon.getMaxRange");
+            }
+            InsnList toInject = new InsnList();
+            LabelNode skipBonus = new LabelNode();
+            toInject.add((AbstractInsnNode)new VarInsnNode(25, 0));
+            toInject.add((AbstractInsnNode)new MethodInsnNode(182, "zombie/inventory/types/HandWeapon", "isRanged", "()Z", false));
+            toInject.add((AbstractInsnNode)new JumpInsnNode(154, skipBonus));
+            this.addAttackRangeBonusFetch(toInject, skipBonus);
+            toInject.add((AbstractInsnNode)new InsnNode(98));
+            toInject.add((AbstractInsnNode)skipBonus);
+            method.instructions.insertBefore(returnInsn, toInject);
+            Logger.print("  [OK] Injected melee range bonus into HandWeapon.getMaxRange" + method.desc);
+        });
+        this.patchMeleeRangeCap("calcValidTarget", 1, false);
+        this.patchMeleeRangeCap("calculateHitListWeapon", 2, true);
+    }
+
+    // 把 CombatManager 方法里的 LDC 9.0f 常量替换为 max(maxRange, 3.0f)^2。
+    // 取武器方式二选一: calcValidTarget 的 weapon 就是 2 号局部变量;
+    // calculateHitListWeapon 的 2 号是 AttackVars, 需经 getWeapon(owner) 现取。
+    private void patchMeleeRangeCap(String methodName, int expectedCaps, boolean weaponViaAttackVars) {
+        Patch.injectIntoClass("zombie/CombatManager", methodName, false, method -> {
+            int replaced = 0;
+            AbstractInsnNode insn = method.instructions.getFirst();
+            while (insn != null) {
+                AbstractInsnNode next = insn.getNext();
+                if (insn instanceof LdcInsnNode && ((LdcInsnNode)insn).cst instanceof Float
+                        && ((Float)((LdcInsnNode)insn).cst).floatValue() == 9.0f) {
+                    InsnList toInject = new InsnList();
+                    toInject.add((AbstractInsnNode)new VarInsnNode(25, 2));
+                    if (weaponViaAttackVars) {
+                        toInject.add((AbstractInsnNode)new VarInsnNode(25, 1));
+                        // 原源码此处是 getWeapon((IsoLivingCharacter)owner) 显式转型:
+                        // owner 形参是父类 IsoGameCharacter, 字节码必须补 CHECKCAST,
+                        // 否则类校验报 Bad type on operand stack (3.2.2 首版实测)
+                        toInject.add((AbstractInsnNode)new TypeInsnNode(192, "zombie/characters/IsoLivingCharacter"));
+                        toInject.add((AbstractInsnNode)new MethodInsnNode(182, "zombie/network/fields/hit/AttackVars", "getWeapon", "(Lzombie/characters/IsoLivingCharacter;)Lzombie/inventory/types/HandWeapon;", false));
+                    }
+                    toInject.add((AbstractInsnNode)new VarInsnNode(25, 1));
+                    toInject.add((AbstractInsnNode)new MethodInsnNode(182, "zombie/inventory/types/HandWeapon", "getMaxRange", "(Lzombie/characters/IsoGameCharacter;)F", false));
+                    toInject.add((AbstractInsnNode)new LdcInsnNode(Float.valueOf(3.0f)));
+                    toInject.add((AbstractInsnNode)new MethodInsnNode(184, "java/lang/Math", "max", "(FF)F", false));
+                    toInject.add((AbstractInsnNode)new InsnNode(89));
+                    toInject.add((AbstractInsnNode)new InsnNode(106));
+                    method.instructions.insert(insn, toInject);
+                    method.instructions.remove(insn);
+                    ++replaced;
+                }
+                insn = next;
+            }
+            if (replaced != expectedCaps) {
+                throw new IllegalStateException("Expected " + expectedCaps + " range cap(s) in CombatManager." + methodName + ", replaced " + replaced);
+            }
+            Logger.print("  [OK] Patched " + replaced + " melee range cap(s) in CombatManager." + methodName + "()");
+        });
+    }
+
+    // EtherMain.getInstance() → etherAPI → attackRangeBonus 取值链, 带三级空守卫
+    // (任一为空则跳过加成, 原值返回), 防 UI/脚本在主逻辑初始化前调用 getMaxRange。
+    private void addAttackRangeBonusFetch(InsnList list, LabelNode skipLabel) {
+        list.add((AbstractInsnNode)new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+        list.add((AbstractInsnNode)new JumpInsnNode(198, skipLabel));
+        list.add((AbstractInsnNode)new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+        list.add((AbstractInsnNode)new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+        list.add((AbstractInsnNode)new JumpInsnNode(198, skipLabel));
+        list.add((AbstractInsnNode)new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+        list.add((AbstractInsnNode)new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+        list.add((AbstractInsnNode)new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "attackRangeBonus", "F"));
+    }
+
     public void patchLuaEventManager() {
         Patch.injectIntoClass("zombie/Lua/LuaEventManager", "triggerEvent", true, method -> {
             InsnList toInject = new InsnList();
@@ -904,6 +990,7 @@ public class GamePatcher {
         this.patchGameWindow();
         this.patchItemContainer();
         this.patchCombatSpeed();
+        this.patchAttackRange();
         this.patchLuaEventManager();
         this.patchLuaManager();
         this.patchAntiCheatSystem();

@@ -1,6 +1,12 @@
 # Changelog
 
-## [3.2.1] - Current
+## [3.2.2] - Current
+
+- Added: "Attack range bonus" (Character tab - Combat, adjustable 0-4 tiles) — melee can now reach up to weapon's vanilla range + bonus, beyond the vanilla 3-tile hit cap; keeps 1 tile of safety headroom against your own server's validation by default.
+- Changed: "Attack speed" cap tightened from 3.0 to 2.5 — at higher multipliers targets get knocked back and swings whiff, so effective hit rate drops.
+- Build: version bumped to 3.2.2.
+
+## [3.2.1]
 
 - Feature: "Unlimited condition (held item)" and "Auto-repair items" now also restore a weapon's "Head condition" — the second durability bar of axe/hammer-type weapons.
 - Added: an "Item Radar" tab — search the whole item database, with freely combinable minimap-marker and tracking-line switches; the "Items" page list reworked, lighter and faster.

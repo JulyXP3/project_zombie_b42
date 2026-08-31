@@ -125,6 +125,7 @@ public class EtherAPI {
     public int ammoFarmCount = 30;
     public boolean isCritMax;
     public float combatSpeedMultiplier = 1.0f;
+    public float attackRangeBonus = 0.0f;
     public boolean isAutoRepairItems;
     public boolean isRepairClothing;
     public boolean isPadClothing;
@@ -209,6 +210,7 @@ public class EtherAPI {
         var3.setProperty("ammoFarmCount", Integer.toString(this.ammoFarmCount));
         var3.setProperty("isCritMax", Boolean.toString(this.isCritMax));
         var3.setProperty("combatSpeedMultiplier", Float.toString(this.combatSpeedMultiplier));
+        var3.setProperty("attackRangeBonus", Float.toString(this.attackRangeBonus));
         var3.setProperty("isAutoRepairItems", Boolean.toString(this.isAutoRepairItems));
         var3.setProperty("isRepairClothing", Boolean.toString(this.isRepairClothing));
         var3.setProperty("isPadClothing", Boolean.toString(this.isPadClothing));
@@ -321,6 +323,7 @@ public class EtherAPI {
         this.ammoFarmCount = ConfigUtils.getIntFromConfig(var3, "ammoFarmCount", 30);
         this.isCritMax = ConfigUtils.getBooleanFromConfig(var3, "isCritMax", false);
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var3, "combatSpeedMultiplier", 1.0f);
+        this.attackRangeBonus = ConfigUtils.getFloatFromConfig(var3, "attackRangeBonus", 0.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var3, "isAutoRepairItems", false);
         this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var3, "isRepairClothing", false);
         this.isPadClothing = ConfigUtils.getBooleanFromConfig(var3, "isPadClothing", false);
@@ -430,6 +433,7 @@ public class EtherAPI {
         this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedAmmo", false);
         this.isCritMax = ConfigUtils.getBooleanFromConfig(var1, "isCritMax", false);
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var1, "combatSpeedMultiplier", 1.0f);
+        this.attackRangeBonus = ConfigUtils.getFloatFromConfig(var1, "attackRangeBonus", 0.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var1, "isAutoRepairItems", false);
         this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var1, "isRepairClothing", false);
         this.isPadClothing = ConfigUtils.getBooleanFromConfig(var1, "isPadClothing", false);

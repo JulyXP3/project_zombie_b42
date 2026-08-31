@@ -779,6 +779,17 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="getAttackRangeBonus", global=true)
+    public static float getAttackRangeBonus() {
+        return EtherMain.getInstance().etherAPI.attackRangeBonus;
+    }
+
+    @LuaMethod(name="setAttackRangeBonus", global=true)
+    public static void setAttackRangeBonus(float var0) {
+        EtherMain.getInstance().etherAPI.attackRangeBonus = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isUnlimitedCondition", global=true)
     public static boolean isUnlimitedCondition() {
         return EtherMain.getInstance().etherAPI.isUnlimitedCondition;
