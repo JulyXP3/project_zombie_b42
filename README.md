@@ -4,7 +4,7 @@ A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/
 
 The main additions over the original mod are **Farming / Map teleport (pathfind & fast-move) / Reveal Map / True Night Vision / Vehicles / Loot reroll / ESP / Item Search + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
 
-> **Important:** This project is only **temporarily maintained**. Anyone who needs it may fork/clone this repository and continue development. Thanks!
+> **Important:** This project is only **temporarily maintained**. Anyone who needs it may fork/clone this repository and continue development. **Any form of commercial use is prohibited** (including selling and paywalled downloads), and forks/modifications **must credit the original authors**. Thanks!
 
 ## Feature Overview
 
