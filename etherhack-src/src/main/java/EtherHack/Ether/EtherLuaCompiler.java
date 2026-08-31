@@ -24,20 +24,27 @@ public class EtherLuaCompiler {
             if (!var3.equals(var1)) continue;
             return true;
         }
+        // 读盘延迟: 两项内容检查均要求路径含 "mod" 且对应开关开启 ——
+        // 三条件任一不满足时整文件读入纯属浪费 (本方法挂在每个 RunLua 上,
+        // 原版 Lua 也会被全量读一遍)。仅必要时才读, 原版路径零额外 I/O。
+        boolean isModPath = var1.toLowerCase().contains("mod");
+        boolean needContent = isModPath && (this.isBlockCompileLuaAboutEtherHack || this.isBlockCompileLuaWithBadWords);
         String var10 = "";
-        try (BufferedReader var11 = new BufferedReader(new FileReader(var1));){
-            StringBuilder var4 = new StringBuilder();
-            while (true) {
-                String var5;
-                if ((var5 = var11.readLine()) == null) {
-                    var10 = var4.toString();
-                    break;
+        if (needContent) {
+            try (BufferedReader var11 = new BufferedReader(new FileReader(var1));){
+                StringBuilder var4 = new StringBuilder();
+                while (true) {
+                    String var5;
+                    if ((var5 = var11.readLine()) == null) {
+                        var10 = var4.toString();
+                        break;
+                    }
+                    var4.append(var5).append("\n");
                 }
-                var4.append(var5).append("\n");
             }
-        }
-        catch (IOException var9) {
-            var9.printStackTrace();
+            catch (IOException var9) {
+                var9.printStackTrace();
+            }
         }
         if (this.isBlockCompileLuaAboutEtherHack) {
             for (String var14 : this.blackListWordsEtherUICompiler) {

@@ -255,6 +255,7 @@
     UI_Map_Toggle_Zombies = "Зомби",
     UI_Map_Toggle_Items = "Вещи",
     UI_ItemSearch_NoResults = "Предметы не найдены",
+    UI_ItemSearch_Searching = "Поиск...",
     UI_Settings_Language = "Язык интерфейса",
     UI_Settings_ResetLuaLabel = "Перезагрузить все Lua элементы",
     UI_Settings_ResetLuaButton = "Перезагрузить",

@@ -4,6 +4,7 @@
 
 - Added: "Attack range bonus" (Character tab - Combat, adjustable 0-4 tiles) — melee can now reach up to weapon's vanilla range + bonus, beyond the vanilla 3-tile hit cap; keeps 1 tile of safety headroom against your own server's validation by default.
 - Changed: "Attack speed" cap tightened from 3.0 to 2.5 — at higher multipliers targets get knocked back and swings whiff, so effective hit rate drops.
+- Improved: "Item Radar" searches now run in small background steps — no more periodic stutters while moving or picking up items; the frame stays smooth, and old markers keep showing until the refresh completes.
 - Build: version bumped to 3.2.2.
 
 ## [3.2.1]

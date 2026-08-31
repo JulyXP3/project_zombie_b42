@@ -10,67 +10,84 @@
 --*       首行 if (GameClient.client) return), 只能用已加载方格扫描
 --* 匹配: 先比 getFullType() ("Base.Axe"), 不比中再比 getType() ("Axe"),
 --*       兼容按钮侧 scriptItem:getFullName() 返回短名的可能
---* 刷新: 事件驱动而非定时器 —— OnPlayerUpdate 每 tick:
---*       1. 比较玩家背包物品数 (getItems():size() 一次调用), 有变化置"脏",
---*          安静满 1 秒才真正重扫一次 (防抖: 连续转移物品期间 0 次扫描);
---*       2. 比较玩家位置, 走出 5 格且距上次扫描 ≥4 秒即静默重扫 (标记跟随角色)。
---*       空闲零开销, 拾取/丢弃物品停手后标记一次性刷新到位。
+--* 刷新: 事件驱动 + 时间片步进 —— onPlayerUpdate 每 tick:
+--*       1. 比较玩家背包物品数, 有变化置"脏", 安静满 1 秒才启动重扫;
+--*       2. 比较玩家位置, 走出 5 格且距上次扫描完成 ≥4 秒即重扫 (标记跟随角色);
+--*       3. 推进在途扫描游标 (每帧 3ms 预算, 超时让出下帧继续)。
+--* 扫描不再是单帧全量 (~3.8 万格走 Kahlua 桥, 密集区 100-500ms 尖峰,
+--* 结果在扫描完成后原子替换 —— 进行期间旧标记照常显示, 刷新无感。
 --* 注意: 禁止 "obj:getItem ~= nil" 这类索引式方法探测 (Kahlua2 不可靠),
 --*       一律直接调用或 pcall 兜底
 --*********************************************************
 EtherItemSearch = EtherItemSearch or {};
 
 EtherItemSearch.results = nil; -- { {x=.., y=.., z=.., name=.., count=..}, ... } 命中位置列表 (z=楼层, name=首个命中物品显示名, 与世界标记共用)
-EtherItemSearch.radius = 56;   -- 扫描半径(格), 仅覆盖玩家周围已加载区域 (48→56→实测回调: 64 卡, 56 + 4 秒重扫间隔定稿)
+EtherItemSearch.radius = 56;   -- 扫描半径(格), 仅覆盖玩家周围已加载区域
 EtherItemSearch.lastTargets = nil;    -- 上次扫描目标, 供自动刷新复用
 EtherItemSearch.debounceMs = 1000;    -- 防抖: 背包变动后安静满 1 秒才重扫
 EtherItemSearch.refreshPending = false; -- 待重扫标记
 EtherItemSearch.lastChangeAt = 0;     -- 最后一次背包变动时刻
-EtherItemSearch.lastScanAt = 0;       -- 上次扫描时刻
+EtherItemSearch.lastScanAt = 0;       -- 上次扫描完成时刻
 EtherItemSearch.moveRefreshTiles = 5; -- 玩家走出 N 格触发移动重扫
-EtherItemSearch.moveRefreshMs = 4000; -- 移动重扫最小间隔 (连续奔跑也不超过 1 次/4 秒; 64 格实测卡, 回调 56 后进一步放宽)
+EtherItemSearch.moveRefreshMs = 4000; -- 移动重扫最小间隔 (连续奔跑也不超过 1 次/4 秒)
+EtherItemSearch.stepBudgetMs = 3;     -- 时间片: 每帧扫描步进预算 (ms), 超出即让出下帧继续
 EtherItemSearch._scanX = nil;         -- 上次扫描时的玩家位置
 EtherItemSearch._scanY = nil;
+EtherItemSearch._cursor = nil;        -- 在途扫描游标 (非 nil = 有扫描进行中)
 
 --*********************************************************
---* 扫描: targetTypes = { ["Base.Axe"]=true, ... }
---* 返回命中位置数; 结果存到 EtherItemSearch.results
---* silent=true 时不打印诊断 (自动刷新用)
+--* 启动扫描: targetTypes = { ["Base.Axe"]=true, ... }
+--* 立即返回; 扫描由 onPlayerUpdate 里的 stepScan 按时间片推进,
+--* 完成时 results 原子替换并回调 onDone(nHits, stats)。
+--* onDone 可为 nil (自动刷新用); 新扫描会取代在途扫描 (游标重置,
+--* 旧 results 保留到新扫描完成 —— 无闪烁)。
+--* silent=true 且无 onDone 时, 零命中不打印诊断 (自动刷新用)。
 --*********************************************************
-function EtherItemSearch.scan(targetTypes, silent)
+function EtherItemSearch.startScan(targetTypes, silent, onDone)
     local cell = getCell();
     local player = getPlayer();
     if cell == nil or targetTypes == nil or player == nil then
         EtherItemSearch.results = nil;
-        return 0;
+        if onDone then onDone(0, nil) end
+        return;
     end
 
     EtherItemSearch.lastTargets = targetTypes;
-    EtherItemSearch.lastScanAt = getTimestampMs();
-    EtherItemSearch._scanX = player:getX();
-    EtherItemSearch._scanY = player:getY();
 
-    local out, key, n = {}, {}, 0;
-    local stats = { squares = 0, floor = 0, containers = 0, bags = 0, items = 0 };
+    -- 游标: 累积结果与循环位置全部挂在 cur 上 (闭包与步进器共享)
+    local cur = {
+        cell = cell;
+        targets = targetTypes; silent = silent; onDone = onDone;
+        stats = { squares = 0, floor = 0, containers = 0, bags = 0, items = 0 };
+        out = {}; key = {}; n = 0;
+        px = player:getX(); py = player:getY(); pz = player:getZ();
+        R = EtherItemSearch.radius;
+    };
+    cur.cx0 = math.floor(cur.px);
+    cur.cy0 = math.floor(cur.py);
+    cur.z = math.floor(cur.pz) - 1;   -- 三重循环游标: z / dx / dy
+    cur.zMax = math.floor(cur.pz) + 1;
+    cur.dx = -cur.R;
+    cur.dy = -cur.R;
 
     local function addAt(x, y, z, name)
         local k = math.floor(x) .. "," .. math.floor(y) .. "," .. math.floor(z);
-        if key[k] ~= nil then
-            out[key[k]].count = out[key[k]].count + 1;
+        if cur.key[k] ~= nil then
+            cur.out[cur.key[k]].count = cur.out[cur.key[k]].count + 1;
         else
-            n = n + 1;
-            key[k] = n;
-            out[n] = { x = math.floor(x), y = math.floor(y), z = math.floor(z), name = name, count = 1 };
+            cur.n = cur.n + 1;
+            cur.key[k] = cur.n;
+            cur.out[cur.n] = { x = math.floor(x), y = math.floor(y), z = math.floor(z), name = name, count = 1 };
         end
     end
 
     local function itemHits(item)
         if item == nil then return nil end
-        stats.items = stats.items + 1;
+        cur.stats.items = cur.stats.items + 1;
         local t = item:getFullType();
         -- 命中返回显示名 (真值), 未命中返回 nil —— 名称供世界标记文字使用
-        if targetTypes[t] then return item:getDisplayName() end
-        if targetTypes[item:getType()] == true then return item:getDisplayName() end
+        if cur.targets[t] then return item:getDisplayName() end
+        if cur.targets[item:getType()] == true then return item:getDisplayName() end
         return nil;
     end
 
@@ -91,7 +108,7 @@ function EtherItemSearch.scan(targetTypes, silent)
         for j = 0, nCont - 1 do
             local c = obj:getContainerByIndex(j);
             if c ~= nil then
-                stats.containers = stats.containers + 1;
+                cur.stats.containers = cur.stats.containers + 1;
                 scanItems(c:getItems(), obj:getX(), obj:getY(), obj:getZ());
             end
         end
@@ -99,7 +116,7 @@ function EtherItemSearch.scan(targetTypes, silent)
 
     -- 地面物品 (含放在地上的包: 包本身 + 包内物品)
     local function scanFloor(w)
-        stats.floor = stats.floor + 1;
+        cur.stats.floor = cur.stats.floor + 1;
         local item = w:getItem();
         if item == nil then return end
         local name = itemHits(item);
@@ -110,14 +127,14 @@ function EtherItemSearch.scan(targetTypes, silent)
         if item:IsInventoryContainer() then
             local inv = item:getInventory();
             if inv ~= nil then
-                stats.bags = stats.bags + 1;
+                cur.stats.bags = cur.stats.bags + 1;
                 scanItems(inv:getItems(), w:getX(), w:getY(), w:getZ());
             end
         end
     end
 
     local function scanSquare(sq)
-        stats.squares = stats.squares + 1;
+        cur.stats.squares = cur.stats.squares + 1;
         local objects = sq:getObjects();
         if objects ~= nil then
             for i = 1, objects:size() do
@@ -146,7 +163,7 @@ function EtherItemSearch.scan(targetTypes, silent)
                 if body ~= nil then
                     local c = body:getContainer();
                     if c ~= nil then
-                        stats.containers = stats.containers + 1;
+                        cur.stats.containers = cur.stats.containers + 1;
                         scanItems(c:getItems(), body:getX(), body:getY(), body:getZ());
                     end
                 end
@@ -154,39 +171,62 @@ function EtherItemSearch.scan(targetTypes, silent)
         end
     end
 
+    cur.scanSquare = scanSquare;
+    cur.scanItems = scanItems;
+    EtherItemSearch._cursor = cur;
+end
+
+--*********************************************************
+--* 时间片步进器: 由 onPlayerUpdate 每 tick 调用 (先于一切门控,
+--* 在途扫描必跑完 —— 扫描由 startScan 启动才存在, 天然有界)。
+--* 预算内尽量多走方格, 超时让出下帧继续; 走完全部方格后收尾
+--* 车辆部件容器 (车辆数少, 单步收尾), 原子替换 results, 回调 onDone。
+--*********************************************************
+local function stepScan()
+    local cur = EtherItemSearch._cursor;
+    if cur == nil then return end
+    local deadline = getTimestampMs() + EtherItemSearch.stepBudgetMs;
+    local cell = cur.cell;
+    local R = cur.R;
+
     -- 玩家周围半径内的已加载方格 (getGridSquare 纯查询, 不会触发区块生成)
-    local px, py, pz = player:getX(), player:getY(), player:getZ();
-    local R = EtherItemSearch.radius;
-    for z = pz - 1, pz + 1 do
-        for dx = -R, R do
-            local cx = math.floor(px) + dx;
-            for dy = -R, R do
-                local sq = cell:getGridSquare(cx, math.floor(py) + dy, z);
+    while cur.z <= cur.zMax do
+        while cur.dx <= R do
+            local cx = cur.cx0 + cur.dx;
+            while cur.dy <= R do
+                local sq = cell:getGridSquare(cx, cur.cy0 + cur.dy, cur.z);
                 if sq ~= nil then
-                    scanSquare(sq);
+                    cur.scanSquare(sq);
                 end
+                cur.dy = cur.dy + 1;
+                if getTimestampMs() >= deadline then return end
             end
+            cur.dy = -R;
+            cur.dx = cur.dx + 1;
         end
+        cur.dx = -R;
+        cur.z = cur.z + 1;
     end
 
-    -- 车辆部件容器 (后备箱/座位等); getVehicles() 返回 Set, :toArray() 转 Lua 数组 (官方 UIMap 同款用法)
-    -- 注意: 部件遍历必须在车辆对象上调用 getPartCount()/getPartByIndex()
-    --       (官方 ISInventoryPage 同款); 车辆.getParts 返回的 VehicleParts
-    --       java 对象未暴露给 Lua, 无法对其点方法
+    -- 收尾: 车辆部件容器 (后备箱/座位等); getVehicles() 返回 Set,
+    -- :toArray() 转 Lua 数组 (官方 UIMap 同款用法)。
+    -- 部件遍历必须在车辆对象上调用 getPartCount()/getPartByIndex()
+    -- (官方 ISInventoryPage 同款); 车辆.getParts 返回的 VehicleParts
+    -- java 对象未暴露给 Lua, 无法对其点方法
     local vehicles = cell:getVehicles();
     if vehicles ~= nil then
         local vlist = vehicles:toArray();
         for vi = 1, #vlist do
             local v = vlist[vi];
-            if v ~= nil and math.abs(v:getX() - px) <= R and math.abs(v:getY() - py) <= R then
+            if v ~= nil and math.abs(v:getX() - cur.px) <= R and math.abs(v:getY() - cur.py) <= R then
                 local nParts = v:getPartCount();
                 for i = 0, nParts - 1 do
                     local part = v:getPartByIndex(i);
                     if part ~= nil then
                         local c = part:getItemContainer();
                         if c ~= nil then
-                        stats.containers = stats.containers + 1;
-                        scanItems(c:getItems(), part:getX(), part:getY(), v:getZ());
+                            cur.stats.containers = cur.stats.containers + 1;
+                            cur.scanItems(c:getItems(), part:getX(), part:getY(), v:getZ());
                         end
                     end
                 end
@@ -194,17 +234,25 @@ function EtherItemSearch.scan(targetTypes, silent)
         end
     end
 
-    EtherItemSearch.results = out;
-    if n == 0 and not silent then
-        print("[EtherHack] 未找到该物品 (已扫=" .. stats.squares .. "格, 地面物品=" .. stats.floor .. ", 容器=" .. stats.containers .. ", 背包=" .. stats.bags .. ", 检查物品=" .. stats.items .. ")");
+    -- 完成: 原子替换结果 (进行期间旧标记照常显示)
+    local n = cur.n;
+    EtherItemSearch.results = cur.out;
+    EtherItemSearch.lastScanAt = getTimestampMs();
+    EtherItemSearch._scanX = cur.px;
+    EtherItemSearch._scanY = cur.py;
+    EtherItemSearch._cursor = nil;
+    if cur.onDone ~= nil then
+        cur.onDone(n, cur.stats);
+    elseif n == 0 and not cur.silent then
+        print("[EtherHack] 未找到该物品 (已扫=" .. cur.stats.squares .. "格, 地面物品=" .. cur.stats.floor .. ", 容器=" .. cur.stats.containers .. ", 背包=" .. cur.stats.bags .. ", 检查物品=" .. cur.stats.items .. ")");
     end
-    return n;
 end
 
 --*********************************************************
 --* 事件驱动刷新: 背包物品数变化 / 库存窗口容器变化 -> 置脏,
---* 安静满 1 秒后由 onPlayerUpdate 触发的 refresh() 重扫一次
---* (拾取、丢弃、吃东西等都会改变背包物品数, 标记随之更新)
+--* 安静满 1 秒后由 onPlayerUpdate 触发重扫一次
+--* (拾取、丢弃、吃东西等都会改变背包物品数, 标记随之更新;
+--*  在途扫描进行中不重复启动, 完成后节流自然兜住下一轮)
 --*********************************************************
 function EtherItemSearch.refresh()
     if EtherItemSearch.results == nil or EtherItemSearch.lastTargets == nil then return end
@@ -214,11 +262,15 @@ function EtherItemSearch.refresh()
     local now = getTimestampMs();
     if now - EtherItemSearch.lastChangeAt < EtherItemSearch.debounceMs then return end
     EtherItemSearch.refreshPending = false;
-    EtherItemSearch.scan(EtherItemSearch.lastTargets, true);
+    if EtherItemSearch._cursor ~= nil then return end
+    EtherItemSearch.startScan(EtherItemSearch.lastTargets, true, nil);
 end
 
 local function onPlayerUpdate(player)
-    if EtherItemSearch.results == nil or player == nil then return end
+    -- 步进器先于一切门控: 在途扫描必跑完 (首扫时 results 尚为 nil)
+    stepScan();
+    if player == nil then return end
+    if EtherItemSearch.results == nil then return end
     -- 两组开关全关: 暂停位置/背包轮询与自动重扫 (结果与目标保留, 重开即恢复)
     if not UIMap.drawItems and not UIMap.drawItemEsp then return end
     -- 官方写法: getInventory():getItems():size() (ItemContainer 未直接暴露 size)
@@ -232,14 +284,16 @@ local function onPlayerUpdate(player)
         end
     end
 
-    -- 移动刷新: 走出 5 格且距上次扫描 ≥4 秒 -> 静默重扫, 标记跟随角色
+    -- 移动刷新: 走出 5 格且距上次扫描完成 ≥4 秒 -> 静默重扫, 标记跟随角色
     if EtherItemSearch._scanX ~= nil then
         local dx = player:getX() - EtherItemSearch._scanX;
         local dy = player:getY() - EtherItemSearch._scanY;
         local now = getTimestampMs();
         if dx * dx + dy * dy >= (EtherItemSearch.moveRefreshTiles * EtherItemSearch.moveRefreshTiles)
            and now - EtherItemSearch.lastScanAt >= EtherItemSearch.moveRefreshMs then
-            EtherItemSearch.scan(EtherItemSearch.lastTargets, true);
+            if EtherItemSearch._cursor == nil then
+                EtherItemSearch.startScan(EtherItemSearch.lastTargets, true, nil);
+            end
             return;
         end
     end
@@ -260,7 +314,7 @@ if Events ~= nil then
 end
 
 --*********************************************************
---* 清除搜索结果 (标记不再显示)
+--* 清除搜索结果 (标记不再显示; 中止在途扫描)
 --*********************************************************
 function EtherItemSearch.clear()
     EtherItemSearch.results = nil;
@@ -270,6 +324,7 @@ function EtherItemSearch.clear()
     EtherItemSearch.lastChangeAt = 0;
     EtherItemSearch._scanX = nil;
     EtherItemSearch._scanY = nil;
+    EtherItemSearch._cursor = nil;
 end
 
 --*********************************************************

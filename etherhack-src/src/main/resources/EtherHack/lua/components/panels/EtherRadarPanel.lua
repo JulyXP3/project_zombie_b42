@@ -153,7 +153,9 @@ end
 --*********************************************************
 --* 两个勾选 (小地图标记 / ESP 画线追踪) 共用的目标构建 + 扫描:
 --* 选中项 > 过滤列表; 无可追踪目标时状态行提示并返回 false
---* (render 的逐帧 setCheked 会把勾选框弹回未勾, 自愈)
+--* (render 的逐帧 setCheked 会把勾选框弹回未勾, 自愈)。
+--* 扫描为时间片异步: 立即返回 true, 状态行先显示「搜索中…」,
+--* 完成回调更新命中数/无结果 (期间无冻结, 详见 EtherItemSearch)。
 --*********************************************************
 function EtherRadarPanel:ensureScan()
     local targetTypes = {};
@@ -176,12 +178,15 @@ function EtherRadarPanel:ensureScan()
         return false;
     end
 
-    local nHits = EtherItemSearch.scan(targetTypes);
-    if nHits == nil or nHits == 0 then
-        self.statusText = tr("UI_ItemSearch_NoResults");
-    else
-        self.statusText = tr("UI_RadarPanel_StatusHits", { count = nHits });
-    end
+    self.statusText = tr("UI_ItemSearch_Searching");
+    local panel = self;
+    EtherItemSearch.startScan(targetTypes, false, function(n, stats)
+        if n == 0 then
+            panel.statusText = tr("UI_ItemSearch_NoResults");
+        else
+            panel.statusText = tr("UI_RadarPanel_StatusHits", { count = n });
+        end
+    end);
     return true;
 end
 
