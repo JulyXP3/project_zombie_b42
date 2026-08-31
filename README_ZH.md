@@ -4,7 +4,7 @@
 
 在原版基础上新增了 **耕种 / 地图传送(自动寻路快速移动) / 点亮全图 / 真-夜视 / 载具 / 战利品重掷 / ESP / 物品搜索 + 小地图标记** 等大量功能, 并针对 B42 客户端 Lua 环境 (Kahlua) 做了多处修复与加固。完整功能见下方「功能一览」。
 
-> **重要声明:** 本项目**禁止任何形式的商业用途**(包括售卖、付费下载等), 二次修改与转载**必须标注原作者**。
+> **重要声明:** 本项目**禁止任何形式的商业用途**(包括售卖、付费下载等), 二次修改与转载**必须标注原作者**。授权条款详见文末「许可证」。
 
 ## 功能一览
 
@@ -116,6 +116,12 @@ temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main
 
 ## 致谢
 
-- 原版模组 [EtherHack](https://github.com/Yeet-Masta/Project-Zomboid-EtherHack) by Quzile & Yeet-Masta, 本仓库为其 Fork
+- 原版模组 [EtherHack](https://github.com/Yeet-Masta/Project-Zomboid-EtherHack) by Quzile & Yeet-Masta
 - B42 移植: [EtherHack B42](https://github.com/dei0/EtherHack) by dei0 (原仓库已无法访问, 保留链接以标注作者)
 - 本仓库维护与功能开发: JulyXP3
+
+## 许可证
+
+- EtherHack 基座 © 2023 Quzile, 遵循 [MIT](etherhack-src/LICENSE.txt) 许可;
+- 本仓库在其基础上的修改与新增部分遵循 [PolyForm Noncommercial 1.0.0](LICENSE) 许可: 非商业用途可自由使用、修改与分发; **任何商业用途(售卖、付费下载、广告变现等)须事先获得作者书面授权**;
+- 二次修改与转载必须标注原作者(Quzile、Yeet-Masta、dei0、JulyXP3)并保留本许可声明。

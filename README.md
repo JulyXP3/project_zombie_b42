@@ -4,7 +4,7 @@ A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/
 
 The main additions over the original mod are **Farming / Map teleport (pathfind & fast-move) / Reveal Map / True Night Vision / Vehicles / Loot reroll / ESP / Item Search + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
 
-> **Important:** **Any form of commercial use is prohibited** (including selling and paywalled downloads), and forks/modifications **must credit the original authors**.
+> **Important:** **Any form of commercial use is prohibited** (including selling and paywalled downloads), and forks/modifications **must credit the original authors**. See the License section at the end for details.
 
 ## Feature Overview
 
@@ -116,6 +116,12 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 ## Acknowledgments
 
-- Original mod [EtherHack](https://github.com/Yeet-Masta/Project-Zomboid-EtherHack) by Quzile & Yeet-Masta; this repository is a fork of it
+- Original mod [EtherHack](https://github.com/Yeet-Masta/Project-Zomboid-EtherHack) by Quzile & Yeet-Masta
 - B42 port: [EtherHack B42](https://github.com/dei0/EtherHack) by dei0 (original repo no longer accessible; link kept for attribution)
 - Maintained & extended by JulyXP3
+
+## License
+
+- The EtherHack base is © 2023 Quzile, licensed under the [MIT License](etherhack-src/LICENSE.txt);
+- This repository's modifications and additions are licensed under the [PolyForm Noncommercial 1.0.0](LICENSE): free to use, modify and redistribute for noncommercial purposes; **any commercial use (selling, paywalled downloads, monetization) requires prior written permission from the author**;
+- Forks and redistributions must credit the original authors (Quzile, Yeet-Masta, dei0, JulyXP3) and retain this license notice.

@@ -1,6 +1,6 @@
 {
     UI_Title_Credit = "作者: {names}",
-    UI_Title_Notice = "免费开源 · 如果你买了就是被骗了",
+    UI_Title_Notice = "免费开源 · 禁止商用 · 如果你买了就是被骗了",
     UI_Nav_Info = "信息",
     UI_Nav_Character = "角色",
     UI_Nav_Items = "物品(SP)",

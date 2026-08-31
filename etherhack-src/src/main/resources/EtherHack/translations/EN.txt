@@ -1,6 +1,6 @@
 {
     UI_Title_Credit = "Author: {names}",
-    UI_Title_Notice = "Free & Open Source · If you paid for it, you got scammed",
+    UI_Title_Notice = "Free & Open Source · Non-commercial only · If you paid for it, you got scammed",
     UI_Nav_Info = "Info",
     UI_Nav_Character = "Character",
     UI_Nav_Items = "Items(SP)",
