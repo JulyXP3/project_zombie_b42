@@ -116,5 +116,5 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 ## Acknowledgments
 
-- Original mod: [EtherHack](https://github.com/dei0/EtherHack) by Quzile
+- Original mod [EtherHack](https://github.com/Yeet-Masta/Project-Zomboid-EtherHack) by Quzile & Yeet-Masta; this repository is a fork of it
 - B42 port: dei0
