@@ -61,7 +61,7 @@
 
 ### 其他改动 / 修复
 
-完整更新历史见 [更新日志.md](更新日志.md)。
+完整更新历史见 [UPDATELOG_ZH.md](UPDATELOG_ZH.md)。
 
 ## 安装
 
