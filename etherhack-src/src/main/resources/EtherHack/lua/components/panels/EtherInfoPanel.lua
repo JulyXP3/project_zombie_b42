@@ -8,7 +8,7 @@ EtherInfoPanel = ISPanel:derive("Dei0InfoPanel"); -- Наследование о
 local SIDE_PAD = 16;   -- 左右安全边距 (文本不得越过)
 
 -- 作者名单 (原先写在 EtherHackMenu 页眉里, 随署名一起移到本面板)
-local AUTHORS = "Quzile & dei0 & JulyXP3";
+local AUTHORS = "Quzile & Yeet-Masta & dei0 & JulyXP3";
 
 --*********************************************************
 --* 折行统一走 EtherTheme (公共实现, 信息页/各面板共用),

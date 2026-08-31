@@ -117,4 +117,5 @@ temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main
 ## 致谢
 
 - 原版模组 [EtherHack](https://github.com/Yeet-Masta/Project-Zomboid-EtherHack) by Quzile & Yeet-Masta, 本仓库为其 Fork
-- B42 移植: dei0
+- B42 移植: [EtherHack B42](https://github.com/dei0/EtherHack) by dei0 (原仓库已无法访问, 保留链接以标注作者)
+- 本仓库维护与功能开发: JulyXP3
