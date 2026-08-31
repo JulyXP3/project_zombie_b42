@@ -5,8 +5,6 @@ require "ISUI/ISPanel"
 --*********************************************************
 EtherInfoPanel = ISPanel:derive("Dei0InfoPanel"); -- Наследование от ISPanel
 
-local SIDE_PAD = 16;   -- 左右安全边距 (文本不得越过)
-
 -- 作者名单 (原先写在 EtherHackMenu 页眉里, 随署名一起移到本面板)
 local AUTHORS = "Quzile & Yeet-Masta & dei0 & JulyXP3";
 
@@ -18,20 +16,13 @@ local AUTHORS = "Quzile & Yeet-Masta & dei0 & JulyXP3";
 --*********************************************************
 
 --*********************************************************
---* 缩放居中绘制一行正文 (说明文字): 宽度按 hintScale 折算, 保证真居中
---*********************************************************
-function EtherInfoPanel:drawHintCentered(text, y, col)
-    local x = (self.width - EtherTheme.hintWidth(text)) / 2;
-    EtherTheme.drawHintText(self, text, x, y, col);
-end
-
---*********************************************************
 --* 构建显示行列表 (折行结果缓存, 不在 render 里每帧测量)。
 --* 缓存失效条件: 面板宽度变化 / 语言切换 / 反作弊状态变化。
 --*********************************************************
 function EtherInfoPanel:buildLines()
     local th = EtherTheme;
-    local maxW = self.width - SIDE_PAD * 2 - 32;   -- 盒内文字再留边
+    -- 正文折行宽度: 与 render 的正文左缘 (BX+10=34) 对齐, 两侧各留同宽内边距
+    local maxW = self.width - 68;
     local blocks = {};
     local fhS = th.fontHgtSmall;          -- 分区标题行高 (Small, 原尺寸)
     local lhH = th.fontHgtHint + 4;       -- 正文行距 (hintScale 缩小后的说明文字)
@@ -215,7 +206,8 @@ function EtherInfoPanel:render()
             for j = 1, #blk.lines do
                 local ln = blk.lines[j];
                 if iy + lhH > 0 and iy < self.height then
-                    self:drawHintCentered(ln.text, iy, ln.col);
+                    -- 正文左对齐: 从盒内左缘起画 (与分区标题同一左缘), 盒体仍整体居中
+                    EtherTheme.drawHintText(self, ln.text, BX + 10, iy, ln.col);
                 end
                 iy = iy + lhH;
             end
