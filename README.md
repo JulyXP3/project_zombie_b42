@@ -19,7 +19,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Items
 
 - **Item creator**: filter by name/category/ID, grant ×1/×2/×5/×10
-- **Item search + minimap markers**: scans loaded tiles within 48 tiles (floor ±1) — furniture/containers, ground items & bags, corpses, vehicle containers; matches shown as gray squares (with counts); markers refresh as you move; minimap quick-toggle bar (Me/Players/Vehicles/Zombies/Items) two-way synced with the Map tab checkboxes
+- **Item search + minimap markers**: scans loaded tiles within 56 tiles (floor ±1) — furniture/containers, ground items & bags, corpses, vehicle containers; matches shown as gray squares (with counts); markers refresh as you move; minimap quick-toggle bar (Me/Players/Vehicles/Zombies/Items) two-way synced with the Map tab checkboxes
 
 ### Traps
 
@@ -109,8 +109,8 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 ## Known limitations
 
-- **Item radar name-match bug**: when a search filter is active, clicking "Show on map" tracks **every** item in the filtered list (the name filter is a substring match). For example, searching `Wrench` will also track `Ratchet Wrench`. To track a single item only, clear the filter text and select the item directly.
-- Only **loaded** chunks around the player can be scanned (client-side limitation; the server's `processItems` registry is empty on the client).
+- **The filter is a plain substring match** (name/ID, case-insensitive): ticking "Show on map" or "ESP tracking" with nothing selected tracks **every** item in the filtered list — e.g. searching `Wrench` also tracks `Ratchet Wrench`. To track a single item, select it in the list first.
+- The item radar only scans **loaded** tiles within 56 tiles of the player (client-side limitation; the server's `processItems` registry is always empty on the client), and refreshes are throttled: inventory changes trigger a rescan after a 1s debounce; movement triggers a rescan after 5+ tiles but at most once every 4 seconds — hit positions are not per-frame live.
 - Player inventories/equipment are intentionally excluded; other players' items appear with the 1–2s sync delay.
 - Loot encryption on servers hides container contents from the client entirely.
 
@@ -118,8 +118,3 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 - Original mod: [EtherHack](https://github.com/dei0/EtherHack) by Quzile
 - B42 port: dei0
-
-## Disclaimer
-
-- This project was developed with AI assistance.
-- This is a temporary maintenance fork. If you find it useful, feel free to fork and continue development. Thanks!
