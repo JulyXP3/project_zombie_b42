@@ -33,7 +33,6 @@
     UI_InformationPanel_AntiCheatStatus_CustomLogger = "Custom log system: ",
     UI_InformationPanel_Contacts_Title = "Contact Information",
     UI_InformationPanel_Contacts_Donation = "Donations",
-    UI_InformationPanel_Contacts_Hint = "Click an underlined link to open it",
     UI_InformationPanel_AntiCheatStatus_Enable = "Enabled",
     UI_InformationPanel_AntiCheatStatus_Disable = "Disabled",
     UI_InformationPanel_AntiCheatStatus_Format = "{label}[{value}]",

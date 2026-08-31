@@ -116,12 +116,11 @@ function EtherInfoPanel:buildLines()
     end
     addBlock("UI_InformationPanel_AntiCheatStatus_Title", statusLines);
 
-    -- 联系方式: 平台名是专有名词(不翻译), 但"无"必须可翻译;
-    -- 带 url 的行渲染为主题色+下划线, 点击直接 openUrl (Email/捐赠继续留空)
+    -- 联系方式: 平台名是专有名词(不翻译), 但"无"必须可翻译; 链接纯文本显示
     local none = getTranslate("UI_Common_None");
     local channels = {
-        { label = "GitHub",  url = "https://github.com/JulyXP3/project_zombie_b42" },
-        { label = "Discord", url = "https://discord.gg/bkyNqSYyh" },
+        { label = "GitHub",  value = "https://github.com/JulyXP3/project_zombie_b42" },
+        { label = "Discord", value = "https://discord.gg/bkyNqSYyh" },
         { label = "Email" },
         { label = getTranslate("UI_InformationPanel_Contacts_Donation") },
     };
@@ -129,17 +128,10 @@ function EtherInfoPanel:buildLines()
     for i = 1, #channels do
         local ch = channels[i];
         local wrapped = EtherTheme.wrapHint(tr("UI_Fmt_LabelValue",
-            { label = ch.label, value = ch.url or none }), maxW);
+            { label = ch.label, value = ch.value or none }), maxW);
         for j = 1, #wrapped do
-            local entry = { text = wrapped[j], col = th.textDim };
-            if ch.url ~= nil then entry.url = ch.url; end
-            table.insert(contactLines, entry);
+            table.insert(contactLines, { text = wrapped[j], col = th.textDim });
         end
-    end
-    -- 可点击提示 (无 url, 常规暗色)
-    local hintLines = EtherTheme.wrapHint(getTranslate("UI_InformationPanel_Contacts_Hint"), maxW);
-    for j = 1, #hintLines do
-        table.insert(contactLines, { text = hintLines[j], col = th.textDim });
     end
     addBlock("UI_InformationPanel_Contacts_Title", contactLines);
 
@@ -210,7 +202,6 @@ function EtherInfoPanel:render()
     local fhS = th.fontHgtSmall;
     local lhH = th.fontHgtHint + 4;
     local y = 10 + self.scrollY;
-    self.linkRects = {};   -- 每帧重建链接命中区 (随滚动位置变化, 仅记录实际画出的可见行)
     for i = 1, #self.blocks do
         local blk = self.blocks[i];
         if y + blk.h > 0 and y < self.height then
@@ -224,17 +215,7 @@ function EtherInfoPanel:render()
             for j = 1, #blk.lines do
                 local ln = blk.lines[j];
                 if iy + lhH > 0 and iy < self.height then
-                    local col = ln.col;
-                    if ln.url ~= nil then
-                        col = EtherMain.accentColor;
-                        -- 命中区与 drawHintCentered 同一套居中公式, 宽度同源 hintWidth
-                        local w = EtherTheme.hintWidth(ln.text);
-                        local lx = (self.width - w) / 2;
-                        table.insert(self.linkRects, { x = lx, y = iy, w = w, h = lhH, url = ln.url });
-                        -- 下划线走 drawRect 1px (B42 drawLine 首参要 Texture, EtherTheme 边线同款画法)
-                        self:drawRect(lx, iy + lhH - 1, w, 1, 0.7, col.r, col.g, col.b);
-                    end
-                    self:drawHintCentered(ln.text, iy, col);
+                    self:drawHintCentered(ln.text, iy, ln.col);
                 end
                 iy = iy + lhH;
             end
@@ -254,25 +235,6 @@ function EtherInfoPanel:onMouseWheel(del)
 end
 
 --*********************************************************
---* 联系方式链接: 点中链接行直接 openUrl (浏览器打开),
---* 不进入面板拖动; 未点中回落 ISPanel 原行为 (按住拖动面板)
---* 命中区是上一帧 render 记录的面板本地坐标, 与绘制同源
---*********************************************************
-function EtherInfoPanel:onMouseDown(x, y)
-    local rects = self.linkRects;
-    if rects ~= nil then
-        for i = 1, #rects do
-            local r = rects[i];
-            if x >= r.x and x <= r.x + r.w and y >= r.y and y <= r.y + r.h then
-                openUrl(r.url);
-                return true;
-            end
-        end
-    end
-    return ISPanel.onMouseDown(self, x, y);
-end
-
---*********************************************************
 --* Создание нового экземпляра меню
 --*********************************************************
 function EtherInfoPanel:new(posX, posY, width, height)
@@ -286,7 +248,6 @@ function EtherInfoPanel:new(posX, posY, width, height)
     menuTableData.moveWithMouse = true;
     menuTableData.localPlayer = getPlayer();
     menuTableData.scrollY = 0;
-    menuTableData.linkRects = {};
     self.__index = self;
 
     return menuTableData;

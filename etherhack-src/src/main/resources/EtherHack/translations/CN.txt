@@ -33,7 +33,6 @@
     UI_InformationPanel_AntiCheatStatus_CustomLogger = "自定义日志系统: ",
     UI_InformationPanel_Contacts_Title = "联系方式",
     UI_InformationPanel_Contacts_Donation = "捐赠",
-    UI_InformationPanel_Contacts_Hint = "点击带下划线的链接可直接打开",
     UI_InformationPanel_AntiCheatStatus_Enable = "已启用",
     UI_InformationPanel_AntiCheatStatus_Disable = "已禁用",
     UI_InformationPanel_AntiCheatStatus_Format = "{label}[{value}]",
