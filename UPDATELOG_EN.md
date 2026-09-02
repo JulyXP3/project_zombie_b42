@@ -61,7 +61,7 @@
 - UI: "Headshot only" and "Auto-repair inventory items" checkboxes swapped positions.
 - Fixed: NoClip / Invisible / God mode / Zombies don't attack now work in single-player again (requires enabling "Bypass debug mode ban (type 12)"). Note: ineffective in multiplayer.
 - Feature: Vehicle unconditional hotwire — instantly hotwires and starts the vehicle locally; auto-disables after 30s. Toggle moved to the Character tab, above "Auto-repair inventory items".
-- Fixed: fishing-rod item spawn — restored the Loot page spawn UI (previously overwritten during a sync) and the fishSpawn* globals (removed exposeFishingSpawn caused an error on spawn); list position/height adjusted.
+- Fixed: fishing-rod item spawn — restored the Loot page spawn UI (previously overwritten during a sync).
 - Build: version bumped to 3.1.8.
 
 ## [3.1.7]
