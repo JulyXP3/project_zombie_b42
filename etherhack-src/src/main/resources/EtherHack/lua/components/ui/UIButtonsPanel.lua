@@ -49,8 +49,18 @@ function UIButtonsPanel:prerender()
 
         -- 文字: 激活青亮, 否则次青
         local tc = active and b or td;
-        self:drawText(tr(t.labelKey), BOX_M + PAD_X + ICON + GAP,
-            ty + (TILE_H - EtherTheme.fontHgtSmall) / 2, tc.r, tc.g, tc.b, 1, UIFont.Small);
+        local tx = BOX_M + PAD_X + ICON + GAP;
+        local ty0 = ty + (TILE_H - EtherTheme.fontHgtSmall) / 2;
+        local label = tr(t.labelKey);
+        -- 长翻译 (俄语) 超宽时按 hintScale 缩放绘制 (drawHintText 的 DrawString
+        -- 通道, 08-29 已实机验证), 保证任何语言都不溢出磁贴背景框
+        local maxTextW = (self.width - BOX_M) - tx - 6;
+        if maxTextW > 40 and getTextManager():MeasureStringX(UIFont.Small, label) > maxTextW then
+            local th = EtherTheme.fontHgtHint;
+            EtherTheme.drawHintText(self, label, tx, ty + (TILE_H - th) / 2, tc);
+        else
+            self:drawText(label, tx, ty0, tc.r, tc.g, tc.b, 1, UIFont.Small);
+        end
     end
 end
 

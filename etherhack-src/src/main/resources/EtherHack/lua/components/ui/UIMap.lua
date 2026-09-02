@@ -79,20 +79,32 @@ function UIMap:render()
 
 	UIMap.ensureDrawFlags();
 
+	-- 每帧共享量: 世界缩放/标记尺寸/视口剔除半径 —— 桥调用一次提出循环外
+	-- (原每符号各调一次, 700 符号 ≈ 3500+ 桥调用/帧, 是"注入后 hitch 膨胀"主源)
+	local worldScale = self.mapAPI:getWorldScale()
+	local baseSize = 125 / worldScale
+	local size = clamp(baseSize, 2, 5)
+	-- 视口剔除半径(世界格): 高缩放时视野仅几格, 视口外符号跳过全套桥换算;
+	-- 低缩放(拉远)时半径自动覆盖全列表, 不误删。+3 格余量防边缘抖动
+	local px, py = self.localPlayer:getX(), self.localPlayer:getY()
+	local visR = (math.min(self:getWidth(), self:getHeight()) / 2) / worldScale + 3
+
 	-- Отрисовка зомби
 	if UIMap.drawZombies then
 		local zombies = getCell():getZombieList()
 		for i=1,zombies:size() do
 			local zombie = zombies:get(i-1)
 
-			local x = self.mapAPI:worldToUIX(zombie:getX(), zombie:getY());
-			local y = self.mapAPI:worldToUIY(zombie:getX(), zombie:getY());
+			local zx, zy = zombie:getX(), zombie:getY()
+			if math.abs(zx - px) > visR or math.abs(zy - py) > visR then
+				-- 视口外: 纯 Lua 判断跳过, 不走 worldToUIX/Y 桥
+			else
+				local x = self.mapAPI:worldToUIX(zx, zy);
+				local y = self.mapAPI:worldToUIY(zx, zy);
 
-			local size = 125 / self.mapAPI:getWorldScale()
-			size = clamp(size, 2, 5)
-
-			self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.zombieColor.a, self.zombieColor.r, self.zombieColor.g, self.zombieColor.b);
-			self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
+				self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.zombieColor.a, self.zombieColor.r, self.zombieColor.g, self.zombieColor.b);
+				self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
+			end
 		end
 	end
 
@@ -101,19 +113,20 @@ function UIMap:render()
 		local vehicles = getCell():getVehicles():toArray()
 		for i=1,#vehicles do
 			local vehicle = vehicles[i]
+			local vx, vy = vehicle:getX(), vehicle:getY()
+			if math.abs(vx - px) > visR or math.abs(vy - py) > visR then
+				-- 视口外跳过
+			else
+				local x = self.mapAPI:worldToUIX(vx, vy);
+				local y = self.mapAPI:worldToUIY(vx, vy);
 
-			local x = self.mapAPI:worldToUIX(vehicle:getX(), vehicle:getY());
-			local y = self.mapAPI:worldToUIY(vehicle:getX(), vehicle:getY());
-
-			local size = 125 / self.mapAPI:getWorldScale()
-			size = clamp(size, 2, 5)
-
-			self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.vehicleColor.a, self.vehicleColor.r, self.vehicleColor.g, self.vehicleColor.b);
-			self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
-			if self.mapAPI:getWorldScale() > 5 then
-			self:drawTextCentre(vehicle:getScriptName(), x + 1, y + 6, 0.0, 0.0, 0.0, 1.0, UIFont.Small);
-			self:drawTextCentre(vehicle:getScriptName(), x, y + 5, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
-		end
+				self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.vehicleColor.a, self.vehicleColor.r, self.vehicleColor.g, self.vehicleColor.b);
+				self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
+				if worldScale > 5 then
+				self:drawTextCentre(vehicle:getScriptName(), x + 1, y + 6, 0.0, 0.0, 0.0, 1.0, UIFont.Small);
+				self:drawTextCentre(vehicle:getScriptName(), x, y + 5, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
+			end
+			end
 		end
 	end
 
@@ -125,17 +138,19 @@ function UIMap:render()
 			for i=1,players:size() do
 				local player = players:get(i-1)
 				if player ~= self.localPlayer then
-					local x = self.mapAPI:worldToUIX(player:getX(), player:getY());
-					local y = self.mapAPI:worldToUIY(player:getX(), player:getY());
+					local ox, oy = player:getX(), player:getY()
+					if math.abs(ox - px) > visR or math.abs(oy - py) > visR then
+						-- 视口外跳过
+					else
+						local x = self.mapAPI:worldToUIX(ox, oy);
+						local y = self.mapAPI:worldToUIY(ox, oy);
 
-					local size = 125 / self.mapAPI:getWorldScale()
-					size = clamp(size, 2, 5)
-
-					self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.playerColor.a, self.playerColor.r, self.playerColor.g, self.playerColor.b);
-					self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
-					if self.mapAPI:getWorldScale() > 1 then
-						self:drawTextCentre(player:getUsername(), x + 1, y + 6, 0.0, 0.0, 0.0, 1.0, UIFont.Small);
-						self:drawTextCentre(player:getUsername(), x, y + 5, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
+						self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.playerColor.a, self.playerColor.r, self.playerColor.g, self.playerColor.b);
+						self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
+						if worldScale > 1 then
+							self:drawTextCentre(player:getUsername(), x + 1, y + 6, 0.0, 0.0, 0.0, 1.0, UIFont.Small);
+							self:drawTextCentre(player:getUsername(), x, y + 5, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
+						end
 					end
 				end
 			end
@@ -149,12 +164,9 @@ function UIMap:render()
 		local x = self.mapAPI:worldToUIX(player:getX(), player:getY());
 		local y = self.mapAPI:worldToUIY(player:getX(), player:getY());
 	
-		local size = 125 / self.mapAPI:getWorldScale()
-		size = clamp(size, 2, 5)
-	
 		self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.localPlayerColor.a, self.localPlayerColor.r, self.localPlayerColor.g, self.localPlayerColor.b);
 		self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
-		if self.mapAPI:getWorldScale() > 1 then
+		if worldScale > 1 then
 			self:drawTextCentre(player:getUsername(), x + 1, y + 6, 0.0, 0.0, 0.0, 1.0, UIFont.Small);
 			self:drawTextCentre(player:getUsername(), x, y + 5, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
 		end
@@ -163,17 +175,19 @@ function UIMap:render()
 	-- Отрисовка найденных предметов (поиск по миру); 刷新由事件驱动 (EtherItemSearch.refresh)
 	if UIMap.drawItems and EtherItemSearch.results ~= nil then
 		for _, p in pairs(EtherItemSearch.results) do
-			local x = self.mapAPI:worldToUIX(p.x, p.y);
-			local y = self.mapAPI:worldToUIY(p.x, p.y);
+			local ix, iy = p.x, p.y
+			if math.abs(ix - px) > visR or math.abs(iy - py) > visR then
+				-- 视口外跳过
+			else
+				local x = self.mapAPI:worldToUIX(ix, iy);
+				local y = self.mapAPI:worldToUIY(ix, iy);
 
-			-- 与玩家/僵尸标记同尺寸
-			local size = 125 / self.mapAPI:getWorldScale()
-			size = clamp(size, 2, 5)
-
-			self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, 1.0, 0.75, 0.75, 0.75);
-			self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
-			if p.count > 1 then
-				self:drawTextCentre(tostring(p.count), x, y + size + 2, 0.75, 0.75, 0.75, 1.0, UIFont.Small);
+				-- 与玩家/僵尸标记同尺寸
+				self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, 1.0, 0.75, 0.75, 0.75);
+				self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
+				if p.count > 1 then
+					self:drawTextCentre(tostring(p.count), x, y + size + 2, 0.75, 0.75, 0.75, 1.0, UIFont.Small);
+				end
 			end
 		end
 	end

@@ -12,6 +12,8 @@ require "ISUI/ISPanel"
 --*     + 攻速倍率/攻击距离加成输入行 (应用/重置, 手动摆进盒内);
 --*   - 物品与携带: 手中物品无限耐久/自动修理/无限负重(多人经 PlayerDamage
 --*     自报包周期上报, 服务端每帧重算由 20/s 重发压制);
+--*   - 配方: 学习所有可用的制作配方 (2026-09-02 自「其他」页迁入,
+--*     多人同步版 + 旧 learnAllRecipes 兜底, onlyInGame 门控);
 --*   - 特殊模式: 创造/夜视/真-夜视/僵尸不理会
 --*     (作弊耕种已于 2026-08-25 移入独立「耕种」选项卡 EtherFarmingPanel;
 --*      僵尸不理会 = IsoZombie.setTarget 注入拦截本地玩家, 模拟上传
@@ -222,6 +224,24 @@ local function placeEntryRow(panel, bx, by, innerW, spec)
 end
 
 --*********************************************************
+--* 标签 + 右对齐按钮 行 (模块盒内, 一次性动作如学习配方)。
+--* placeEntryRow 同族布局: 标签左, 按钮贴盒内右沿; 返回占用高度。
+--* 按钮以 onlyInGame 跟踪 — 主菜单构建时 refreshGating 灰置
+--* (面板随玩家状态变化重建, 游戏内构建即启用, 与实时 canRun 等价)。
+--*********************************************************
+local function placeButtonRow(panel, bx, by, innerW, spec)
+    local ctrlH = EtherTheme.ctrlH;
+    local label = EtherTheme.makeLabel(bx, by, ctrlH, tr(spec.title));
+    panel:addChild(label);
+    local btnTitle = tr(spec.btnKey);
+    local btnW = UIButton.measureWidth(btnTitle);
+    local btn = UIButton:new(bx + innerW - btnW - EtherFormPanel.BOX_PAD_X, by, btnW, ctrlH,
+        btnTitle, spec.onClick, btnW);
+    panel:addWidget(btn, { onlyInGame = true });
+    return ctrlH;
+end
+
+--*********************************************************
 --* 构建表单内容 (基类 createChildren 回调): 五个功能模块。
 --* 描述表在运行时构建, 确保引用的全局已暴露。
 --*********************************************************
@@ -296,6 +316,25 @@ function EtherCharacterPanel:build()
             },
         },
         {
+            -- 配方: 一次性动作模块 (buttons), 2026-09-02 自「其他」页迁入。
+            -- 多人同步版优先 (本地全学 + SyncPlayerFields 上行, 服务端 parse 采纳),
+            -- 旧 learnAllRecipes 兜底。
+            title = "UI_CharacterPanel_Group_Crafting",
+            buttons = {
+                {
+                    title = "UI_Exploit_LearnAllRecipesTitle",
+                    btnKey = "UI_Exploit_LearnAllRecipesButton",
+                    onClick = function()
+                        if learnAllRecipesSynced ~= nil then
+                            learnAllRecipesSynced();
+                        else
+                            learnAllRecipes();
+                        end
+                    end,
+                },
+            },
+        },
+        {
             title = "UI_CharacterPanel_Group_Special",
             items = {
                 { key = "UI_CharacterPanel_NightVision", on = toggleNightVision, get = isEnableNightVision },
@@ -343,8 +382,8 @@ function EtherCharacterPanel:build()
         local w = self:_rowContentW();
         local innerW = w - EtherFormPanel.BOX_PAD_X * 2;
 
-        -- 高度预算: 网格 (预排一次, 摆放复用同一份 rows) + 可选说明行/输入行
-        local rows, gridH, colW = planGrid(mod.items, innerW);
+        -- 高度预算: 网格 (预排一次, 摆放复用同一份 rows) + 可选说明行/输入行/按钮行
+        local rows, gridH, colW = planGrid(mod.items or {}, innerW);
         local contentH = gridH;
         local hintH = 0;
         if mod.hint ~= nil then
@@ -354,6 +393,11 @@ function EtherCharacterPanel:build()
         if mod.entries ~= nil then
             for ei = 1, #mod.entries do
                 contentH = contentH + 6 + entryRowHeight(innerW, mod.entries[ei].title);
+            end
+        end
+        if mod.buttons ~= nil then
+            for bi = 1, #mod.buttons do
+                contentH = contentH + 6 + EtherTheme.ctrlH;
             end
         end
 
@@ -374,6 +418,12 @@ function EtherCharacterPanel:build()
                 local ey = cy + 6;
                 for ei = 1, #mod.entries do
                     ey = ey + placeEntryRow(self, ix, ey, iW, mod.entries[ei]) + 6;
+                end
+            end
+            if mod.buttons ~= nil then
+                local py = cy + 6;
+                for bi = 1, #mod.buttons do
+                    py = py + placeButtonRow(self, ix, py, iW, mod.buttons[bi]) + 6;
                 end
             end
         end);

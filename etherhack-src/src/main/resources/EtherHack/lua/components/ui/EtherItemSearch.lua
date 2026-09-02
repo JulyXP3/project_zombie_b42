@@ -73,11 +73,13 @@ function EtherItemSearch.startScan(targetTypes, silent, onDone)
     local function addAt(x, y, z, name)
         local k = math.floor(x) .. "," .. math.floor(y) .. "," .. math.floor(z);
         if cur.key[k] ~= nil then
-            cur.out[cur.key[k]].count = cur.out[cur.key[k]].count + 1;
+            local hit = cur.out[cur.key[k]];
+            hit.count = hit.count + 1;
+            hit.label = hit.name .. " x" .. hit.count;
         else
             cur.n = cur.n + 1;
             cur.key[k] = cur.n;
-            cur.out[cur.n] = { x = math.floor(x), y = math.floor(y), z = math.floor(z), name = name, count = 1 };
+            cur.out[cur.n] = { x = math.floor(x), y = math.floor(y), z = math.floor(z), name = name, count = 1, label = name .. " x1" };
         end
     end
 
@@ -236,6 +238,8 @@ local function stepScan()
 
     -- 完成: 原子替换结果 (进行期间旧标记照常显示)
     local n = cur.n;
+    -- 预拼世界标记文字: drawWorldMarkers 每帧读现成串, 免每帧 name.." x"..count 拼接
+    -- (数百命中 × 每帧 = Kahlua GC 尖峰源)。楼层标签与玩家 z 相关, 留给绘制侧按帧算
     EtherItemSearch.results = cur.out;
     EtherItemSearch.lastScanAt = getTimestampMs();
     EtherItemSearch._scanX = cur.px;
@@ -467,6 +471,7 @@ local function drawWorldMarkers()
         if sx > -160 and sy > -20 and sx < sw and sy < sh then
             -- 物品侧文字: 名称 x数量 + 楼层 (z 相对玩家: 楼上/楼下, 同层不标 —— 修"分不清哪层楼")
             -- 数量分隔用 ASCII x: 游戏 Small 字体缺 × 字形, 实测渲染成空白 (实机截图 "扳手 1")
+            -- 文字主体预拼于扫描完成时 (cur.out 侧 label 字段), 此处只拼楼层小尾巴
             local dz = (p.z or 0) - pz;
             local floorTag = "";
             if dz > 0 then
@@ -474,7 +479,7 @@ local function drawWorldMarkers()
             elseif dz < 0 then
                 floorTag = " " .. tr("UI_RadarPanel_FloorDown");
             end
-            local text = p.name .. " x" .. p.count .. floorTag;
+            local text = (p.label or (p.name .. " x" .. p.count)) .. floorTag;
             local tx = sx - tm:MeasureStringX(UIFont.Small, text) / 2;
             -- 阴影 + 主字双层, 与 ESP 文字同款画法; 琥珀色区别于僵尸红/载具白
             -- DrawString 用 8 参无缩放形式 (原版先例), 不赌 9 参重载分派

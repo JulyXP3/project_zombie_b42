@@ -2,9 +2,15 @@
 
 ## [3.2.2] - Current
 
-- Added: "Attack range bonus" (Character tab - Combat, adjustable 0-4 tiles) — melee can now reach up to weapon's vanilla range + bonus, beyond the vanilla 3-tile hit cap; keeps 1 tile of safety headroom against your own server's validation by default.
+- Added: "Fun" tab — ① "Send as another player": post chat messages under any online player's name (server-wide or say/30-tile channel; the target player can't see the message themselves, multiplayer only); ② "Zombie skin": wear a rotting zombie skin in one click (light/heavy rot plus a rotten-face option, a new look each click, skin and face combine freely).
+- Added: "Swap" tab — consume clothing from your inventory to obtain any clothing/bags/armor in the list (mod items included).
+- Added: "Attack range bonus" (Character tab - Combat, adjustable 0-4 tiles).
 - Changed: "Attack speed" cap tightened from 3.0 to 2.5 — at higher multipliers targets get knocked back and swings whiff, so effective hit rate drops.
 - Improved: "Item Radar" searches now run in small background steps — no more periodic stutters while moving or picking up items; the frame stays smooth, and old markers keep showing until the refresh completes.
+- Improved: minimap overall cost — the game runs smoother with the minimap always open, and pre-existing occasional hitches no longer get stretched out.
+- Fixed: "Learn all available crafting recipes" not working in multiplayer — recipes now sync to the server, pass crafting validation, and persist through relogging.
+- Changed: "Learn all available crafting recipes" moved to the Character tab.
+- Fixed: buttons on the "Other" tab were clickable while unavailable — unavailable buttons are now greyed out and unclickable (e.g. vehicle mechanics when no vehicle nearby).
 - Build: version bumped to 3.2.2.
 
 ## [3.2.1]
@@ -55,6 +61,7 @@
 - UI: "Headshot only" and "Auto-repair inventory items" checkboxes swapped positions.
 - Fixed: NoClip / Invisible / God mode / Zombies don't attack now work in single-player again (requires enabling "Bypass debug mode ban (type 12)"). Note: ineffective in multiplayer.
 - Feature: Vehicle unconditional hotwire — instantly hotwires and starts the vehicle locally; auto-disables after 30s. Toggle moved to the Character tab, above "Auto-repair inventory items".
+- Fixed: fishing-rod item spawn — restored the Loot page spawn UI (previously overwritten during a sync) and the fishSpawn* globals (removed exposeFishingSpawn caused an error on spawn); list position/height adjusted.
 - Build: version bumped to 3.1.8.
 
 ## [3.1.7]
@@ -72,6 +79,7 @@
 ## [3.1.6]
 
 - Feature: "Loot reroll" tab — resets loot records for all containers in a radius (default 10), reopened containers get re-rolled by the server, gun cabinets/ammo boxes can yield weapons and ammo; F9 hotkey; multiplayer only.
+- Feature: "Fishing rod spawn" section (self-hosted servers only) — inject any item via fishing rod, ~5-8 s per item.
 - Fixed: "server sync protection" toggle not working.
 - UI: full panel restyle — RE2 remake style + frosted glass (main window, sidebar, buttons, tables, floating windows, popups); fixed glass dimming and text overlap.
 

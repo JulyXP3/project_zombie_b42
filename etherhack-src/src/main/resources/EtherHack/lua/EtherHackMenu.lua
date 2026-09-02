@@ -29,6 +29,8 @@ local etherModules = {
     "EtherHack/lua/components/ui/UIItemTables.lua",
     "EtherHack/lua/components/ui/EtherItemSearch.lua",
     "EtherHack/lua/components/ui/EtherTrapPOC.lua",
+    "EtherHack/lua/components/ui/EtherFishSpawn.lua",
+    "EtherHack/lua/components/ui/EtherExchange.lua",
     "EtherHack/lua/components/ui/EtherAmmoFarm.lua",
     "EtherHack/lua/components/ui/UIMap.lua",
     "EtherHack/lua/components/ui/UISkillTable.lua",
@@ -38,6 +40,8 @@ local etherModules = {
     "EtherHack/lua/components/panels/EtherItemCreator.lua",
     "EtherHack/lua/components/panels/EtherRadarPanel.lua",
     "EtherHack/lua/components/panels/EtherTrapSpawn.lua",
+    "EtherHack/lua/components/panels/EtherExchangePanel.lua",
+    "EtherHack/lua/components/panels/EtherFunPanel.lua",
     "EtherHack/lua/components/panels/EtherPlayerEditor.lua",
     "EtherHack/lua/components/panels/EtherVisualsPanel.lua",
     "EtherHack/lua/components/panels/EtherMapPanel.lua",
@@ -98,6 +102,8 @@ function EtherMain:createChildren()
     self.buttonsPanel:addButton("EtherHack/media/ui/itemCreator.png", "UI_Nav_Items", EtherItemCreator);
     self.buttonsPanel:addButton("EtherHack/media/ui/radar.png", "UI_Nav_Radar", EtherRadarPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/trap.png", "UI_Nav_Traps", EtherTrapSpawn);
+    -- 「等价交换」: 任意物品生成 (红队链), 位于「陷阱」之后 (同为物品生成类)
+    self.buttonsPanel:addButton("EtherHack/media/ui/exchange.png", "UI_Nav_Exchange", EtherExchangePanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/playerEditor.png", "UI_Nav_Player", EtherPlayerEditor);
     self.buttonsPanel:addButton("EtherHack/media/ui/visuals.png", "UI_Nav_Visuals", EtherVisualsPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/teleport.png", "UI_Nav_Teleport", EtherMapPanel);
@@ -105,6 +111,8 @@ function EtherMain:createChildren()
     self.buttonsPanel:addButton("EtherHack/media/ui/vehicle.png", "UI_Nav_Vehicle", EtherVehiclePanel);
     -- 「耕种」: 原角色页「作弊耕种模式」开关的面板化替代, 位于「载具」之后
     self.buttonsPanel:addButton("EtherHack/media/ui/farming.png", "UI_Nav_Farming", EtherFarmingPanel);
+    -- 「趣味」: 整活功能集中页 (红队 PoC: 冒名发消息/僵尸皮肤), 位于「耕种」之后
+    self.buttonsPanel:addButton("EtherHack/media/ui/fun.png", "UI_Nav_Fun", EtherFunPanel);
     -- 「创建角色」: 建号相关功能集中页 (自定义编辑/建号增强), 位于「耕种」与「其他」之间。
     self.buttonsPanel:addButton("EtherHack/media/ui/characterBoost.png", "UI_Nav_CharacterBoost", EtherCharacterBoostPanel);
     -- 「其他」(原「漏洞」): 位置固定在「耕种」与「设置」之间。

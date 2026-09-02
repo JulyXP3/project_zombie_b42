@@ -525,7 +525,10 @@ public class EtherAPI {
         SafeEtherLuaMethods protectedMethods = this.createProtectedMethods();
         this.exposer.exposeAPI(protectedMethods);
         this.exposer.exposeServerSyncBlocker();
+        this.exposer.exposeFishingSpawn();
         this.exposer.exposeTrapSpawn();
+        this.exposer.exposeChat();
+        this.exposer.exposeRecipes();
         this.exposer.exposeRenderingAPI();
         this.initializeProtectedState();
     }
@@ -1372,6 +1375,21 @@ public class EtherAPI {
             }
         }
 
+        public void exposeFishingSpawn() {
+            for (Method method : FishingSpawnAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                // static method -> global function: use exposeGlobalClassFunction,
+                // NOT exposeMethod (the latter only attaches to the class metatable)
+                this.exposeGlobalClassFunction(LuaManager.env, FishingSpawnAPI.class, method, name);
+                Logger.printLog("Exposed FishingSpawnAPI method: " + name);
+            }
+        }
+
         public void exposeTrapSpawn() {
             for (Method method : TrapSpawnAPI.class.getMethods()) {
                 if (!method.isAnnotationPresent(LuaMethod.class)) continue;
@@ -1395,6 +1413,32 @@ public class EtherAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, RenderingAPI.class, method, name);
                 Logger.printLog("Exposed RenderingAPI method: " + name);
+            }
+        }
+
+        public void exposeChat() {
+            for (Method method : ChatAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, ChatAPI.class, method, name);
+                Logger.printLog("Exposed ChatAPI method: " + name);
+            }
+        }
+
+        public void exposeRecipes() {
+            for (Method method : RecipeAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, RecipeAPI.class, method, name);
+                Logger.printLog("Exposed RecipeAPI method: " + name);
             }
         }
 

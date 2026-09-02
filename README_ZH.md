@@ -69,7 +69,7 @@
 
 1. 准备编译依赖: 将游戏根目录下的 `projectzomboid.jar` 复制到 `etherhack-src/lib/` 目录下, 并改名为 `zombie.jar`(该文件仅用于编译, 不会被修改)。
 2. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
-3. 从 `build` 目录中拿到 `EtherHack-3.2.1-B42.jar`。
+3. 从 `build` 目录中拿到 `EtherHack-3.2.2-B42.jar`。
 4. 将 jar 和 `etherhack-src/install.bat` 一起复制到游戏根目录。
 5. 运行 `install.bat` 完成安装(需要系统装有 JDK)。
 
@@ -84,7 +84,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-产物在 `etherhack-src/build/EtherHack-3.2.1-B42.jar`。Lua 源码嵌入在 `src/main/resources/EtherHack/lua/` 中, 构建时自动打包。
+产物在 `etherhack-src/build/EtherHack-3.2.2-B42.jar`。Lua 源码嵌入在 `src/main/resources/EtherHack/lua/` 中, 构建时自动打包。
 
 ## 测试
 
@@ -102,7 +102,7 @@ temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main
 
 | 路径 | 说明 |
 |---|---|
-| `etherhack-src/build/EtherHack-3.2.1-B42.jar` | 可直接使用的构建产物(当前版本) |
+| `etherhack-src/build/EtherHack-3.2.2-B42.jar` | 可直接使用的构建产物(当前版本) |
 | `etherhack-src/` | 完整源码 (Gradle 工程, 含 `build.bat` / `install.bat`) |
 | `tests/` | Lua 冒烟测试 + Kahlua 兼容性检查脚本 |
 | `analysis/` | 反编译取证用的类文件片段 |

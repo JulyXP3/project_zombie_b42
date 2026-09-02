@@ -238,16 +238,27 @@ function EtherRadarPanel:createChildren()
     local innerX = PAD + IP;
     local innerW = boxW - IP * 2;
 
-    -- ================= 顶部: 搜索 (名称/ID 各一行, 标签左 输入框右) =================
+    -- ================= 顶部: 搜索 (名称/ID 同一行, 标签左 输入框右) =================
+    -- 宽度不足时自动拆两行 (鱼竿页同款); 标签限宽 40% 防长翻译压住输入框
     local sy = PAD;
     local nameT = getTranslate("UI_RadarPanel_SearchName");
     local idT = getTranslate("UI_RadarPanel_SearchId");
-    local lblW = math.max(tm:MeasureStringX(UIFont.Small, nameT), tm:MeasureStringX(UIFont.Small, idT));
-    local entW = innerW - lblW - GAP;
+    local nlW = tm:MeasureStringX(UIFont.Small, nameT);
+    local ilW = tm:MeasureStringX(UIFont.Small, idT);
+    local maxLabelW = math.floor(innerW * 0.4);
+    if nlW > maxLabelW then nlW = maxLabelW; end
+    if ilW > maxLabelW then ilW = maxLabelW; end
+    local entW = math.floor((innerW - nlW - ilW - GAP * 3) / 2);
+    local twoRows = entW < 90;
+    if twoRows then
+        entW = innerW - nlW - GAP;
+        if entW < 60 then entW = 60; end
+    end
     local rowH = EtherTheme.entryH + GAP;
-    local searchH = rowH * 2 + IP;
+    -- 盒高: 上下各留 IP 内边距 (与物品页一致, 下方留冗余), 修正"搜索框偏下贴底"
+    local searchH = twoRows and (rowH + EtherTheme.entryH + IP * 2) or (EtherTheme.entryH + IP * 2);
 
-    self.searchName = ISTextEntryBox:new("", innerX + lblW + GAP, sy + IP, entW, EtherTheme.entryH);
+    self.searchName = ISTextEntryBox:new("", innerX + nlW + GAP, sy + IP, entW, EtherTheme.entryH);
     EtherTheme.styleEntry(self.searchName);
     self.searchName:initialise();
     self.searchName:instantiate();
@@ -255,7 +266,16 @@ function EtherRadarPanel:createChildren()
     self.searchName.onTextChange = function() EtherRadarPanel.applyFilter(self) end
     self:addChild(self.searchName);
 
-    self.searchId = ISTextEntryBox:new("", innerX + lblW + GAP, sy + IP + rowH, entW, EtherTheme.entryH);
+    local idX, idY;
+    if twoRows then
+        idX = innerX;
+        idY = sy + IP + rowH;
+        entW = math.max(60, innerW - ilW - GAP);
+    else
+        idX = innerX + nlW + GAP + entW + GAP;
+        idY = sy + IP;
+    end
+    self.searchId = ISTextEntryBox:new("", idX + ilW + GAP, idY, entW, EtherTheme.entryH);
     EtherTheme.styleEntry(self.searchId);
     self.searchId:initialise();
     self.searchId:instantiate();
@@ -264,7 +284,7 @@ function EtherRadarPanel:createChildren()
     self:addChild(self.searchId);
 
     self:_text(innerX, sy + IP + EtherTheme.entryLabelDY, nameT, EtherTheme.text, UIFont.Small);
-    self:_text(innerX, sy + IP + rowH + EtherTheme.entryLabelDY, idT, EtherTheme.text, UIFont.Small);
+    self:_text(idX, idY + EtherTheme.entryLabelDY, idT, EtherTheme.text, UIFont.Small);
     self:_group(PAD, sy, boxW, searchH);
 
     -- ================= 底部: 两个勾选 + 说明 + 状态 =================
