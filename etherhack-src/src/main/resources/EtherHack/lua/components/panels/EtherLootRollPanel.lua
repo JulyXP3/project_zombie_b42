@@ -86,13 +86,10 @@ function EtherLootRollPanel:render()
         return
     end
 
-    -- 钓竿生成状态 (生成中/已生成/失败; 无消息时显示用法提示)
-    -- 长提示按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
+    -- 钓竿生成状态 (生成中/已生成/失败; 空闲时无消息, 使用提示在底部静态注册)
+    -- 长消息按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
     local fishStatus = tostring(EtherFishSpawn.message or "")
-    if fishStatus == "" then
-        fishStatus = getTranslate("UI_FishSpawn_Hint")
-    end
-    if self.statusX ~= nil then
+    if fishStatus ~= "" and self.statusX ~= nil then
         if self.statusCacheText ~= fishStatus or self.statusCacheW ~= self.statusW then
             self.statusLines = EtherTheme.wrapHint(fishStatus, self.statusW);
             self.statusCacheText = fishStatus;
@@ -269,6 +266,12 @@ function EtherLootRollPanel:createChildren()
         self:_text(innerX, cy, hintLines[i], EtherTheme.textDim, nil, true);
         cy = cy + EtherTheme.fontHgtHint;
     end
+    -- 留痕警告 (红字): 每次重置都会进服务器日志且带玩家名, 提醒仅自建服使用
+    local warnLines = EtherTheme.wrapHint(getTranslate("UI_LootRoll_TraceWarn"), innerW);
+    for i = 1, #warnLines do
+        self:_text(innerX, cy, warnLines[i], EtherTheme.statusRed, nil, true);
+        cy = cy + EtherTheme.fontHgtHint;
+    end
     self:_group(PAD, g1y, boxW, (cy - g1y) + IP);
 
     -- ================= 分组2: 刷弹药 =================
@@ -393,8 +396,12 @@ function EtherLootRollPanel:createChildren()
     self:addChild(self.filterId);
     cy = cy + EtherTheme.entryH + GAP;
 
-    -- 底部行: 生成按钮 + 状态文字 (状态由 render 动态绘制)
-    local bottomY = g3y + g3h - IP - ctrlH;
+    -- 底部区: 生成按钮行 + 使用提示 + 留痕警告 (自下而上: 警告 -> 提示 -> 按钮),
+    -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩
+    local hintLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_Hint"), innerW);
+    local warnLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_TraceWarn"), innerW);
+    local notesH = (#hintLinesF + #warnLinesF) * EtherTheme.fontHgtHint + GAP * 2;
+    local bottomY = g3y + g3h - IP - ctrlH - notesH;
     local spawnTitle = getTranslate("UI_FishSpawn_Button");
     local spawnW = UIButton.measureWidth(spawnTitle);
     if spawnW > innerW then spawnW = innerW; end
@@ -444,8 +451,19 @@ function EtherLootRollPanel:createChildren()
     self.spawnBtn.isOnlyInGame = true;
     self:addChild(self.spawnBtn);
 
-    -- 状态文字区域 (生成按钮右侧): 记录可用宽度, 由 render 按此折行,
-    -- 避免长提示 (如 "Multiplayer: hold a fishing rod, ...") 冲出面板右缘。
+    -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册)
+    local noteY = bottomY + ctrlH + GAP;
+    for i = 1, #hintLinesF do
+        self:_text(innerX, noteY, hintLinesF[i], EtherTheme.textDim, nil, true);
+        noteY = noteY + EtherTheme.fontHgtHint;
+    end
+    for i = 1, #warnLinesF do
+        self:_text(innerX, noteY, warnLinesF[i], EtherTheme.statusRed, nil, true);
+        noteY = noteY + EtherTheme.fontHgtHint;
+    end
+
+    -- 状态文字区域 (生成按钮右侧): 只显示动态状态消息 (生成中/已生成/失败),
+    -- 空闲时留空 —— 使用提示已改为底部静态注册, 不再在此兜底
     self.statusX = innerX + spawnW + GAP * 2;
     self.statusY = bottomY + labelDY;
     self.statusW = (innerX + innerW) - self.statusX;

@@ -317,14 +317,22 @@ function EtherTrapSpawn:createChildren()
     local hintW = (PAD + boxW - IP) - hintX;
     if hintW < 60 then hintW = 60; end
     -- 两种模式的说明都按可用宽度折行注册, 高度取较髙者, 显示按模式二选一;
+    -- 武器模式说明拆两段: 普通用法 (灰) + 留痕警告 (红);
     -- 极端窄面板/超长翻译下说明文字限行 (最多 6 行): 说明是次要信息,
     -- 不该吃掉大半面板把列表挤没 (底部块反推 actY 过小即此因)。
     local maxHintLines = 6;
     local foodHintLines = EtherTheme.wrapHint(getTranslate("UI_TrapSpawn_Hint"), hintW);
     local weaponHintLines = EtherTheme.wrapHint(getTranslate("UI_TrapSpawn_HintWeapon"), hintW);
+    local weaponWarnLines = EtherTheme.wrapHint(getTranslate("UI_TrapSpawn_TraceWarnWeapon"), hintW);
+    local weaponTotal = #weaponHintLines + #weaponWarnLines;
     while #foodHintLines > maxHintLines do table.remove(foodHintLines); end
-    while #weaponHintLines > maxHintLines do table.remove(weaponHintLines); end
-    local hintH = math.max(#foodHintLines, #weaponHintLines) * EtherTheme.fontHgtHint;
+    while weaponTotal > maxHintLines do
+        -- 超行时优先砍普通说明, 警告句保到底
+        if #weaponHintLines > 1 then table.remove(weaponHintLines);
+        else table.remove(weaponWarnLines); end
+        weaponTotal = weaponTotal - 1;
+    end
+    local hintH = math.max(#foodHintLines, weaponTotal) * EtherTheme.fontHgtHint;
     local actH = math.max(ctrlH, hintH) + fhS + GAP;      -- 操作行 + 状态行
     local actY = H - PAD - (actH + IP * 2);
 
@@ -361,9 +369,14 @@ function EtherTrapSpawn:createChildren()
         self:_text(hintX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, foodHintLines[i],
             EtherTheme.textDim, nil, true, "food");
     end
+    -- 武器模式: 普通用法 (灰) 在前, 留痕警告 (红) 紧随其后
     for i = 1, #weaponHintLines do
         self:_text(hintX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, weaponHintLines[i],
             EtherTheme.textDim, nil, true, "weapon");
+    end
+    for i = 1, #weaponWarnLines do
+        self:_text(hintX, hintY0 + (#weaponHintLines + i - 1) * EtherTheme.fontHgtHint,
+            weaponWarnLines[i], EtherTheme.statusRed, nil, true, "weapon");
     end
 
     -- 状态行 (动态, 由 render 绘制)
