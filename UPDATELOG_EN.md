@@ -1,11 +1,17 @@
 # Changelog
 
-## [3.2.2] - Current
+## [3.2.3] - Current
+
+- Added: "Guns always hit (ignores environment)" (Character tab - Combat) — firearms no longer miss due to rain, fog, darkness, panic, movement or other conditions; stacks freely with "Headshot only" and "Crit Max".
+- Changed: "Instant kill" no longer extends weapon range; engagement range is back to the weapon's original values. One-hit-kill capability unchanged.
+- Build: version bumped to 3.2.3.
+
+## [3.2.2]
 
 - Added: "Fun" tab — ① "Send as another player": post chat messages under any online player's name (server-wide or say/30-tile channel; the target player can't see the message themselves, multiplayer only); ② "Zombie skin": wear a rotting zombie skin in one click (light/heavy rot plus a rotten-face option, a new look each click, skin and face combine freely).
 - Added: "Swap" tab — consume clothing from your inventory to obtain any clothing/bags/armor in the list (mod items included).
 - Added: "Attack range bonus" (Character tab - Combat, adjustable 0-4 tiles).
-- Changed: "Attack speed" cap tightened from 3.0 to 2.5 — at higher multipliers targets get knocked back and swings whiff, so effective hit rate drops.
+- Changed: "Attack speed" cap tightened from 3.0 to 2.5.
 - Improved: "Item Radar" searches now run in small background steps — no more periodic stutters while moving or picking up items; the frame stays smooth, and old markers keep showing until the refresh completes.
 - Improved: minimap overall cost — the game runs smoother with the minimap always open, and pre-existing occasional hitches no longer get stretched out.
 - Fixed: "Learn all available crafting recipes" not working in multiplayer — recipes now sync to the server, pass crafting validation, and persist through relogging.

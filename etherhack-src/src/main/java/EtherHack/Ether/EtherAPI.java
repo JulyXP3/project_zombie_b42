@@ -115,6 +115,7 @@ public class EtherAPI {
     private HandWeapon recoilStompedWeapon;
     private long lastPlayerDamageSendMs;
     public boolean isHeadshotOnly;
+    public boolean isAlwaysHit;
     public boolean isBypassDebugMode;
     public boolean initialCoreDebugCaptured;
     public boolean initialCoreDebug;
@@ -202,6 +203,7 @@ public class EtherAPI {
         var3.setProperty("isZombieDontAttack", Boolean.toString(this.isZombieDontAttack));
         var3.setProperty("isNoRecoil", Boolean.toString(this.isNoRecoil));
         var3.setProperty("isHeadshotOnly", Boolean.toString(this.isHeadshotOnly));
+        var3.setProperty("isAlwaysHit", Boolean.toString(this.isAlwaysHit));
         var3.setProperty("isBypassDebugMode", Boolean.toString(this.isBypassDebugMode));
         var3.setProperty("isUnlimitedCarry", Boolean.toString(this.isUnlimitedCarry));
         var3.setProperty("isUnlimitedCondition", Boolean.toString(this.isUnlimitedCondition));
@@ -315,6 +317,7 @@ public class EtherAPI {
         this.isZombieDontAttack = ConfigUtils.getBooleanFromConfig(var3, "isZombieDontAttack", false);
         this.isNoRecoil = ConfigUtils.getBooleanFromConfig(var3, "isNoRecoil", false);
         this.isHeadshotOnly = ConfigUtils.getBooleanFromConfig(var3, "isHeadshotOnly", false);
+        this.isAlwaysHit = ConfigUtils.getBooleanFromConfig(var3, "isAlwaysHit", false);
         this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var3, "isBypassDebugMode", false);
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCarry", false);
         this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCondition", false);
@@ -426,6 +429,7 @@ public class EtherAPI {
         this.isZombieDontAttack = ConfigUtils.getBooleanFromConfig(var1, "isZombieDontAttack", false);
         this.isNoRecoil = ConfigUtils.getBooleanFromConfig(var1, "isNoRecoil", false);
         this.isHeadshotOnly = ConfigUtils.getBooleanFromConfig(var1, "isHeadshotOnly", false);
+        this.isAlwaysHit = ConfigUtils.getBooleanFromConfig(var1, "isAlwaysHit", false);
         this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var1, "isBypassDebugMode", false);
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCarry", false);
         this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCondition", false);
@@ -697,13 +701,14 @@ public class EtherAPI {
             if (!this.originalWeaponStats.containsKey(var4)) {
                 this.originalWeaponStats.put(var4, new float[]{var3.getExtraDamage(), var3.getMaxDamage(), var3.getMinDamage(), var3.getMaxRange(), var3.getMinRange(), var3.getHitChance(), var3.getCriticalDamageMultiplier()});
             }
+            // 秒杀只踩伤害三件套 (extraDamage/max/min): 必死能力 = 本地百万伤害 + 命中包
+            // Hit.set 钳 ≤100 (覆盖原版任何僵尸血量), 与射程无关。不再踩 maxRange/minRange/
+            // hitChance/criticalDamageMultiplier —— MP 下服务器用自身武器数据校验命中距离
+            // (AntiCheatHitWeapon: distance-5 > maxRange 拒收并计可疑计数), 客户端踩大射程
+            // 只会让越界包被拒; 交战范围回归武器脚本值, 按构造落在服务器包络内。
             var3.setExtraDamage(100000.0f);
             var3.setMaxDamage(1000000.0f);
             var3.setMinDamage(1000000.0f);
-            var3.setMaxRange(10000.0f);
-            var3.setMinRange(0.0f);
-            var3.setHitChance(100);
-            var3.setCriticalDamageMultiplier(100000.0f);
         }
         if (this.isCritMax && var2 != null && (var2.getStringItemType().equals("RangedWeapon") || var2.getStringItemType().equals("MeleeWeapon")) && var2 instanceof HandWeapon) {
             var3 = (HandWeapon)var2;

@@ -673,6 +673,17 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="getAlwaysHit", global=true)
+    public static boolean getAlwaysHit() {
+        return EtherMain.getInstance().etherAPI.isAlwaysHit;
+    }
+
+    @LuaMethod(name="toggleAlwaysHit", global=true)
+    public static void toggleAlwaysHit(boolean var0) {
+        EtherMain.getInstance().etherAPI.isAlwaysHit = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isAutoRepairItems", global=true)
     public static boolean isAutoRepairItems() {
         return EtherMain.getInstance().etherAPI.isAutoRepairItems;

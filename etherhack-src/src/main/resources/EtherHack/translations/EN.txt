@@ -58,6 +58,7 @@
     UI_CharacterPanel_UnlimitedCarry = "Unlimited carry",
     UI_CharacterPanel_UnlimitedEndurance = "Unlimited endurance",
     UI_CharacterPanel_HeadshotOnly = "Headshot only",
+    UI_CharacterPanel_AlwaysHit = "Guns always hit (ignores environment)",
     UI_CharacterPanel_DisableRecoil = "Increase Fire Rate",
     UI_CharacterPanel_DisableFatigue = "Disable fatigue",
     UI_CharacterPanel_DisableHunger = "Disable hunger",

@@ -438,6 +438,54 @@ public class GamePatcher {
         }
     }
 
+    //*********************************************************
+    //* 枪械百发百中 (EtherAPI.isAlwaysHit): 劫持 CombatManager.calculateHitChanceData
+    //* 的收尾 PUTFIELD (唯一可能产生 <100 的 clamp 路径; 前两个早退 PUTFIELD 本就写
+    //* MAXIMUM=100) —— 栈上 POP 丢弃钳制结果, LDC 100.0f 覆写。
+    //* 消费方: calculateHitInfoList 的 hitInfo.chance (=100 → Rand.Next(100)<=100 恒中)
+    //* + updateReticle 的 isoReticle.setChance (准星同步显示 100%)。
+    //* 服务端包内无命中率字段, 与只爆头同一信任模型, MP 同样生效。
+    //*********************************************************
+    private void patchAlwaysHit() {
+        Logger.print("Patching CombatManager.calculateHitChanceData with always-hit hook...");
+        try {
+            Patch.injectIntoClass("zombie/CombatManager", "calculateHitChanceData", false, method -> {
+                AbstractInsnNode putfield = method.instructions.getLast();
+                while (putfield != null && !(putfield instanceof FieldInsnNode
+                        && ((FieldInsnNode)putfield).owner.equals("zombie/CombatManager$HitChanceData")
+                        && ((FieldInsnNode)putfield).name.equals("hitChance"))) {
+                    putfield = putfield.getPrevious();
+                }
+                if (putfield == null) {
+                    throw new IllegalStateException("hitChance PUTFIELD not found in calculateHitChanceData");
+                }
+                // 开关守卫 (与 patchHeadshotOnly 同款三级判空): isAlwaysHit=false 时跳过覆写,
+                // PUTFIELD 落回钳制原值 = 原版行为。守卫指令全部栈中性 (IFNULL/IFEQ 自弹测试值),
+                // 不影响 [hitChanceData_ref, clamped_F] 操作数栈。
+                InsnList toInject = new InsnList();
+                LabelNode skipOverwrite = new LabelNode();
+                toInject.add((AbstractInsnNode)new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add((AbstractInsnNode)new JumpInsnNode(198, skipOverwrite));
+                toInject.add((AbstractInsnNode)new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add((AbstractInsnNode)new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                toInject.add((AbstractInsnNode)new JumpInsnNode(198, skipOverwrite));
+                toInject.add((AbstractInsnNode)new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add((AbstractInsnNode)new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                toInject.add((AbstractInsnNode)new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isAlwaysHit", "Z"));
+                toInject.add((AbstractInsnNode)new JumpInsnNode(153, skipOverwrite));
+                toInject.add((AbstractInsnNode)new InsnNode(87));
+                toInject.add((AbstractInsnNode)new LdcInsnNode(Float.valueOf(100.0f)));
+                toInject.add((AbstractInsnNode)skipOverwrite);
+                method.instructions.insertBefore(putfield, toInject);
+                Logger.print("  [OK] Injected always-hit (chance=100) into CombatManager.calculateHitChanceData()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: Always-hit injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
     private void patchGameClientSyncBlocker() {
         Logger.print("Patching GameClient.update with server sync filter...");
         try {
@@ -995,6 +1043,7 @@ public class GamePatcher {
         this.patchLuaManager();
         this.patchAntiCheatSystem();
         this.patchHeadshotOnly();
+        this.patchAlwaysHit();
         this.patchGameClientSyncBlocker();
         this.patchRoleCapabilityForSP();
         this.patchVehicleNoKey();

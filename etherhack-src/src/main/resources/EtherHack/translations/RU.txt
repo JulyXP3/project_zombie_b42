@@ -58,6 +58,7 @@
     UI_CharacterPanel_UnlimitedCarry = "Неограниченная переноска",
     UI_CharacterPanel_UnlimitedEndurance = "Неограниченная выносливость",
     UI_CharacterPanel_HeadshotOnly = "Только в голову",
+    UI_CharacterPanel_AlwaysHit = "Огнестрел без промаха (без влияния среды)",
     UI_CharacterPanel_DisableRecoil = "Повышение скорострельности",
     UI_CharacterPanel_DisableFatigue = "Отключить усталость",
     UI_CharacterPanel_DisableHunger = "Отключить голод",

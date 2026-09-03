@@ -298,6 +298,7 @@ function EtherCharacterPanel:build()
                   get = isExtraDamage },
                 { key = "UI_CharacterPanel_CritMax",          on = toggleCritMax,        get = isCritMax },
                 { key = "UI_CharacterPanel_HeadshotOnly",     on = toggleHeadshotOnly,   get = isHeadshotOnly },
+                { key = "UI_CharacterPanel_AlwaysHit",        on = toggleAlwaysHit,      get = getAlwaysHit },
                 { key = "UI_CharacterPanel_DisableRecoil",    on = toggleNoRecoil,       get = isNoRecoil },
                 { key = "UI_CharacterPanel_MultiHitZombies",  on = toggleMultiHitZombies, get = isMultiHitZombies },
                 { key = "UI_CharacterPanel_UnlimitedAmmo",    on = toggleUnlimitedAmmo,  get = isUnlimitedAmmo },
