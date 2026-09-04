@@ -4,6 +4,9 @@
 
 - Added: "Guns always hit (ignores environment)" (Character tab - Combat) — firearms no longer miss due to rain, fog, darkness, panic, movement or other conditions; stacks freely with "Headshot only" and "Crit Max".
 - Changed: "Instant kill" no longer extends weapon range; engagement range is back to the weapon's original values. One-hit-kill capability unchanged.
+- Reworked: the "Players" tab — player info and recipes merged into one module, a new "VHS lessons" module added, traits and skills shown as separate sections.
+- Added: "VHS lessons" (Players tab) — search and boost any skill in one click; requires a playing radio/TV nearby (vehicle radios work), and an inventory radio is placed out automatically when none is around; the server's media XP cap setting may limit the effect.
+- Fixed: hint text overlap on the "Loot" tab.
 - Build: version bumped to 3.2.3.
 
 ## [3.2.2]
