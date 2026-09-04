@@ -12,8 +12,7 @@ require "ISUI/ISPanel"
 --*     + 攻速倍率/攻击距离加成输入行 (应用/重置, 手动摆进盒内);
 --*   - 物品与携带: 手中物品无限耐久/自动修理/无限负重(多人经 PlayerDamage
 --*     自报包周期上报, 服务端每帧重算由 20/s 重发压制);
---*   - 配方: 学习所有可用的制作配方 (2026-09-02 自「其他」页迁入,
---*     多人同步版 + 旧 learnAllRecipes 兜底, onlyInGame 门控);
+--*   - 配方: 学习所有可用的制作配方 (2026-09-04 自本页迁入「玩家」页);
 --*   - 特殊模式: 创造/夜视/真-夜视/僵尸不理会
 --*     (作弊耕种已于 2026-08-25 移入独立「耕种」选项卡 EtherFarmingPanel;
 --*      僵尸不理会 = IsoZombie.setTarget 注入拦截本地玩家, 模拟上传
@@ -314,25 +313,6 @@ function EtherCharacterPanel:build()
                 -- 填充皮革条: 修复衣物的镜像操作 — 对覆盖部位伪造满级皮革衬垫(原版补丁数据), 防御叠加
                 { key = "UI_CharacterPanel_PadClothing",        on = togglePadClothing,          get = isPadClothing },
                 { key = "UI_CharacterPanel_UnlimitedCarry",     on = toggleEnableUnlimitedCarry, get = isEnableUnlimitedCarry },
-            },
-        },
-        {
-            -- 配方: 一次性动作模块 (buttons), 2026-09-02 自「其他」页迁入。
-            -- 多人同步版优先 (本地全学 + SyncPlayerFields 上行, 服务端 parse 采纳),
-            -- 旧 learnAllRecipes 兜底。
-            title = "UI_CharacterPanel_Group_Crafting",
-            buttons = {
-                {
-                    title = "UI_Exploit_LearnAllRecipesTitle",
-                    btnKey = "UI_Exploit_LearnAllRecipesButton",
-                    onClick = function()
-                        if learnAllRecipesSynced ~= nil then
-                            learnAllRecipesSynced();
-                        else
-                            learnAllRecipes();
-                        end
-                    end,
-                },
             },
         },
         {

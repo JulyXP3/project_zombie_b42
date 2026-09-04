@@ -27,10 +27,13 @@
  */
 package EtherHack.Ether;
 
+import EtherHack.Ether.ChatAPI;
 import EtherHack.Ether.EtherLuaMethods;
 import EtherHack.Ether.EtherMain;
 import EtherHack.Ether.EventProtector;
 import EtherHack.Ether.ProtectionManagerX;
+import EtherHack.Ether.RadioXpAPI;
+import EtherHack.Ether.RecipeAPI;
 import EtherHack.Ether.SafeAPI;
 import EtherHack.Ether.ServerSyncBlocker;
 import EtherHack.GameClientWrapper;
@@ -529,8 +532,9 @@ public class EtherAPI {
         SafeEtherLuaMethods protectedMethods = this.createProtectedMethods();
         this.exposer.exposeAPI(protectedMethods);
         this.exposer.exposeServerSyncBlocker();
-        this.exposer.exposeFishingSpawn();
-        this.exposer.exposeTrapSpawn();
+            this.exposer.exposeFishingSpawn();
+            this.exposer.exposeTrapSpawn();
+            this.exposer.exposeRadioXp();
         this.exposer.exposeChat();
         this.exposer.exposeRecipes();
         this.exposer.exposeRenderingAPI();
@@ -1405,6 +1409,19 @@ public class EtherAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, TrapSpawnAPI.class, method, name);
                 Logger.printLog("Exposed TrapSpawnAPI method: " + name);
+            }
+        }
+
+        public void exposeRadioXp() {
+            for (Method method : RadioXpAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, RadioXpAPI.class, method, name);
+                Logger.printLog("Exposed RadioXpAPI method: " + name);
             }
         }
 

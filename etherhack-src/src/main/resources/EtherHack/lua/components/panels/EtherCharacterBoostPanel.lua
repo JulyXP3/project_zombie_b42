@@ -91,12 +91,14 @@ end
 
 local function buildPerkEntries()
     local out = {};
-    local maxIndex = PerkFactory.Perks.getMaxIndex();
+    -- vanilla 同款链 (ISPlayerStatsUI.lua:720): Perks 枚举常量没有 getName(),
+    -- 必须经 PerkFactory.getPerk 转成 Perk 对象再调
+    local maxIndex = Perks.getMaxIndex();
     for i = 0, maxIndex - 1 do
-        local perk = PerkFactory.Perks.fromIndex(i);
-        if perk ~= nil and perk ~= PerkFactory.Perks.None and perk ~= PerkFactory.Perks.MAX
-            and not (perk.parent == PerkFactory.Perks.None
-                and perk ~= PerkFactory.Perks.Fitness and perk ~= PerkFactory.Perks.Strength) then
+        local perk = PerkFactory.getPerk(Perks.fromIndex(i));
+        if perk ~= nil and perk ~= Perks.None and perk ~= Perks.MAX
+            and not (perk.parent == Perks.None
+                and perk ~= Perks.Fitness and perk ~= Perks.Strength) then
             local name = perk:getName();        -- 显式 getName() -> 真 Lua 字符串
             table.insert(out, {
                 name = name,
@@ -177,6 +179,10 @@ function EtherCharacterBoostPanel:build()
             local list = ISScrollingListBox:new(ix, listY, iW, LIST_H);
             list:initialise();
             list:instantiate();
+            -- 游戏 new 默认 font=UIFont.Large (行高≈40px); 行高压到 Small 后
+            -- Large 字被挤裁, 显式降到 Small 与自定义 doDrawItem 的字号一致
+            list.font = UIFont.Small;
+            list.fontHgt = getTextManager():getFontFromEnum(UIFont.Small):getLineHeight();
             list.itemheight = EtherTheme.listItemH;
             list.selected = -1;
             list.drawBorder = false;
