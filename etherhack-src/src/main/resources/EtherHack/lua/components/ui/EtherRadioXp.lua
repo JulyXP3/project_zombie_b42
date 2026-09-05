@@ -92,7 +92,7 @@ function EtherRadioXp.placeAnchor()
         local canPower = (not dd:getIsBatteryPowered()) or dd:getPower() > 0 or dd:canBePoweredHere();
         if canPower then
             dd:setIsTurnedOn(true);
-            dd:setDeviceVolume(5);   -- 与 findAnchor 的音量门槛一致
+            dd:setDeviceVolume(1.0);   -- DeviceData 内部音量标度 0-1 (setDeviceVolume 钳制), 1.0 = UI 音量条 10/10 满格, 满足"5以上"门槛
             EtherRadioXp.placePending = true;   -- OnObjectAdded 里二次保险 (见下)
         else
             HaloTextHelper.addText(player, getTranslate("UI_RadioXp_NeedBattery"), "[br/]", HaloTextHelper.getColorRed());
@@ -117,7 +117,7 @@ local function onObjectAdded(obj)
         local dd = obj:getDeviceData();
         if dd ~= nil then
             if not dd:getIsTurnedOn() then dd:setIsTurnedOn(true); end
-            if dd:getDeviceVolume() < 5 then dd:setDeviceVolume(5); end
+            if dd:getDeviceVolume() < 0.5 then dd:setDeviceVolume(1.0); end
         end
     end
 end
@@ -137,7 +137,7 @@ function EtherRadioXp.upgrade(code)
         HaloTextHelper.addText(player, getTranslate("UI_RadioXp_Cooldown"), "[br/]", HaloTextHelper.getColorRed());
         return;
     end
-    -- 锚点: 扫描周围 10 格开着且音量>0 的设备 (家具收音机/电视/车载电台)
+    -- 锚点: 扫描周围 10 格开着且音量≥5格 (内部 0.5) 的设备 (家具收音机/电视/车载电台)
     local anchor = EtherRadioXp.findAnchor(10);
     if anchor == nil then
         -- 无锚点 → 尝试自动放置收音机 (打开放置光标, 放好后玩家再点一次升级);
@@ -164,14 +164,17 @@ function EtherRadioXp.upgrade(code)
     end
 end
 
--- 检查一个设备对象是否可用锚点 (开着 + 音量 > 0)。
+-- 检查一个设备对象是否可用锚点 (开着 + 音量达标)。
+-- 音量标度: DeviceData.deviceVolume 内部是 0-1 浮点 (setDeviceVolume 把 >1 钳回 1.0),
+-- 游戏内设备选项的音量条是 10 格 (ISVolumeBar.volumeSteps=10, 内部值 = 显示格数/10)。
+-- 门槛"音量5以上" = 内部 0.5。勿写成 5 —— 内部最大 1.0, <5 恒真会永远找不到锚点。
 -- 返回 { channel=, isTv= } 或 nil。
 local function anchorFromDevice(dev)
     if dev == nil then return nil end
     local dd = dev:getDeviceData();
     if dd == nil then return nil end
     if not dd:getIsTurnedOn() then return nil end
-    if dd:getDeviceVolume() < 5 then return nil end
+    if dd:getDeviceVolume() < 0.5 then return nil end
     return { channel = dd:getChannel(), isTv = dd:getIsTelevision() };
 end
 
