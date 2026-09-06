@@ -684,6 +684,29 @@ public class EtherLuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="getSuperMultiHit", global=true)
+    public static boolean getSuperMultiHit() {
+        return EtherMain.getInstance().etherAPI.isSuperMultiHit;
+    }
+
+    @LuaMethod(name="toggleSuperMultiHit", global=true)
+    public static void toggleSuperMultiHit(boolean var0) {
+        EtherMain.getInstance().etherAPI.isSuperMultiHit = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="getSuperMultiHitCount", global=true)
+    public static int getSuperMultiHitCount() {
+        return EtherMain.getInstance().etherAPI.superMultiHitCount;
+    }
+
+    @LuaMethod(name="setSuperMultiHitCount", global=true)
+    public static void setSuperMultiHitCount(int var0) {
+        // 数量钳制 10~20 (研判 §五.1); 输入行即时钳制, 生效开关由 toggleSuperMultiHit 决定
+        EtherMain.getInstance().etherAPI.superMultiHitCount = var0 < 10 ? 10 : (var0 > 20 ? 20 : var0);
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isAutoRepairItems", global=true)
     public static boolean isAutoRepairItems() {
         return EtherMain.getInstance().etherAPI.isAutoRepairItems;

@@ -31,23 +31,23 @@ dependencies {
     implementation(files("lib/zombie.jar"))
     implementation(files("lib/Kahlua.jar"))
     implementation(files("lib/org.jar"))
+}
 
-    tasks.named<Jar>("jar") {
-        destinationDirectory.set(project.file("build"))
-        archiveFileName.set("EtherHack-${version}.jar")
+tasks.named<Jar>("jar") {
+    destinationDirectory.set(project.file("build"))
+    archiveFileName.set("EtherHack-${version}.jar")
 
-        manifest {
-            attributes["Main-Class"] = "EtherHack.Main"
-        }
-
-        duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-
-        from(configurations.runtimeClasspath.get().map { file ->
-            if (file.isDirectory) {
-                file
-            } else {
-                zipTree(file)
-            }
-        })
+    manifest {
+        attributes["Main-Class"] = "EtherHack.Main"
     }
+
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+
+    from(configurations.runtimeClasspath.get().map { file ->
+        if (file.isDirectory) {
+            file
+        } else {
+            zipTree(file)
+        }
+    })
 }

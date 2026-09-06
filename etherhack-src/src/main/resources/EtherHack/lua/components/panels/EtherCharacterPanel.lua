@@ -8,8 +8,6 @@ require "ISUI/ISPanel"
 --*   - 调试权限功能: 上帝/穿墙/隐身/进度条秒走完 (标签带 (SP)),
 --*     盒底附说明: 需在「其他」页开启「解锁调试权限(单人)」, 仅单人有效
 --*     (B42 的 Role.isUsingDebugMode 显式排除联网客户端, 多人开关无效);
---*   - 战斗强化: 秒杀/暴击Max/枪械只爆头/提高枪械射速/群攻/无限弹药/无卡壳
---*     + 攻速倍率/攻击距离加成输入行 (应用/重置, 手动摆进盒内);
 --*   - 物品与携带: 手中物品无限耐久/自动修理/无限负重(多人经 PlayerDamage
 --*     自报包周期上报, 服务端每帧重算由 20/s 重发压制);
 --*   - 配方: 学习所有可用的制作配方 (2026-09-04 自本页迁入「玩家」页);
@@ -19,8 +17,10 @@ require "ISUI/ISPanel"
 --*      target=-1 服务端零校验采纳 —— 多人可用, 不再需要调试权限);
 --*   - 状态与需求: 无限耐力 + 各类负面状态禁用 + 维持最佳体重/卡路里
 --*     + 禁用肌肉拉伤/高速回血 (同走 PlayerDamage 自报通道);
+--*   - 战斗强化已于 2026-09-05 迁入独立「战斗」选项卡 (EtherCombatPanel);
 --*   - 建号增强已于 2026-08-26 迁入独立「创建角色」选项卡
 --*     (EtherCharacterBoostPanel, 含自定义编辑/角色特性点数)。
+--* 2026-09-05 更名: 页面改称「生存」(战斗功能拆出后, 剩余内容均为生存向作弊)。
 --* 模块内复选框按模块内宽自适应 1~3 列 (planGrid 预排一次, 高度预算与
 --* 实际摆放共用同一份布局; 长标签折行按行内最大行数增高)。
 --*
@@ -241,7 +241,7 @@ local function placeButtonRow(panel, bx, by, innerW, spec)
 end
 
 --*********************************************************
---* 构建表单内容 (基类 createChildren 回调): 五个功能模块。
+--* 构建表单内容 (基类 createChildren 回调): 四个功能模块。
 --* 描述表在运行时构建, 确保引用的全局已暴露。
 --*********************************************************
 function EtherCharacterPanel:build()
@@ -266,42 +266,6 @@ function EtherCharacterPanel:build()
                       if p ~= nil then p:setBuildCheat(c); end
                   end,
                   get = function() return ISBuildMenu.cheat; end },
-            },
-        },
-        {
-            title = "UI_CharacterPanel_Group_Combat",
-            entries = {
-                {   -- 攻速倍率: IsoGameCharacter.calculateCombatSpeed 返回值乘数 (原版 clamp 之后再乘)
-                    title = "UI_Exploit_CombatSpeedMultiplierTitle",
-                    minValue = 1.0, maxValue = 2.5, resetText = "1.0",
-                    getInitial = function()
-                        if type(getCombatSpeedMultiplier) == "function" then return getCombatSpeedMultiplier(); end
-                        return 1.0;
-                    end,
-                    apply = function(num) setCombatSpeedMultiplier(num); end,
-                },
-                {   -- 攻击距离加成 (格): 近战最远 = 原版maxRange+加成, 服务器复核线+5 之内留 1 格冗余
-                    title = "UI_Exploit_AttackRangeBonusTitle",
-                    minValue = 0.0, maxValue = 4.0, resetText = "0.0",
-                    getInitial = function()
-                        if type(getAttackRangeBonus) == "function" then return getAttackRangeBonus(); end
-                        return 0.0;
-                    end,
-                    apply = function(num) setAttackRangeBonus(num); end,
-                },
-            },
-            items = {
-                -- 特例: 关闭时额外还原武器数据 (与原版一致)
-                { key = "UI_CharacterPanel_InstantKill",
-                  on = function(c) toggleExtraDamage(c); if not c then resetWeaponsStats(); end end,
-                  get = isExtraDamage },
-                { key = "UI_CharacterPanel_CritMax",          on = toggleCritMax,        get = isCritMax },
-                { key = "UI_CharacterPanel_HeadshotOnly",     on = toggleHeadshotOnly,   get = isHeadshotOnly },
-                { key = "UI_CharacterPanel_AlwaysHit",        on = toggleAlwaysHit,      get = getAlwaysHit },
-                { key = "UI_CharacterPanel_DisableRecoil",    on = toggleNoRecoil,       get = isNoRecoil },
-                { key = "UI_CharacterPanel_MultiHitZombies",  on = toggleMultiHitZombies, get = isMultiHitZombies },
-                { key = "UI_CharacterPanel_UnlimitedAmmo",    on = toggleUnlimitedAmmo,  get = isUnlimitedAmmo },
-                { key = "UI_CharacterPanel_NoJam",            on = toggleNoJam,          get = isNoJam },
             },
         },
         {

@@ -1,11 +1,47 @@
 # Changelog
 
+## [3.2.4] - Current
+
+- Added: "Autopilot" (Vehicle tab) — sit in the driver seat, press M and right-click "Auto-drive here" on the map: speed, corners, obstacle avoidance, waiting for unloaded map areas and arrival braking are all automatic; re-anchor at any time to reroute, any driving key takes over instantly; the Vehicle tab offers cruise speed (0 = auto) and obstacle policy (slow detour / stop and wait / low-speed push).
+- Added: "Super multi-hit" (Combat tab) — one swing hits up to 10-20 targets (adjustable) in all directions (behind you too); "Apply" = active, "Reset" = back to vanilla.
+- Added: "Temp weapon" (Combat tab) — temporarily swap your held weapon for any firearm from the list: full ammo and condition, ready to fire; "Swap back" instantly restores the original item; zero server traces (gunshots are audible server-wide).
+- Changed: new "Combat" tab — combat boost, super multi-hit and temp weapon live here; the former "Character" tab is renamed to "Survival".
+- Fixed: temp weapon list appearing empty; its search bar now matches the Exchange page design (Name/ID fields with clear buttons).
+- Changed: temp weapon no longer shows the red warning note (visible only on screen, not verifiable in server logs).
+- Changed: the VHS teaching search (Player tab) now matches the Exchange page design (Name/ID fields with clear buttons).
+- Fixed: the Player tab erroring and failing to open.
+- Changed: the Combat tab icon has been redrawn to match the other tab icons.
+- Fixed: autopilot — the full map (M) right-click now offers "Auto-drive here" too; fixed the error when starting after anchoring a target; fixed the error when switching the obstacle policy.
+- Fixed: the "Temp weapon — swap" button erroring out on click (generating and swapping the held weapon now works).
+- Fixed: the temp weapon search bar layout where labels and input boxes overlapped into a jumble.
+- Improved: autopilot obstacle handling — static obstacles (fences, lampposts, guardrails, walls) now trigger early slowdown and detours instead of head-on collisions; rerouting after getting stuck is more responsive.
+- Improved: autopilot keeps a steady gear at low speed and while waiting (no more N/1 flip-flopping).
+- Fixed: errors on every gunshot and on "Swap back" in temp weapon (shooting itself worked).
+- Fixed: autopilot not moving after anchoring a target (steering worked, car stayed put).
+- Changed: the multi-hit family is renamed for consistency — "Group-Hit on zombies" is now "Multi-Hit", and the advanced version is "Multi-Hit Pro" (Russian: "Групповой удар" / "Групповой удар Pro").
+- Changed: the Multi-Hit Pro note has been reworded and now sits right below the feature (all languages).
+- Fixed: autopilot grinding through zombie crowds at low speed — it now stops in front and detours through visible gaps, prioritizing the destination.
+- Improved: autopilot cornering and edge tracking are much steadier, greatly reducing scrapes with lampposts and fences.
+- Changed: the obstacle policy no longer includes "Stop and wait" — only "Slow detour / Low-speed push" remain.
+- Fixed: the autopilot destination marker staying on the map after arrival (or after leaving the driver seat).
+- Fixed: autopilot getting stuck dead against bushes, lampposts or fences — it now reverses out, re-plans the route, and gives up with a clear notice only when a passage truly is impossible, instead of grinding in place forever.
+- Improved: autopilot now also senses bushes and hedges it previously could not "see", slowing down and detouring early.
+- Changed: "Autopilot" is renamed to "Pseudo-Autopilot" (all languages) — it was never a real autopilot anyway.
+- Added: while "Pseudo-Autopilot" is driving, the vehicle can pass through small obstacles such as fences, lampposts and bushes (no more slowing to a grind, no more getting stuck — it just slips through; zombies and other vehicles are still avoided); normal collisions are restored on arrival or exit.
+- Changed: the obstacle policy option is gone — zombies are now always pushed through at low speed (no more stopping to detour; routes stay smooth and steady), while other vehicles and unloaded map areas are still avoided as before.
+- Changed: "Pseudo-Autopilot" simplified — after anchoring, it follows the road network straight to the destination (grass and fields don't count as roads) with no frequent re-planning; zombies along the way die on contact while the car takes zero damage and is never stalled by crowds; narrow alleys no longer fail with "no route found".
+- Changed: "Pseudo-Autopilot" is renamed to "Navigation Mode" (all languages) — the map context menu now reads "Navigate here".
+- Fixed: occasional spinning in place before departing; cornering no longer overshoots off the road into woods as easily; the pass-through obstacle speed limit is raised from 12 to 30 km/h.
+- Changed: the Navigation Mode panel is streamlined — the stop button is removed (any driving key takes over instantly, which stops it) along with the duplicated status text while driving; also fixes vanilla error spam when browsing seat containers of a vehicle you have driven far away from.
+- Build: version bumped to 3.2.4.
+
 ## [3.2.3] - Current
 
 - Added: "Guns always hit (ignores environment)" (Character tab - Combat) — firearms no longer miss due to rain, fog, darkness, panic, movement or other conditions; stacks freely with "Headshot only" and "Crit Max".
 - Changed: "Instant kill" no longer extends weapon range; engagement range is back to the weapon's original values. One-hit-kill capability unchanged.
 - Reworked: the "Players" tab — player info and recipes merged into one module, a new "VHS lessons" module added, traits and skills shown as separate sections.
 - Added: "VHS lessons" (Players tab) — search and boost any skill in one click; requires a playing radio/TV nearby (vehicle radios work), and an inventory radio is placed out automatically when none is around; the server's media XP cap setting may limit the effect.
+- Added: "Corpse spawn" (Loot tab, multiplayer only) — a corpse carrying the chosen items instantly appears at your feet; loot it after the kill.
 - Fixed: hint text overlap on the "Loot" tab.
 - Build: version bumped to 3.2.3.
 

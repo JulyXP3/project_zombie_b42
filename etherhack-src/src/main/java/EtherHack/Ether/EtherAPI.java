@@ -119,6 +119,8 @@ public class EtherAPI {
     private long lastPlayerDamageSendMs;
     public boolean isHeadshotOnly;
     public boolean isAlwaysHit;
+    public boolean isSuperMultiHit;
+    public int superMultiHitCount = 10;
     public boolean isBypassDebugMode;
     public boolean initialCoreDebugCaptured;
     public boolean initialCoreDebug;
@@ -207,6 +209,8 @@ public class EtherAPI {
         var3.setProperty("isNoRecoil", Boolean.toString(this.isNoRecoil));
         var3.setProperty("isHeadshotOnly", Boolean.toString(this.isHeadshotOnly));
         var3.setProperty("isAlwaysHit", Boolean.toString(this.isAlwaysHit));
+        var3.setProperty("isSuperMultiHit", Boolean.toString(this.isSuperMultiHit));
+        var3.setProperty("superMultiHitCount", Integer.toString(this.superMultiHitCount));
         var3.setProperty("isBypassDebugMode", Boolean.toString(this.isBypassDebugMode));
         var3.setProperty("isUnlimitedCarry", Boolean.toString(this.isUnlimitedCarry));
         var3.setProperty("isUnlimitedCondition", Boolean.toString(this.isUnlimitedCondition));
@@ -321,6 +325,8 @@ public class EtherAPI {
         this.isNoRecoil = ConfigUtils.getBooleanFromConfig(var3, "isNoRecoil", false);
         this.isHeadshotOnly = ConfigUtils.getBooleanFromConfig(var3, "isHeadshotOnly", false);
         this.isAlwaysHit = ConfigUtils.getBooleanFromConfig(var3, "isAlwaysHit", false);
+        this.isSuperMultiHit = ConfigUtils.getBooleanFromConfig(var3, "isSuperMultiHit", false);
+        this.superMultiHitCount = ConfigUtils.getIntFromConfig(var3, "superMultiHitCount", 10);
         this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var3, "isBypassDebugMode", false);
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCarry", false);
         this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCondition", false);
@@ -433,6 +439,8 @@ public class EtherAPI {
         this.isNoRecoil = ConfigUtils.getBooleanFromConfig(var1, "isNoRecoil", false);
         this.isHeadshotOnly = ConfigUtils.getBooleanFromConfig(var1, "isHeadshotOnly", false);
         this.isAlwaysHit = ConfigUtils.getBooleanFromConfig(var1, "isAlwaysHit", false);
+        this.isSuperMultiHit = ConfigUtils.getBooleanFromConfig(var1, "isSuperMultiHit", false);
+        this.superMultiHitCount = ConfigUtils.getIntFromConfig(var1, "superMultiHitCount", 10);
         this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var1, "isBypassDebugMode", false);
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCarry", false);
         this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCondition", false);
@@ -538,6 +546,7 @@ public class EtherAPI {
         this.exposer.exposeChat();
         this.exposer.exposeRecipes();
         this.exposer.exposeRenderingAPI();
+        this.exposer.exposeAutoDrive();
         this.initializeProtectedState();
     }
 
@@ -1412,6 +1421,7 @@ public class EtherAPI {
             }
         }
 
+
         public void exposeRadioXp() {
             for (Method method : RadioXpAPI.class.getMethods()) {
                 if (!method.isAnnotationPresent(LuaMethod.class)) continue;
@@ -1461,6 +1471,22 @@ public class EtherAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, RecipeAPI.class, method, name);
                 Logger.printLog("Exposed RecipeAPI method: " + name);
+            }
+        }
+
+        // 自动驾驶域 (EtherHack/drive, 研判 §八): 静态 @LuaMethod → 全局函数;
+        // 引导时顺带读回持久化配置 (cruiseSpeed/policy, EtherHack/config/drive.properties)。
+        public void exposeAutoDrive() {
+            EtherHack.drive.EtherAutoDriveAPI.loadConfig();
+            for (Method method : EtherHack.drive.EtherAutoDriveAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, EtherHack.drive.EtherAutoDriveAPI.class, method, name);
+                Logger.printLog("Exposed EtherAutoDriveAPI method: " + name);
             }
         }
 

@@ -184,12 +184,35 @@ end
 --*********************************************************
 function EtherPlayerEditor:buildVhsModule()
     local innerW = self:_rowContentW() - EtherFormPanel.BOX_PAD_X * 2;
-    local searchH = EtherTheme.entryH;
     local listH = 160;
     local btnRowH = EtherTheme.ctrlH + 6;
 
+    -- 搜索行 (交换页同款 名称/ID 双框): 预算与摆放同一套判定; 标签限宽 40%
+    -- 防长翻译压住输入框
+    local tm = getTextManager();
+    local searchNameT = tr("UI_RadioXp_SearchName");
+    local searchIdT = tr("UI_RadioXp_SearchId");
+    local nameLblW = tm:MeasureStringX(UIFont.Small, searchNameT);
+    local idLblW = tm:MeasureStringX(UIFont.Small, searchIdT);
+    local searchGap = EtherTheme.ctrlGap;
+    local maxLblW = math.floor(innerW * 0.4);
+    if nameLblW > maxLblW then nameLblW = maxLblW; end
+    if idLblW > maxLblW then idLblW = maxLblW; end
+    local searchEntW = math.floor((innerW - nameLblW - idLblW - searchGap * 3) / 2);
+    local searchTwoRows = searchEntW < 90;
+    local nameEntW, idEntW, filterH;
+    if searchTwoRows then
+        nameEntW = math.max(60, innerW - nameLblW - searchGap);
+        idEntW = math.max(60, innerW - idLblW - searchGap);
+        filterH = EtherTheme.entryH * 2 + searchGap;
+    else
+        nameEntW = searchEntW;
+        idEntW = searchEntW;
+        filterH = EtherTheme.entryH;
+    end
+
     local hintLines = EtherTheme.wrapHint(tr("UI_RadioXp_Hint"), innerW);
-    local moduleH = searchH + 4 + listH + 6 + btnRowH + 8
+    local moduleH = filterH + 4 + listH + 6 + btnRowH + 8
         + #hintLines * EtherTheme.fontHgtHint + 6;
 
     self:addModule("UI_RadioXp_ModuleTitle", moduleH, function(bx, by, bw)
@@ -197,21 +220,41 @@ function EtherPlayerEditor:buildVhsModule()
         local iW = bw - EtherFormPanel.BOX_PAD_X * 2;
         self.hintRows = self.hintRows or {};
 
-        -- 搜索行 (标签 + 输入框, boost 页 makeSection 同款)
-        local searchLabel = tr("UI_RadioXp_Search");
-        local lb = EtherTheme.makeLabel(ix, by, searchH, searchLabel);
-        self:addChild(lb);
-        local entryX = ix + getTextManager():MeasureStringX(UIFont.Small, searchLabel) + EtherTheme.ctrlGap;
-        local search = ISTextEntryBox:new("", entryX, by,
-            math.max(80, ix + iW - entryX), searchH);
-        EtherTheme.styleEntry(search);
-        self:addWidget(search);
+        -- 搜索行 (交换页同款: 名称/ID 双框 AND 过滤, setClearButton 一键清空)
+        -- 注意: setClearButton 必须在 instantiate 之后调 — 它第一行就索引
+        -- javaObject (ISTextEntryBox.lua:102), 未初始化时为 nil, 点击页签即崩
+        -- (实测缺陷)
+        self:addChild(EtherTheme.makeLabel(ix, by, EtherTheme.entryH, searchNameT));
+        local nameEntry = ISTextEntryBox:new("", ix + nameLblW + searchGap, by,
+            nameEntW, EtherTheme.entryH);
+        EtherTheme.styleEntry(nameEntry);
+        nameEntry:initialise();
+        nameEntry:instantiate();
+        nameEntry:setClearButton(true);
+        self:addWidget(nameEntry);
+
+        local idX, idY;
+        if searchTwoRows then
+            idX = ix;
+            idY = by + EtherTheme.entryH + searchGap;
+        else
+            idX = ix + nameLblW + searchGap + nameEntW + searchGap;
+            idY = by;
+        end
+        self:addChild(EtherTheme.makeLabel(idX, idY, EtherTheme.entryH, searchIdT));
+        local idEntry = ISTextEntryBox:new("", idX + idLblW + searchGap, idY,
+            idEntW, EtherTheme.entryH);
+        EtherTheme.styleEntry(idEntry);
+        idEntry:initialise();
+        idEntry:instantiate();
+        idEntry:setClearButton(true);
+        self:addWidget(idEntry);
 
         -- 技能列表 (可训练技能: PERK_CODE 覆盖)。
         -- 字体必须显式降到 Small: 游戏 ISScrollingListBox:new 默认 UIFont.Large
         -- (行高 ≈40px, 用户实测"行太大"); boost 页列表也有此隐患 (只压 itemheight
         -- 不换 font, Large 字在 Small 行高里被挤裁)。
-        local list = ISScrollingListBox:new(ix, by + searchH + 4, iW, listH);
+        local list = ISScrollingListBox:new(ix, by + filterH + 4, iW, listH);
         list:initialise();
         list:instantiate();
         list.font = UIFont.Small;
@@ -227,16 +270,21 @@ function EtherPlayerEditor:buildVhsModule()
             entries = EtherRadioXp.trainablePerks();
         end
         local function refill()
-            local query = string.lower(search:getInternalText() or "");
+            local nameQ = string.lower(nameEntry:getInternalText() or "");
+            local idQ = string.lower(idEntry:getInternalText() or "");
             list:clear();
             for i = 1, #entries do
                 local e = entries[i];
-                if query == "" or string.find(string.lower(e.label), query, 1, true) ~= nil then
+                -- 名称与 ID (Perk 枚举名, 如 MetalWelding) 双框 AND 过滤 (交换页同款)
+                local okName = nameQ == "" or string.find(string.lower(e.label), nameQ, 1, true) ~= nil;
+                local okId = idQ == "" or string.find(string.lower(e.name), idQ, 1, true) ~= nil;
+                if okName and okId then
                     list:addItem(e.label .. " (" .. e.name .. ")", e);
                 end
             end
         end
-        search.onTextChange = refill;
+        nameEntry.onTextChange = refill;
+        idEntry.onTextChange = refill;
         refill();
 
         -- 行渲染 (boost 页列表同款紧凑风格): 主题化行底 + Small 字左对齐
@@ -251,7 +299,7 @@ function EtherPlayerEditor:buildVhsModule()
         end
 
         -- 升级按钮行: 升级所选技能 | 全技能升级 (无锚点时自动尝试放置背包收音机)
-        local btnY = by + searchH + 4 + listH + 6;
+        local btnY = by + filterH + 4 + listH + 6;
         local btnW = math.floor((iW - EtherTheme.ctrlGap) / 2);
         local oneBtn = UIButton:new(ix, btnY, btnW, EtherTheme.ctrlH,
             tr("UI_RadioXp_ButtonOne"), function()

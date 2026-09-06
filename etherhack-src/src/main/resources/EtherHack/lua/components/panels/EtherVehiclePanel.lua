@@ -266,6 +266,13 @@ function EtherVehiclePanel:build()
             end
         end);
     end
+
+    -- 自动驾驶模块 (EtherDrive 域, 独立文件 EtherDriveModule.lua 单一源;
+    -- 用户定夺 2026-09-05: 放载具页不设独立驾驶 Tab, 研判 §八 UI 设计同步修正)
+    if type(EtherDriveModule_addTo) == "function" then
+        self:addSpacer(EtherFormPanel.SECTION_GAP);
+        EtherDriveModule_addTo(self);
+    end
 end
 
 --*********************************************************

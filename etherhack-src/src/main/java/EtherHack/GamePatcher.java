@@ -46,12 +46,14 @@ import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
+import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.TryCatchBlockNode;
 import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "core/opengl/RenderSettings$PlayerRenderSettings.class", "iso/LightingJNI$JNILighting.class", "network/ServerLOS$ServerLighting.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "iso/IsoChunk.class", "core/opengl/RenderSettings$PlayerRenderSettings.class", "iso/LightingJNI$JNILighting.class", "network/ServerLOS$ServerLighting.class", "core/physics/CarController.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "EtherHack";
 
@@ -59,7 +61,11 @@ public class GamePatcher {
         try {
             String jarFilePath = Main.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
             Path currentDirectory = Paths.get(System.getProperty("user.dir"), new String[0]);
+            // 旧版/独立测试版时代残留: drive 域已并回 EtherHack (2026-09-06), 安装时清理旧目录
+            this.removeLegacyDriveDir(currentDirectory);
             try (JarFile jarFile = new JarFile(jarFilePath);){
+                // drive 域 Lua (EtherDriveModule/AutoDriveMap) 位于 EtherHack/lua/components/drive/,
+                // 由 EtherHackMenu requireExtra 引用, 随 EtherHack 前缀一并提取
                 jarFile.stream().filter(entry -> entry.getName().startsWith("EtherHack")).forEach(entry -> {
                     block9: {
                         try {
@@ -89,6 +95,21 @@ public class GamePatcher {
         }
     }
 
+    // 删除旧命名空间的 EtherDrive 目录 (独立测试版/3.2.4 早期构建残留; 本目录只会由
+    // 本 mod 创建, 清理安全)
+    private void removeLegacyDriveDir(Path currentDirectory) {
+        Path legacyDrive = currentDirectory.resolve("EtherDrive");
+        if (Files.exists(legacyDrive, new LinkOption[0])) {
+            try {
+                Files.walk(legacyDrive, new FileVisitOption[0]).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+                Logger.print("Removed legacy EtherDrive directory (merged into EtherHack)");
+            }
+            catch (IOException except) {
+                Logger.print("Failed to remove legacy EtherDrive directory: " + except.getMessage());
+            }
+        }
+    }
+
     public void uninstallEtherHackFiles() {
         Logger.print("Deleting all EtherHack files...");
         try {
@@ -97,6 +118,7 @@ public class GamePatcher {
             if (Files.exists(targetPath, new LinkOption[0])) {
                 Files.walk(targetPath, new FileVisitOption[0]).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
             }
+            this.removeLegacyDriveDir(currentDirectory);
             Logger.print("Deletion EtherHack files completed successfully");
         }
         catch (IOException except) {
@@ -185,6 +207,42 @@ public class GamePatcher {
     }
 
     public void patchItemContainer() {
+        // 座位占用查询空守卫 (原版 B42 空指针): isOccupiedVehicleSeat 链
+        // `vehiclePart.getVehicle().getCharacter(...)` 无空判 — 车被开远流式虚拟化
+        // 后 owner 退化为 VirtualVehicle, getVehicle() 的 tryCastTo(BaseVehicle)
+        // 返回 null → NPE 每帧刷屏 (物品栏正看着该车座位容器时, 实测)。
+        // vehiclePart 为空或已虚拟化 → 返回 false (与 isVehicleSeat 短路语义一致)。
+        // 注: 代码注入在 ItemContainer 自身类内, 访问自有字段不受跨包可见性限制。
+        final boolean[] injected = {false};
+        Patch.injectIntoClass("zombie/inventory/ItemContainer", "isOccupiedVehicleSeat", false, method -> {
+            if (!method.desc.equals("()Z")) {
+                return;
+            }
+            injected[0] = true;
+            InsnList guard = new InsnList();
+            LabelNode continueLabel = new LabelNode();
+            LabelNode falseLabel = new LabelNode();
+            guard.add(new VarInsnNode(25, 0)); // aload_0
+            guard.add(new FieldInsnNode(180, "zombie/inventory/ItemContainer", "vehiclePart",
+                    "Lzombie/vehicles/VehiclePart;"));
+            guard.add(new JumpInsnNode(198, falseLabel)); // IFNULL (vehiclePart 空) → false
+            guard.add(new VarInsnNode(25, 0));
+            guard.add(new FieldInsnNode(180, "zombie/inventory/ItemContainer", "vehiclePart",
+                    "Lzombie/vehicles/VehiclePart;"));
+            guard.add(new MethodInsnNode(182, "zombie/vehicles/VehiclePart", "getVehicle",
+                    "()Lzombie/vehicles/BaseVehicle;", false));
+            guard.add(new JumpInsnNode(198, falseLabel)); // IFNULL (已虚拟化) → false
+            guard.add(continueLabel);
+            method.instructions.insert(guard);
+            method.instructions.add(falseLabel);
+            method.instructions.add(new InsnNode(3));  // ICONST_0
+            method.instructions.add(new InsnNode(172)); // IRETURN
+            Logger.print("  [OK] ItemContainer.isOccupiedVehicleSeat null-guard");
+        });
+        if (!injected[0]) {
+            // 守卫是稳定性改善, 描述符不匹配只告警不中断安装 (game update 容错)
+            Logger.print("Warning: isOccupiedVehicleSeat null-guard skipped (descriptor mismatch)");
+        }
         Patch.injectIntoClass("zombie/inventory/ItemContainer", "getCapacityWeight", false, method -> {
             InsnList newInstructions = new InsnList();
             LabelNode carryOnLabel = new LabelNode();
@@ -482,6 +540,157 @@ public class GamePatcher {
         }
         catch (Exception e) {
             Logger.print("Warning: Always-hit injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
+    //*********************************************************
+    //* 超级群攻 (EtherAPI.isSuperMultiHit, 研判 超级群攻-研判(未实现).md §三A/§五/§六):
+    //* ① maxHit 覆写: calculateHitInfoList 里 maxHit(局部槽 5) 全部赋值完成后、
+    //*   `if (maxHit <= 0)` 门之前, 门控开时覆写为 superMultiHitCount — 近战裁剪
+    //*   while(size > maxHit) 与枪械 hitCount >= maxHit 上限读同一局部槽, 一处全覆盖;
+    //* ② 全向扇面: calcValidTargets / getNearestMeleeTargetPosAndDot 两处
+    //*   getMinAngle/getMaxAngle 局部覆写为 -2/+2 (dot 值域 [-1,1], 恒通过;
+    //*   倒地 minAngle /= 1.5 后仍 ≤ -1) — 单门控恒全向, 无独立扇面开关 (§六 用户拍板);
+    //* ③ 属主僵尸命中包抑制: GameClient.sendPlayerHit 头部 — 开关开 + target 是
+    //*   IsoZombie + 本地模拟 (NetworkZombieSimulator.isZombieSimulated, 属主判定现成 API)
+    //*   → 直接 return 不发包; 伤害走客户端本地结算 + 血量经僵尸模拟包盲采上传,
+    //*   非属主僵尸照常发包维持原版行为 (超额命中天然只作用于身边属主僵尸)。
+    //*********************************************************
+    public void patchSuperMultiHit() {
+        Logger.print("Patching CombatManager for super multi-hit...");
+        try {
+            Patch.injectIntoClass("zombie/CombatManager", "calculateHitInfoList", false, method -> {
+                // 锚点: 最后一处 ISTORE 5 且其后(隔标签/行号/帧)紧跟 ILOAD 5 + IFGT = `if (maxHit <= 0)` 门
+                AbstractInsnNode anchor = null;
+                for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                    if (insn instanceof VarInsnNode && ((VarInsnNode)insn).getOpcode() == 54 && ((VarInsnNode)insn).var == 5) {
+                        AbstractInsnNode next = skipIgnorable(insn.getNext());
+                        if (next instanceof VarInsnNode && ((VarInsnNode)next).getOpcode() == 21 && ((VarInsnNode)next).var == 5) {
+                            AbstractInsnNode jump = skipIgnorable(next.getNext());
+                            if (jump instanceof JumpInsnNode && ((JumpInsnNode)jump).getOpcode() == 157) { // IFGT: if (maxHit <= 0) 门
+                                anchor = insn;
+                            }
+                        }
+                    }
+                }
+                if (anchor == null) {
+                    throw new IllegalStateException("maxHit gate (ISTORE 5 + ILOAD 5/IFGT) not found in calculateHitInfoList");
+                }
+                InsnList toInject = new InsnList();
+                LabelNode skip = new LabelNode();
+                addSuperMultiHitGate(toInject, skip);
+                toInject.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+                toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "superMultiHitCount", "I"));
+                toInject.add(new VarInsnNode(54, 5)); // ISTORE maxHit
+                toInject.add(skip);
+                method.instructions.insert(anchor, toInject);
+                Logger.print("  [OK] Injected super multi-hit maxHit overwrite into CombatManager.calculateHitInfoList()");
+            });
+            this.patchWideMeleeArc("calcValidTargets");
+            this.patchWideMeleeArc("getNearestMeleeTargetPosAndDot");
+        }
+        catch (Exception e) {
+            Logger.print("Warning: super multi-hit injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
+    // 全向扇面: 方法内唯一的 getMinAngle→FSTORE / getMaxAngle→FSTORE 对, 其后覆写两局部为 -2/+2
+    private void patchWideMeleeArc(String methodName) {
+        Patch.injectIntoClass("zombie/CombatManager", methodName, false, method -> {
+            AbstractInsnNode minStore = null;
+            AbstractInsnNode maxStore = null;
+            for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                if (insn instanceof MethodInsnNode && ((MethodInsnNode)insn).getOpcode() == 182
+                        && ((MethodInsnNode)insn).owner.equals("zombie/inventory/types/HandWeapon")
+                        && ((MethodInsnNode)insn).name.equals("getMinAngle")) {
+                    AbstractInsnNode store = skipIgnorable(insn.getNext());
+                    if (store instanceof VarInsnNode && ((VarInsnNode)store).getOpcode() == 56) {
+                        minStore = store;
+                    }
+                }
+                if (insn instanceof MethodInsnNode && ((MethodInsnNode)insn).getOpcode() == 182
+                        && ((MethodInsnNode)insn).owner.equals("zombie/inventory/types/HandWeapon")
+                        && ((MethodInsnNode)insn).name.equals("getMaxAngle")) {
+                    AbstractInsnNode store = skipIgnorable(insn.getNext());
+                    if (store instanceof VarInsnNode && ((VarInsnNode)store).getOpcode() == 56) {
+                        maxStore = store;
+                    }
+                }
+            }
+            if (minStore == null || maxStore == null) {
+                throw new IllegalStateException("getMinAngle/getMaxAngle FSTORE pair not found in " + methodName);
+            }
+            int minVar = ((VarInsnNode)minStore).var;
+            int maxVar = ((VarInsnNode)maxStore).var;
+            InsnList toInject = new InsnList();
+            LabelNode skip = new LabelNode();
+            addSuperMultiHitGate(toInject, skip);
+            toInject.add(new LdcInsnNode(Float.valueOf(-2.0f)));
+            toInject.add(new VarInsnNode(56, minVar)); // FSTORE minAngle
+            toInject.add(new LdcInsnNode(Float.valueOf(2.0f)));
+            toInject.add(new VarInsnNode(56, maxVar)); // FSTORE maxAngle
+            toInject.add(skip);
+            method.instructions.insert(maxStore, toInject);
+            Logger.print("  [OK] Injected omnidirectional melee arc into CombatManager." + methodName
+                    + "() (angle slots " + minVar + "/" + maxVar + ")");
+        });
+    }
+
+    // 锚点扫描辅助: 跳过 Label/Frame/LineNumber 等非指令节点 (ClassReader 会把
+    // 行号表读进指令树, 不跳过会隔断相邻指令匹配)
+    private static AbstractInsnNode skipIgnorable(AbstractInsnNode insn) {
+        while (insn instanceof LabelNode || insn instanceof FrameNode || insn instanceof LineNumberNode) {
+            insn = insn.getNext();
+        }
+        return insn;
+    }
+
+    // 三级空守卫 (patchAlwaysHit 同款): EtherMain.getInstance → etherAPI → isSuperMultiHit,
+    // 任一为空/关则跳到 skip, 全部指令栈中性
+    private void addSuperMultiHitGate(InsnList list, LabelNode skip) {
+        list.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+        list.add(new JumpInsnNode(198, skip));
+        list.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+        list.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+        list.add(new JumpInsnNode(198, skip));
+        list.add(new MethodInsnNode(184, "EtherHack/Ether/EtherMain", "getInstance", "()LEtherHack/Ether/EtherMain;", false));
+        list.add(new FieldInsnNode(180, "EtherHack/Ether/EtherMain", "etherAPI", "LEtherHack/Ether/EtherAPI;"));
+        list.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "isSuperMultiHit", "Z"));
+        list.add(new JumpInsnNode(153, skip));
+    }
+
+    // 属主僵尸命中包抑制: GameClient.sendPlayerHit 头部 (静态方法, target = 参数槽 1)
+    public void patchSuperMultiHitSuppression() {
+        Logger.print("Patching GameClient.sendPlayerHit with owner-zombie suppression...");
+        try {
+            Patch.injectIntoClass("zombie/network/GameClient", "sendPlayerHit", true, method -> {
+                InsnList toInject = new InsnList();
+                LabelNode skip = new LabelNode();
+                addSuperMultiHitGate(toInject, skip);
+                // target instanceof IsoZombie
+                toInject.add(new VarInsnNode(25, 1));
+                toInject.add(new TypeInsnNode(193, "zombie/characters/IsoZombie"));
+                toInject.add(new JumpInsnNode(153, skip));
+                // NetworkZombieSimulator.getInstance().isZombieSimulated(Short.valueOf(((IsoZombie)target).getOnlineID()))
+                toInject.add(new VarInsnNode(25, 1));
+                toInject.add(new TypeInsnNode(192, "zombie/characters/IsoZombie"));
+                toInject.add(new MethodInsnNode(182, "zombie/characters/IsoZombie", "getOnlineID", "()S", false));
+                toInject.add(new MethodInsnNode(184, "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;", false));
+                toInject.add(new MethodInsnNode(184, "zombie/popman/NetworkZombieSimulator", "getInstance", "()Lzombie/popman/NetworkZombieSimulator;", false));
+                toInject.add(new InsnNode(95)); // SWAP: [Short, sim] → [sim, Short]
+                toInject.add(new MethodInsnNode(182, "zombie/popman/NetworkZombieSimulator", "isZombieSimulated", "(Ljava/lang/Short;)Z", false));
+                toInject.add(new JumpInsnNode(153, skip));
+                toInject.add(new InsnNode(177)); // RETURN: 属主模拟僵尸不发包 (血量走模拟包盲采)
+                toInject.add(skip);
+                method.instructions.insert(toInject);
+                Logger.print("  [OK] Injected owner-zombie hit-packet suppression into GameClient.sendPlayerHit()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: sendPlayerHit suppression injection failed: " + e.getMessage());
             Logger.logException(e);
         }
     }
@@ -1044,6 +1253,9 @@ public class GamePatcher {
         this.patchAntiCheatSystem();
         this.patchHeadshotOnly();
         this.patchAlwaysHit();
+        // 超级群攻: maxHit 扩容 + 全向扇面 + 属主命中包抑制 (研判 §三A/§五/§六)
+        this.patchSuperMultiHit();
+        this.patchSuperMultiHitSuppression();
         this.patchGameClientSyncBlocker();
         this.patchRoleCapabilityForSP();
         this.patchVehicleNoKey();
@@ -1053,6 +1265,10 @@ public class GamePatcher {
         this.patchCharacterCreationBoost();
          this.patchApplyTraitsSP();
         this.patchFullbright();
+        // 自动驾驶: 唯一补丁点 CarController.updateControls 门控 (drive/CarControllerPatch)
+        EtherHack.drive.CarControllerPatch.install();
+        // 伪·自动驾驶: 世界碰撞豁免 IsoChunk.calcPhysics 过滤 (drive/BulletNoClipPatch)
+        EtherHack.drive.BulletNoClipPatch.install();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");
         Logger.print("Extracting EtherHack files to the current directory...");

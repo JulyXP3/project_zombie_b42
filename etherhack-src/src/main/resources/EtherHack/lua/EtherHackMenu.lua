@@ -34,10 +34,14 @@ local etherModules = {
     "EtherHack/lua/components/ui/EtherExchange.lua",
     "EtherHack/lua/components/ui/EtherAmmoFarm.lua",
     "EtherHack/lua/components/ui/UIMap.lua",
+    -- 自动驾驶地图锚定 (drive 域): 在 UIMap 之后加载
+    "EtherHack/lua/components/drive/AutoDriveMap.lua",
     "EtherHack/lua/components/ui/UISkillTable.lua",
     "EtherHack/lua/components/ui/UITraitsTable.lua",
     "EtherHack/lua/components/panels/EtherInfoPanel.lua",
     "EtherHack/lua/components/panels/EtherCharacterPanel.lua",
+    "EtherHack/lua/components/ui/EtherTempWeapon.lua",
+    "EtherHack/lua/components/panels/EtherCombatPanel.lua",
     "EtherHack/lua/components/panels/EtherItemCreator.lua",
     "EtherHack/lua/components/panels/EtherRadarPanel.lua",
     "EtherHack/lua/components/panels/EtherTrapSpawn.lua",
@@ -49,6 +53,8 @@ local etherModules = {
     "EtherHack/lua/components/panels/EtherExploitPanel.lua",
     "EtherHack/lua/components/panels/EtherLootRollPanel.lua",
     "EtherHack/lua/components/panels/EtherVehiclePanel.lua",
+    -- 自动驾驶模块 (drive 域, 载具页 EtherVehiclePanel 构建时追加)
+    "EtherHack/lua/components/drive/EtherDriveModule.lua",
     "EtherHack/lua/components/override/EtherCharacterCreation.lua",
     "EtherHack/lua/components/panels/EtherCharacterBoostPanel.lua",
     "EtherHack/lua/components/panels/EtherFarmingPanel.lua",
@@ -99,7 +105,10 @@ function EtherMain:createChildren()
     self:addChild(self.buttonsPanel);
 
     self.buttonsPanel:addButton("EtherHack/media/ui/info.png", "UI_Nav_Info", EtherInfoPanel);
+    -- 「生存」(原「角色」): 战斗功能拆出后仅剩生存向作弊, 名称随之更贴切
     self.buttonsPanel:addButton("EtherHack/media/ui/character.png", "UI_Nav_Character", EtherCharacterPanel);
+    -- 「战斗」: 战斗强化(自角色页迁入) + 超级群攻 + 临时武器
+    self.buttonsPanel:addButton("EtherHack/media/ui/combat.png", "UI_Nav_Combat", EtherCombatPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/itemCreator.png", "UI_Nav_Items", EtherItemCreator);
     self.buttonsPanel:addButton("EtherHack/media/ui/radar.png", "UI_Nav_Radar", EtherRadarPanel);
     self.buttonsPanel:addButton("EtherHack/media/ui/trap.png", "UI_Nav_Traps", EtherTrapSpawn);
