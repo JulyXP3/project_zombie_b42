@@ -87,6 +87,11 @@ function EtherTempWeapon.apply(itemId)
     local gun = instanceItem(itemId);
     if gun == nil then return false; end
     gun:setCondition(100);
+    -- 永不卡壳 (设计文档 §1.4 预留方案): checkJam 首行 chance==0 直接短路,
+    -- 枪永远进不了 jammed 态 → 「排除故障」永远不需要 (原版拉栓路径对临时枪必崩)。
+    if gun.setJamGunChance ~= nil then
+        gun:setJamGunChance(0);
+    end
     -- 本地枪不进背包 (零上行设计) — 联机下原版"射后上膛"动作会按 ID 从背包重取枪
     -- (ISRackFirearm:start:11 getInventory():getItemById), 本地枪必取 nil →
     -- canRack 索引 nil 崩 (实测每枪一报)。关掉 RackAfterShoot 跳过该链;
@@ -200,6 +205,11 @@ local function onTick()
             and gun:haveChamber() and not gun:isRoundChambered() then
         gun:setRoundChambered(true);
     end
+    -- 卡壳兜底清除: 卡壳是本地物品状态 (血量/条件度无关), 原版 MP 排除故障走服务端
+    -- 网络动作 (临时枪无服务端副本, 必失败) → 本地直接清。
+    if gun.isJammed ~= nil and gun.setJammed ~= nil and gun:isJammed() then
+        gun:setJammed(false);
+    end
 end
 
 Events.OnTick.Add(onTick);
@@ -216,3 +226,21 @@ if ISReloadWeaponAction ~= nil and ISReloadWeaponAction.OnPressRackButton ~= nil
         return _origOnPressRack(player, gun, shift);
     end;
 end
+
+-- 武器轮盘路径 (长按 R → 径向菜单「排除故障/退弹/装填」): 原版 MP 下 start() 会按 ID
+-- 从背包重查枪, 临时枪无背包副本 → nil → canRack(nil) 崩 (实测 Lua 报错刷屏)。
+-- 入口拦截 = 优雅无操作结束 (弹药/上膛由 OnTick 自动维持, 这些动作对临时枪无意义)。
+local function blockActionForTempGun(cls)
+    if cls == nil or cls.start == nil then return; end
+    local origStart = cls.start;
+    cls.start = function(self)
+        if self.gun ~= nil and EtherTempWeapon.isTempGun(self.gun) then
+            self:forceComplete();
+            return;
+        end
+        return origStart(self);
+    end;
+end
+blockActionForTempGun(ISRackFirearm);                 -- 拉栓 / 排除故障
+blockActionForTempGun(ISUnloadBulletsFromFirearm);    -- 退弹
+blockActionForTempGun(ISReloadWeaponAction);          -- 装填 (补弹由 OnTick 负责)

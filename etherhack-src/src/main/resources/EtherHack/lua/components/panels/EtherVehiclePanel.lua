@@ -273,6 +273,12 @@ function EtherVehiclePanel:build()
         self:addSpacer(EtherFormPanel.SECTION_GAP);
         EtherDriveModule_addTo(self);
     end
+
+    -- 战斗攻击模块 (2026-09-08): 导航期间三项恒开, 开关只控制手动驾驶
+    if type(EtherDriveCombatModule_addTo) == "function" then
+        self:addSpacer(EtherFormPanel.SECTION_GAP);
+        EtherDriveCombatModule_addTo(self);
+    end
 end
 
 --*********************************************************

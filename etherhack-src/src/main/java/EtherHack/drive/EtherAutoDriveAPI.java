@@ -56,6 +56,47 @@ public final class EtherAutoDriveAPI {
         INSTANCE().stop("UI_DrivePanel_MsgStopped");
     }
 
+    /**
+     * 清除导航线与终点标记 (仅 IDLE 态: 接管/到达后路线保留显示至下次锚定,
+     * 改主意不去原目的地时由此显式清除)。返回 false = 自动驾驶进行中, 忽略。
+     */
+    @LuaMethod(name = "autoDriveClearRoute", global = true)
+    public static boolean autoDriveClearRoute() {
+        return INSTANCE().clearRoute();
+    }
+
+    /**
+     * 继续导航: 手动接管后恢复自动驾驶, 沿保留的原路线开往原终点 (所见即所行)。
+     * 前置: 本地玩家在本车驾驶位 + 有保留路线。返回 false = 不满足。
+     */
+    @LuaMethod(name = "autoDriveResume", global = true)
+    public static boolean autoDriveResume() {
+        BaseVehicle vehicle = driverVehicle();
+        if (vehicle == null) {
+            INSTANCE().setMessage("UI_DrivePanel_MsgNoVehicle");
+            Logger.printLog("[AutoDrive] resume rejected: not driving a vehicle");
+            return false;
+        }
+        return INSTANCE().resumeRoute(vehicle);
+    }
+
+    /**
+     * 车辆重置 (宽限期兜底): 嵌墙车 15s 内没开出会被挤进地里 — 此按钮
+     * 续期碰撞豁免 15s + 把车抬回地面高度。返回 false = 不在驾驶位。
+     */
+    @LuaMethod(name = "autoDriveResetVehicle", global = true)
+    public static boolean autoDriveResetVehicle() {
+        BaseVehicle vehicle = driverVehicle();
+        if (vehicle == null) {
+            INSTANCE().setMessage("UI_DrivePanel_MsgNoVehicle");
+            return false;
+        }
+        INSTANCE().grantNoClipGrace();
+        boolean ok = BulletNoClipHook.resetVehiclePose(vehicle);
+        Logger.printLog("[AutoDrive] vehicle reset: pose=" + ok);
+        return ok;
+    }
+
     /** 巡航目标速 km/h, 0 = 自适应 (~55, 仍被硬顶钳制) — 唯一速度旋钮 (§五)。 */
     @LuaMethod(name = "autoDriveSetCruiseSpeed", global = true)
     public static void autoDriveSetCruiseSpeed(double kmh) {
@@ -76,6 +117,43 @@ public final class EtherAutoDriveAPI {
     // ================================================================
 
     /** 状态机: 0=IDLE 1=DRIVING 2=BRAKE_TO_BOUNDARY 3=WAIT_LOAD 4=ARRIVED。 */
+    // ================================================================
+    // 战斗攻击三开关 (载具页「战斗攻击」模块; 导航期间恒开, 开关只控制手动驾驶)
+    // ================================================================
+
+    @LuaMethod(name = "autoDriveSetCombatWiggle", global = true)
+    public static void autoDriveSetCombatWiggle(double v) {
+        AutoDriveController.setCombatWiggle(v != 0.0 && !Double.isNaN(v));
+        saveConfig();
+    }
+
+    @LuaMethod(name = "autoDriveGetCombatWiggle", global = true)
+    public static double autoDriveGetCombatWiggle() {
+        return AutoDriveController.isCombatWiggle() ? 1.0 : 0.0;
+    }
+
+    @LuaMethod(name = "autoDriveSetCombatZombieKill", global = true)
+    public static void autoDriveSetCombatZombieKill(double v) {
+        AutoDriveController.setCombatZombieKill(v != 0.0 && !Double.isNaN(v));
+        saveConfig();
+    }
+
+    @LuaMethod(name = "autoDriveGetCombatZombieKill", global = true)
+    public static double autoDriveGetCombatZombieKill() {
+        return AutoDriveController.isCombatZombieKill() ? 1.0 : 0.0;
+    }
+
+    @LuaMethod(name = "autoDriveSetCombatNoClip", global = true)
+    public static void autoDriveSetCombatNoClip(double v) {
+        AutoDriveController.setCombatNoClip(v != 0.0 && !Double.isNaN(v));
+        saveConfig();
+    }
+
+    @LuaMethod(name = "autoDriveGetCombatNoClip", global = true)
+    public static double autoDriveGetCombatNoClip() {
+        return AutoDriveController.isCombatNoClip() ? 1.0 : 0.0;
+    }
+
     @LuaMethod(name = "autoDriveGetStateId", global = true)
     public static int autoDriveGetStateId() {
         return INSTANCE().getStateId();
@@ -115,7 +193,7 @@ public final class EtherAutoDriveAPI {
         return INSTANCE().speedLimit();
     }
 
-    /** 硬顶 = min(服务端限速 × 0.85, 当前车辆脚本极速)。 */
+    /** 上限 = 用户巡航设定 > 车辆极速 (服务端限速只作未设定时的自适应默认)。 */
     @LuaMethod(name = "autoDriveGetHardCap", global = true)
     public static double autoDriveGetHardCap() {
         BaseVehicle v = currentVehicle();
@@ -126,8 +204,48 @@ public final class EtherAutoDriveAPI {
     }
 
     // ================================================================
+    // 路线读数 (AutoDriveMap.lua 地图画线)
+    // ================================================================
+
+    /** 当前路线路点数; IDLE/无路线一律 0 (防怠速期脏读)。 */
+    @LuaMethod(name = "autoDriveGetRouteCount", global = true)
+    public static int autoDriveGetRouteCount() {
+        return INSTANCE().getRouteCount();
+    }
+
+    /** 第 i 个路点世界坐标 X; 越界返回 0。 */
+    @LuaMethod(name = "autoDriveGetRouteX", global = true)
+    public static double autoDriveGetRouteX(int i) {
+        return INSTANCE().getRouteX(i);
+    }
+
+    /** 第 i 个路点世界坐标 Y; 越界返回 0。 */
+    @LuaMethod(name = "autoDriveGetRouteY", global = true)
+    public static double autoDriveGetRouteY(int i) {
+        return INSTANCE().getRouteY(i);
+    }
+
+    /** 当前推进下标 (pathIdx)。 */
+    @LuaMethod(name = "autoDriveGetRouteIndex", global = true)
+    public static int autoDriveGetRouteIndex() {
+        return INSTANCE().getRouteIndex();
+    }
+
+    /** 路线类型: "road" (大地图路网) / "direct" (直线兜底) / "" (IDLE 无路线)。 */
+    @LuaMethod(name = "autoDriveGetRouteKind", global = true)
+    public static String autoDriveGetRouteKind() {
+        return INSTANCE().getRouteKind();
+    }
+
+    // ================================================================
     // 配置持久化 (EtherHack/config/drive.properties)
     // ================================================================
+
+    /** 首次触碰本类 (任一 autoDrive* Lua 调用, 如 UI build) 时自动加载持久化配置
+     * (修复存量缺陷: loadConfig 此前无调用点, 巡航速度只存不读)。 */
+    static {
+        loadConfig();
+    }
 
     public static void loadConfig() {
         File f = new File(CONFIG_PATH);
@@ -138,6 +256,9 @@ public final class EtherAutoDriveAPI {
         try (FileInputStream in = new FileInputStream(f)) {
             props.load(in);
             INSTANCE().setCruiseSpeed(parseFloat(props.getProperty("cruiseSpeed", "0")));
+            AutoDriveController.setCombatWiggle("true".equals(props.getProperty("combatWiggle", "false")));
+            AutoDriveController.setCombatZombieKill("true".equals(props.getProperty("combatZombieKill", "false")));
+            AutoDriveController.setCombatNoClip("true".equals(props.getProperty("combatNoClip", "false")));
             Logger.printLog("[AutoDrive] config loaded (cruise="
                     + props.getProperty("cruiseSpeed") + ")");
         } catch (IOException e) {
@@ -153,6 +274,9 @@ public final class EtherAutoDriveAPI {
             }
             Properties props = new Properties();
             props.setProperty("cruiseSpeed", String.valueOf(INSTANCE().getCruiseSpeed()));
+            props.setProperty("combatWiggle", String.valueOf(AutoDriveController.isCombatWiggle()));
+            props.setProperty("combatZombieKill", String.valueOf(AutoDriveController.isCombatZombieKill()));
+            props.setProperty("combatNoClip", String.valueOf(AutoDriveController.isCombatNoClip()));
             props.remove("policy");   // 旧键清出 (停车等待时代)
             props.remove("policy2");  // 旧键清出 (两档策略时代)
             try (FileOutputStream out = new FileOutputStream(CONFIG_PATH)) {

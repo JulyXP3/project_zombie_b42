@@ -188,8 +188,10 @@ function EtherDriveModule_addTo(panel)
     -- 高度预算 (与摆放同一套判定)
     local statusH = 3 * EtherTheme.fontHgtHint + 4;
     local entryH = cruiseEntryRowHeight(innerW);
+    local resetBtnW = UIButton.measureGroupWidth({ tr("UI_DrivePanel_ResetVehicle") });
+    local resetH = EtherTheme.ctrlH;
     local hintH = #EtherTheme.wrapHint(tr("UI_DrivePanel_Hint"), innerW - 8) * EtherTheme.fontHgtHint + 2;
-    local contentH = statusH + 6 + entryH + 6 + hintH + 2;
+    local contentH = statusH + 6 + entryH + 6 + resetH + 6 + hintH + 2;
 
     panel:addModule("UI_DrivePanel_Title", contentH + 2, function(bx, by, bw)
         local ix = bx + EtherFormPanel.BOX_PAD_X;
@@ -207,11 +209,49 @@ function EtherDriveModule_addTo(panel)
         -- ② 巡航速度 (唯一速度旋钮, 0 = 自适应)
         cy = cy + placeCruiseEntryRow(panel, ix, cy, iW) + 6;
 
+        -- ②.5 车辆重置 (宽限期兜底: 嵌墙/埋地时恢复高度 + 碰撞豁免续 15s)
+        local resetBtn = UIButton:new(ix, cy, resetBtnW, resetH,
+            tr("UI_DrivePanel_ResetVehicle"), function()
+                autoDriveResetVehicle();
+            end, resetBtnW);
+        resetBtn:initialise();
+        resetBtn:instantiate();
+        panel:addChild(resetBtn);
+        cy = cy + resetH + 6;
+
         -- ③ 操作说明 (停止按钮已移除: 任意驾驶键当帧接管 = 停止)
         local hint = HintRow:new(ix, cy + 6, iW, tr("UI_DrivePanel_Hint"));
         hint:initialise();
         hint:instantiate();
         panel:_anchor(hint);
         panel:addChild(hint);
+    end);
+end
+
+--*********************************************************
+--* 战斗攻击模块盒 (追加进载具页, 2026-09-08): 自动导航期间
+--* 三项恒定开启 (导航行为不变); 开关只控制手动驾驶时的可用性。
+--*********************************************************
+function EtherDriveCombatModule_addTo(panel)
+    local rowH = math.max(18, EtherTheme.fontHgtSmall + 4);
+    local contentH = 3 * (rowH + 6);
+
+    panel:addModule("UI_DriveCombat_Title", contentH + 2, function(bx, by, bw)
+        local ix = bx + EtherFormPanel.BOX_PAD_X;
+        local cy = by;
+
+        local function placeCheckbox(key, getter, setter)
+            local checked = false;
+            if type(getter) == "function" and getter() ~= 0 then checked = true; end
+            local cb = UICheckbox:new(ix, cy, tr(key), checked, function(checked)
+                if type(setter) == "function" then setter(checked and 1 or 0); end
+            end);
+            panel:addWidget(cb);
+            cy = cy + rowH + 6;
+        end
+
+        placeCheckbox("UI_DriveCombat_Wiggle", autoDriveGetCombatWiggle, autoDriveSetCombatWiggle);
+        placeCheckbox("UI_DriveCombat_ZombieKill", autoDriveGetCombatZombieKill, autoDriveSetCombatZombieKill);
+        placeCheckbox("UI_DriveCombat_NoClip", autoDriveGetCombatNoClip, autoDriveSetCombatNoClip);
     end);
 end

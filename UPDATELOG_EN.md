@@ -2,6 +2,40 @@
 
 ## [3.2.4] - Current
 
+- Fixed: being pushed back or stopped dead by roadside objects (signs, mailboxes, fences) while no-clipping.
+- Fixed: still slowing down when driving through trees, lamp posts, trash cans (now all static obstacles at full speed).
+- Fixed: overly sharp steering when merging back onto the road after detouring (now merges smoothly).
+- Improved: detours now maintain a steady crawl like the game cruise control, no more surging and braking.
+- Improved: detours now pass obstacles at a steady crawl (10 km/h) instead of surging and braking.
+- Fixed: detour geometry is now aligned with the road direction, fixing erratic back-and-forth weaving after passing.
+- Fixed: vehicle circling endlessly around an obstacle after detouring instead of merging back onto the route.
+- Fixed: swinging back and forth when merging back onto the road after detouring (now merges smoothly).
+- Fixed: circling in place behind an obstacle after detouring; stuttering during detours (now smooth).
+- Fixed: stuttering brake-accelerate cycles while detouring around obstacles (now a smooth low-speed detour).
+- Fixed: vehicles feeling sticky and extremely slow when no-clipping through trees/bushes/shrubs (now same speed as buildings).
+- Improved: auto-drive now brakes smoothly by distance to a blocking vehicle ahead (no more crashing into blocking vehicles under any circumstance).
+- Fixed: detour passing too close to the obstacle; overshooting the destination after a detour; blocked-wiggle rushing toward the obstacle from far away.
+- Fixed: auto-drive avoidance crashing head-on into blocking vehicles on straight roads (detour side flip-flopping, plus detour line grazing the obstacle).
+- Improved: "Wiggle kill" now includes instant kill on contact, and wiggle stays locked in a small back-and-forth range instead of drifting backwards.
+- Changed: removed the hint text from the "Utility" module.
+- Fixed: temp weapon jamming with no way to clear it (temp weapons no longer jam).
+- Changed: new Vehicle page module renamed to "Utility".
+- Added: "Combat" module on the Vehicle page (wiggle kill / vehicle instakill / vehicle no-clip). All three are always ON during navigation; the toggles only apply to manual driving. Settings are saved automatically.
+- Added: route display on the map — after right-click anchoring, the navigation route is drawn as a solid blue line on both the world map and minimap (along street centerlines; orange straight line when no road network), destination marker kept.
+- Improved: navigation now follows main roads strictly — route planning uses the exact same street data as the map itself, so the route sticks to street centerlines and never cuts through blocks; one right-click anchor plans the whole trip, cross-map trips complete in one go, with a straight-line fallback when no road network is available.
+- Fixed: navigation not following streets and beelining straight on certain map mod combinations.
+- Improved: long cross-town route planning — gaps not covered by street data are bridged with short straight segments, cross-map routes plan in one go.
+- Improved: route display — after manually taking over or reaching the destination, the navigation line and destination marker stay on the map until a new destination is anchored.
+- Fixed: occasional black screen and vehicle sinking into the ground when taking back manual control while driving through walls.
+- Fixed: navigation repeatedly rocking back and forth at corners and U-turns; also repeatedly reversing again just as it was about to rejoin the route.
+- Improved: navigation steering rewritten — steadier on straights, tighter corner tracking, oscillation and wobble issues resolved at the root.
+- Improved: navigation speed control rewritten — smooth deceleration before corners, steady stopping behind obstacles, no more sudden braking or crawling on straights, and stable gears.
+- Changed: navigation is now pure line-following — it drives straight along the route to the destination, plowing straight through/pushing past everything on the way (zombies die on contact), no longer slowing, stopping or reversing around obstacles; only unloaded map areas still make it stop and wait. U-turns are now done as a single forward arc.
+- Fixed: navigation mistaking roadside parked cars and street lamps for obstacles dead ahead, causing stop-go driving and even repeated reversing on straights.
+- Fixed: cruise speed setting being capped by the default speed limit — the set cruise speed now applies directly (still capped by the vehicle's physical top speed).
+- Fixed: navigation taking a detour when anchoring straight ahead on the same road — the route now extends directly forward from the road under the vehicle.
+- Added: "Clear navigation line" — a map right-click menu option to manually remove the navigation line and destination marker (for when you take over and head elsewhere).
+- Added: "Resume navigation" — after taking over manually, one click in the map right-click menu resumes auto-drive along the original route to the original destination.
 - Added: "Autopilot" (Vehicle tab) — sit in the driver seat, press M and right-click "Auto-drive here" on the map: speed, corners, obstacle avoidance, waiting for unloaded map areas and arrival braking are all automatic; re-anchor at any time to reroute, any driving key takes over instantly; the Vehicle tab offers cruise speed (0 = auto) and obstacle policy (slow detour / stop and wait / low-speed push).
 - Added: "Super multi-hit" (Combat tab) — one swing hits up to 10-20 targets (adjustable) in all directions (behind you too); "Apply" = active, "Reset" = back to vanilla.
 - Added: "Temp weapon" (Combat tab) — temporarily swap your held weapon for any firearm from the list: full ammo and condition, ready to fire; "Swap back" instantly restores the original item; zero server traces (gunshots are audible server-wide).

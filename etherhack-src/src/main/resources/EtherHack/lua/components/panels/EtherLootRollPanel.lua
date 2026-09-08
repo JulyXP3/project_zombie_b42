@@ -72,6 +72,13 @@ function EtherLootRollPanel:prerender()
             self:drawText(t.text, t.x, t.y, t.col.r, t.col.g, t.col.b, t.col.a or 1, t.font);
         end
     end
+    -- 底部说明 (提示/警告) 静态绘制
+    if self.texts ~= nil then
+        for i = 1, #self.texts do
+            local t = self.texts[i];
+            EtherTheme.drawHintText(self, t.text, t.x, t.y, t.col);
+        end
+    end
 end
 
 --*********************************************************
@@ -86,9 +93,10 @@ function EtherLootRollPanel:render()
         return
     end
 
-    -- 钓竿生成状态 (生成中/已生成/失败; 空闲时无消息, 使用提示在底部静态注册)
+    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 按模式取对应状态源,
     -- 长消息按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
-    local fishStatus = tostring(EtherFishSpawn.message or "")
+    local src = EtherFishSpawn;
+    local fishStatus = tostring((src and src.message) or "")
     if fishStatus ~= "" and self.statusX ~= nil then
         if self.statusCacheText ~= fishStatus or self.statusCacheW ~= self.statusW then
             self.statusLines = EtherTheme.wrapHint(fishStatus, self.statusW);
@@ -352,6 +360,19 @@ function EtherLootRollPanel:createChildren()
     self:_header(innerX, cy, getTranslate("UI_FishSpawn_Title"), innerW);
     cy = cy + EtherTheme.fontHgtSmall + GAP;
 
+    -- 数量输入框行
+    local cntW = 56;
+    local cntX = innerX + innerW - cntW;
+    self:_text(cntX - tm:MeasureStringX(UIFont.Small, getTranslate("UI_TrapSpawn_Count")) - math.floor(GAP / 2),
+        cy + EtherTheme.entryLabelDY, getTranslate("UI_TrapSpawn_Count"), EtherTheme.text, UIFont.Small);
+    self.countBox = ISTextEntryBox:new("1", cntX, cy, cntW, EtherTheme.entryH);
+    EtherTheme.styleEntry(self.countBox);
+    self.countBox:initialise();
+    self.countBox:instantiate();
+    self.countBox:setClearButton(false);
+    self:addChild(self.countBox);
+    cy = cy + EtherTheme.entryH + GAP;
+
     -- 过滤行: 名称 + ID (宽度不足时自动拆成两行, 避免标签压住输入框)
     local nameT = getTranslate("UI_ItemCreator_Title_FilterByName");
     local idT   = getTranslate("UI_ItemCreator_Title_FilterById");
@@ -397,7 +418,7 @@ function EtherLootRollPanel:createChildren()
     cy = cy + EtherTheme.entryH + GAP;
 
     -- 底部区: 生成按钮行 + 使用提示 + 留痕警告 (自下而上: 警告 -> 提示 -> 按钮),
-    -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩
+    -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩;
     local hintLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_Hint"), innerW);
     local warnLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_TraceWarn"), innerW);
     local notesH = (#hintLinesF + #warnLinesF) * EtherTheme.fontHgtHint + GAP * 2;
@@ -433,17 +454,17 @@ function EtherLootRollPanel:createChildren()
 
     self.spawnBtn = UIButton:new(innerX, bottomY, spawnW, ctrlH, spawnTitle,
     function()
-        if not isMultiplayer() then
-            print("[FishSpawn] multiplayer only (use your own dedicated server)")
-            return
-        end
         local sel = self.datas.selected;
         if self.datas.items == nil or sel < 1 or sel > #self.datas.items then
-            print("[FishSpawn] select an item first")
+            print("[Spawn] select an item first")
             return
         end
         local item = self.datas.items[sel].item;
         if item == nil then return end
+        if not isMultiplayer() then
+            print("[FishSpawn] multiplayer only (use your own dedicated server)")
+            return
+        end
         EtherFishSpawn.trigger(item:getFullName());
     end, spawnW)
     self.spawnBtn:initialise();
@@ -452,14 +473,15 @@ function EtherLootRollPanel:createChildren()
     self:addChild(self.spawnBtn);
 
     -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册)
-    local noteY = bottomY + ctrlH + GAP;
+    self.texts = {};
+    local y0 = bottomY + ctrlH + GAP;
     for i = 1, #hintLinesF do
-        self:_text(innerX, noteY, hintLinesF[i], EtherTheme.textDim, nil, true);
-        noteY = noteY + EtherTheme.fontHgtHint;
+        table.insert(self.texts, { x = innerX, y = y0 + (#self.texts) * EtherTheme.fontHgtHint,
+            text = hintLinesF[i], col = EtherTheme.textDim });
     end
     for i = 1, #warnLinesF do
-        self:_text(innerX, noteY, warnLinesF[i], EtherTheme.statusRed, nil, true);
-        noteY = noteY + EtherTheme.fontHgtHint;
+        table.insert(self.texts, { x = innerX, y = y0 + (#self.texts) * EtherTheme.fontHgtHint,
+            text = warnLinesF[i], col = EtherTheme.statusRed });
     end
 
     -- 状态文字区域 (生成按钮右侧): 只显示动态状态消息 (生成中/已生成/失败),

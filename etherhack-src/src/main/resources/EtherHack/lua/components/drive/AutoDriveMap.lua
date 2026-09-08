@@ -34,11 +34,90 @@ local function anchorDriveTarget(worldX, worldY)
 end
 
 --*********************************************************
---* 终点标记绘制 (render 包装共用): 脉动十字标 + 文案, 视口内才画
+--* 清除导航线动作: 接管/到达后路线保留显示, 改道别处时显式清掉
+--*********************************************************
+local function clearDriveRoute()
+    if type(autoDriveClearRoute) ~= "function" then return; end
+    local player = getPlayer();
+    if player == nil then return; end
+    if autoDriveClearRoute() then
+        player:Say(tr("UI_Drive_MapCleared"));
+    end
+end
+
+--*********************************************************
+--* 继续导航动作: 接管后沿保留的原路线/原终点恢复自动驾驶 (所见即所行)
+--*********************************************************
+local function resumeDriveRoute()
+    if type(autoDriveResume) ~= "function" then return; end
+    local player = getPlayer();
+    if player == nil then return; end
+    if autoDriveResume() then
+        player:Say(tr("UI_Drive_MapResumed"));
+    else
+        local msgKey = autoDriveGetMessage();
+        player:Say(msgKey ~= nil and msgKey ~= "" and tr(msgKey) or tr("UI_DrivePanel_MsgNoVehicle"));
+    end
+end
+
+-- IDLE 且有保留路线时加「继续导航 / 清除导航线」两项 (自动驾驶进行中都不显示)
+local function addResumeAndClearOptions(context)
+    if type(autoDriveGetRouteCount) ~= "function" or autoDriveGetRouteCount() < 1 then return; end
+    if type(autoDriveIsActive) == "function" and autoDriveIsActive() then return; end
+    context:addOption(tr("UI_Drive_MapResume"), nil, resumeDriveRoute);
+    context:addOption(tr("UI_Drive_MapClearRoute"), nil, clearDriveRoute);
+end
+
+--*********************************************************
+--* 导航路线画线: 路点连线 + 终点标记 (render 包装共用)。
+--* 路线 = 大地图同源道路矢量 (Java RoadNetwork), 蓝色实心线严格贴地图大路;
+--* 直线兜底 (路网不可用) 橙色。立即模式渲染语义: "画一次"由 Java 侧数据不变
+--* 保证 — Lua 每帧重读重画同一条固定数据; 路线仅在续段/受阻替换尾段事件时
+--* Java 侧变化, 线随之改形, 已画前缀永不改变。性能无忧 (路点数十级, 仅开图 render)。
+--*********************************************************
+local function drawDriveRoute(self)
+    if type(autoDriveGetRouteCount) ~= "function" then return; end
+    local n = autoDriveGetRouteCount();
+    if n < 2 or self.mapAPI == nil then return; end
+    -- 颜色按路线类型: 大地图路网 = 蓝实心, 直线兜底 = 橙
+    local kind = (type(autoDriveGetRouteKind) == "function") and autoDriveGetRouteKind() or "";
+    local r, g, b = 1.0, 0.6, 0.2;
+    if kind == "road" then r, g, b = 0.35, 0.55, 1.0; end
+    local W, H = self:getWidth(), self:getHeight();
+    local ux0, uy0 = nil, nil;
+    for i = 0, n - 1 do
+        local ux = self.mapAPI:worldToUIX(autoDriveGetRouteX(i), autoDriveGetRouteY(i));
+        local uy = self.mapAPI:worldToUIY(autoDriveGetRouteX(i), autoDriveGetRouteY(i));
+        if ux0 ~= nil then
+            -- 视口剔除: 段两端点均在容器外 (同侧越界) 则跳过
+            if not ((ux0 < 0 and ux < 0) or (uy0 < 0 and uy < 0)
+                    or (ux0 > W and ux > W) or (uy0 > H and uy > H)) then
+                -- UIElement 无 drawLine: 3x3 实心小块沿段插值连线 (步长 2px, 同终点十字原语)
+                local dx, dy = ux - ux0, uy - uy0;
+                local steps = math.max(1, math.floor(math.sqrt(dx * dx + dy * dy) / 2));
+                for s = 0, steps do
+                    local t = s / steps;
+                    local px = ux0 + dx * t;
+                    local py = uy0 + dy * t;
+                    if px >= -3 and py >= -3 and px <= W + 3 and py <= H + 3 then
+                        self:drawRect(px - 1, py - 1, 3, 3, 1.0, r, g, b);
+                    end
+                end
+            end
+        end
+        ux0, uy0 = ux, uy;
+    end
+end
+
+--*********************************************************
+--* 终点标记绘制 (render 包装共用): 脉动十字标 + 文案, 视口内才画。
+--* 门控 = 路线存在 (而非 isActive): 手动接管/到达后导航线与终点标记
+--* 保留显示, 直到下次锚定换目标 (2026-09-07 用户需求"我需要导航线")。
 --*********************************************************
 local function drawDriveMarker(self)
-    if type(autoDriveIsActive) ~= "function" or not autoDriveIsActive() then return; end
+    if type(autoDriveGetRouteCount) ~= "function" or autoDriveGetRouteCount() < 1 then return; end
     if self.mapAPI == nil then return; end
+    drawDriveRoute(self);
     local tx, ty = autoDriveGetTargetX(), autoDriveGetTargetY();
     local ux = self.mapAPI:worldToUIX(tx, ty);
     local uy = self.mapAPI:worldToUIY(tx, ty);
@@ -68,6 +147,7 @@ if UIMap ~= nil and UIMap.onRightMouseUp ~= nil then
         end
         -- 自动驾驶锚定: 不做 isValidChunk 门禁 — 终点允许落在未探索区 (滚动规划衔接)
         context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
+        addResumeAndClearOptions(context);
     end
 
     function UIMap:onAutoDriveAnchor(worldX, worldY)
@@ -107,11 +187,13 @@ if ISWorldMap ~= nil then
             local ctx = getPlayerContextMenu(0);
             if ctx ~= nil and ctx:isVisible() and ctx.addOption ~= nil then
                 ctx:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
+                addResumeAndClearOptions(ctx);
             end
             return true;
         end
         local context = ISContextMenu.get(0, x + self:getAbsoluteX(), y + self:getAbsoluteY());
         context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
+        addResumeAndClearOptions(context);
         return true;
     end
 
@@ -144,6 +226,7 @@ if ISMap ~= nil then
             local worldX = self.mapAPI:uiToWorldX(x, y);
             local worldY = self.mapAPI:uiToWorldY(x, y);
             context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
+            addResumeAndClearOptions(context);
         end
     end
 

@@ -1237,11 +1237,19 @@ public class GamePatcher {
         }
         Logger.print("Checking for injections in game files");
         if (this.checkInjectedAnnotations()) {
-            Logger.print("Signs of interference were found in the game files. If you have installed this cheat before, run it with the '--uninstall' flag. Otherwise, check the integrity of the game files via Steam");
-            return;
+            // 旧版残留: 自动恢复原版类 + 清 EtherHack 目录, 然后全新安装。
+            // (拒绝式重装会留下"新注入体 + 旧钩子类"版本错配 — 新 BaseVehicle 调
+            // 新钩子方法, 而旧 BulletNoClipHook.class 没有它 → 启动即
+            // NoSuchMethodError 卡死, 实测。安装器必须永远 fresh。)
+            Logger.print("Previous injection detected — refreshing installation");
+            this.restoreFiles();
         }
         Logger.print("No signs of injections were found. Preparing for backup...");
         this.backupGameFiles();
+        // EtherHack 类解包提前到注入前 (原在末尾): 安装中途失败时, 磁盘上的钩子类
+        // 与已注入体永远同版本, 不会错配 (NoSuchMethodError 实测教训)
+        Logger.print("Extracting EtherHack files to the current directory...");
+        this.extractEtherHack();
         Logger.print("Preparation for injection into game file...");
         this.exposePrivateFields();
         this.patchGameWindow();
@@ -1271,8 +1279,6 @@ public class GamePatcher {
         EtherHack.drive.BulletNoClipPatch.install();
         Patch.saveModifiedClasses();
         Logger.print("The injections were completed!");
-        Logger.print("Extracting EtherHack files to the current directory...");
-        this.extractEtherHack();
         Logger.print("The cheat installation is complete, you can enter the game!");
     }
 
