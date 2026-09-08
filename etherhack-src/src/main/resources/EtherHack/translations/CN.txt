@@ -433,7 +433,7 @@
     UI_DriveCombat_NoClip = "汽车穿墙",
     UI_DriveCombat_Hint = "自动导航期间三项恒定开启; 此处开关仅对手动驾驶生效: 蠕动秒杀 = 驻车被围时前后蠕动碾杀僵尸; 汽车秒杀 = 撞僵尸即死; 汽车穿墙 = 可穿墙/树等静态物。",
     UI_CharacterPanel_SuperMultiHitTitle = "超级群攻 (10-20)",
-    UI_CharacterPanel_CombatHint = "超级群攻: 启用后可攻击周围全部敌人; 填入数量为每次挥击的命中上限, 实际命中仍受挥击半径与朝向影响。",
+    UI_CharacterPanel_CombatHint = "超级群攻: 启用后可攻击以自身为中心的全部敌人; 伤害很低是正常的, 因为伤害被平均分摊到了多只僵尸身上, 可以配合暴击Max和秒杀模式使用。",
     UI_TempWeapon_Title = "临时武器",
     UI_TempWeapon_Replace = "临时替换",
     UI_TempWeapon_Cancel = "取消替换",

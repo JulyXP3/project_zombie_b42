@@ -31,7 +31,7 @@ local etherModules = {
     "EtherHack/lua/components/ui/EtherTrapPOC.lua",
     "EtherHack/lua/components/ui/EtherFishSpawn.lua",
     "EtherHack/lua/components/ui/EtherRadioXp.lua",
-    "EtherHack/lua/components/ui/EtherExchange.lua",
+        "EtherHack/lua/components/ui/EtherExchange.lua",
     "EtherHack/lua/components/ui/EtherAmmoFarm.lua",
     "EtherHack/lua/components/ui/UIMap.lua",
     -- 自动驾驶地图锚定 (drive 域): 在 UIMap 之后加载
@@ -271,6 +271,8 @@ local function onGameStart()
 end
 
 Events.OnGameStart.Add(onGameStart);
+
+
 
 --*********************************************************
 --* F9: 重置附近容器战利品 (与「战利品重掷」选项卡同入口)

@@ -40,6 +40,7 @@ import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.FieldNode;
 import org.objectweb.asm.tree.FrameNode;
+import org.objectweb.asm.tree.IincInsnNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
@@ -561,21 +562,24 @@ public class GamePatcher {
         Logger.print("Patching CombatManager for super multi-hit...");
         try {
             Patch.injectIntoClass("zombie/CombatManager", "calculateHitInfoList", false, method -> {
-                // 锚点: 最后一处 ISTORE 5 且其后(隔标签/行号/帧)紧跟 ILOAD 5 + IFGT = `if (maxHit <= 0)` 门
+                // 锚点: 门控 `if (maxHit <= 0)` 的 ILOAD 5 (其后紧跟 IFGT)。
+                // 注意: 不能锚 ISTORE 5 —— 最后一处 ISTORE 5 (bareHands+targetOnGround 分支体,
+                // 字节码 istore@151) 之后、ILOAD 5 之前, 有 if_acmpne/ifnull 跳转直指汇聚点
+                // (iload@191), 插在 istore 后 = 插进分支体内, 普通武器挥击被跳越, 门控永不执行
+                // (实测 gateHits=0 / maxHit 恒为脚本值, 2026-09-09 重研判根因)。
+                // ILOAD 5 + IFGT 全方法唯一 (trim/连射上限均为 if_icmpXX), 锚它并 insertBefore,
+                // 使全部路径 (分支体 fall-through + 各路跳转目标) 都先经过注入区。
                 AbstractInsnNode anchor = null;
                 for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-                    if (insn instanceof VarInsnNode && ((VarInsnNode)insn).getOpcode() == 54 && ((VarInsnNode)insn).var == 5) {
-                        AbstractInsnNode next = skipIgnorable(insn.getNext());
-                        if (next instanceof VarInsnNode && ((VarInsnNode)next).getOpcode() == 21 && ((VarInsnNode)next).var == 5) {
-                            AbstractInsnNode jump = skipIgnorable(next.getNext());
-                            if (jump instanceof JumpInsnNode && ((JumpInsnNode)jump).getOpcode() == 157) { // IFGT: if (maxHit <= 0) 门
-                                anchor = insn;
-                            }
+                    if (insn instanceof VarInsnNode && ((VarInsnNode)insn).getOpcode() == 21 && ((VarInsnNode)insn).var == 5) {
+                        AbstractInsnNode jump = skipIgnorable(insn.getNext());
+                        if (jump instanceof JumpInsnNode && ((JumpInsnNode)jump).getOpcode() == 157) { // IFGT: if (maxHit <= 0) 门
+                            anchor = insn;
                         }
                     }
                 }
                 if (anchor == null) {
-                    throw new IllegalStateException("maxHit gate (ISTORE 5 + ILOAD 5/IFGT) not found in calculateHitInfoList");
+                    throw new IllegalStateException("maxHit gate (ILOAD 5 + IFGT) not found in calculateHitInfoList");
                 }
                 InsnList toInject = new InsnList();
                 LabelNode skip = new LabelNode();
@@ -585,8 +589,8 @@ public class GamePatcher {
                 toInject.add(new FieldInsnNode(180, "EtherHack/Ether/EtherAPI", "superMultiHitCount", "I"));
                 toInject.add(new VarInsnNode(54, 5)); // ISTORE maxHit
                 toInject.add(skip);
-                method.instructions.insert(anchor, toInject);
-                Logger.print("  [OK] Injected super multi-hit maxHit overwrite into CombatManager.calculateHitInfoList()");
+                method.instructions.insertBefore(anchor, toInject);
+                Logger.print("  [OK] Injected super multi-hit maxHit overwrite before maxHit gate in CombatManager.calculateHitInfoList()");
             });
             this.patchWideMeleeArc("calcValidTargets");
             this.patchWideMeleeArc("getNearestMeleeTargetPosAndDot");
@@ -691,6 +695,70 @@ public class GamePatcher {
         }
         catch (Exception e) {
             Logger.print("Warning: sendPlayerHit suppression injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
+    //*********************************************************
+    //* 注入⑨ 群攻全额伤害 (研判 §九): attackCollisionCheck 里 melee 伤害按
+    //* `damageSplit = damage/(split++*0.5f)` 逐目标递减 (首目标 2×, 第 N 目标 2/N×),
+    //* 20 目标时第 5 只往后伤害趋零 — 命中列表装了 20 只, 观感只见前 3 只倒。
+    //* 门控开时跳过分摊除法, damageSplit = damage 原值 (全员 1×); split 局部
+    //* 无其他读点 (javap 核实), 跳过 IINC 无副作用; 门控关闭指令栈完全还原原版。
+    //*********************************************************
+    public void patchSuperMultiHitFullDamage() {
+        Logger.print("Patching CombatManager.attackCollisionCheck with full-damage hook...");
+        try {
+            Patch.injectIntoClass("zombie/CombatManager", "attackCollisionCheck", false, method -> {
+                // 锚点: FLOAD damage → ILOAD split → IINC split,1 → I2F → LDC 0.5f → FMUL → FDIV → FSTORE damageSplit
+                // (javap 实测槽位 damage=33/split=12/damageSplit=34, iload split 全方法唯一;
+                //  扫描按语义序列匹配, 槽位从指令流现取, 不硬编码)
+                AbstractInsnNode anchorFload = null;
+                AbstractInsnNode anchorFstore = null;
+                int damageVar = -1;
+                int damageSplitVar = -1;
+                for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                    if (!(insn instanceof VarInsnNode) || ((VarInsnNode)insn).getOpcode() != 23) continue; // FLOAD damage
+                    AbstractInsnNode iload = skipIgnorable(insn.getNext());
+                    if (!(iload instanceof VarInsnNode) || ((VarInsnNode)iload).getOpcode() != 21) continue; // ILOAD split
+                    int splitVar = ((VarInsnNode)iload).var;
+                    AbstractInsnNode iinc = skipIgnorable(iload.getNext());
+                    if (!(iinc instanceof IincInsnNode) || ((IincInsnNode)iinc).var != splitVar || ((IincInsnNode)iinc).incr != 1) continue;
+                    AbstractInsnNode i2f = skipIgnorable(iinc.getNext());
+                    if (!(i2f instanceof InsnNode) || i2f.getOpcode() != 134) continue; // I2F
+                    AbstractInsnNode ldc = skipIgnorable(i2f.getNext());
+                    if (!(ldc instanceof LdcInsnNode) || !(((LdcInsnNode)ldc).cst instanceof Float)
+                            || ((Float)((LdcInsnNode)ldc).cst).floatValue() != 0.5f) continue;
+                    AbstractInsnNode fmul = skipIgnorable(ldc.getNext());
+                    if (!(fmul instanceof InsnNode) || fmul.getOpcode() != 106) continue; // FMUL
+                    AbstractInsnNode fdiv = skipIgnorable(fmul.getNext());
+                    if (!(fdiv instanceof InsnNode) || fdiv.getOpcode() != 110) continue; // FDIV
+                    AbstractInsnNode fstore = skipIgnorable(fdiv.getNext());
+                    if (!(fstore instanceof VarInsnNode) || ((VarInsnNode)fstore).getOpcode() != 56) continue; // FSTORE damageSplit
+                    anchorFload = insn;
+                    anchorFstore = fstore;
+                    damageVar = ((VarInsnNode)insn).var;
+                    damageSplitVar = ((VarInsnNode)fstore).var;
+                }
+                if (anchorFload == null) {
+                    throw new IllegalStateException("damage split sequence (FLOAD/ILOAD/IINC/I2F/LDC 0.5f/FMUL/FDIV/FSTORE) not found in attackCollisionCheck");
+                }
+                InsnList toInject = new InsnList();
+                LabelNode skip = new LabelNode(); // 门关: 落回原版分摊 (damage 已在栈顶, 与原 FLOAD 后栈形一致)
+                LabelNode end = new LabelNode();  // 门开: 直跳原版 FSTORE 之后
+                addSuperMultiHitGate(toInject, skip);
+                // 门开: damageSplit = damage (damage 已由锚点 FLOAD 压栈)
+                toInject.add(new VarInsnNode(56, damageSplitVar));
+                toInject.add(new JumpInsnNode(167, end)); // GOTO end
+                toInject.add(skip);
+                method.instructions.insert(anchorFload, toInject);
+                method.instructions.insert(anchorFstore, end);
+                Logger.print("  [OK] Injected full-damage (split skip, slots " + damageVar + "/" + damageSplitVar
+                        + ") into CombatManager.attackCollisionCheck()");
+            });
+        }
+        catch (Exception e) {
+            Logger.print("Warning: full-damage injection failed: " + e.getMessage());
             Logger.logException(e);
         }
     }
@@ -1261,9 +1329,10 @@ public class GamePatcher {
         this.patchAntiCheatSystem();
         this.patchHeadshotOnly();
         this.patchAlwaysHit();
-        // 超级群攻: maxHit 扩容 + 全向扇面 + 属主命中包抑制 (研判 §三A/§五/§六)
+        // 超级群攻: maxHit 扩容 + 全向扇面 + 属主命中包抑制 + 群攻全额伤害 (研判 §三A/§五/§六/§九)
         this.patchSuperMultiHit();
         this.patchSuperMultiHitSuppression();
+        this.patchSuperMultiHitFullDamage();
         this.patchGameClientSyncBlocker();
         this.patchRoleCapabilityForSP();
         this.patchVehicleNoKey();

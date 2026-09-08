@@ -72,13 +72,6 @@ function EtherLootRollPanel:prerender()
             self:drawText(t.text, t.x, t.y, t.col.r, t.col.g, t.col.b, t.col.a or 1, t.font);
         end
     end
-    -- 底部说明 (提示/警告) 静态绘制
-    if self.texts ~= nil then
-        for i = 1, #self.texts do
-            local t = self.texts[i];
-            EtherTheme.drawHintText(self, t.text, t.x, t.y, t.col);
-        end
-    end
 end
 
 --*********************************************************
@@ -93,7 +86,7 @@ function EtherLootRollPanel:render()
         return
     end
 
-    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 按模式取对应状态源,
+    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 状态源固定为钓竿生成,
     -- 长消息按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
     local src = EtherFishSpawn;
     local fishStatus = tostring((src and src.message) or "")
@@ -360,7 +353,7 @@ function EtherLootRollPanel:createChildren()
     self:_header(innerX, cy, getTranslate("UI_FishSpawn_Title"), innerW);
     cy = cy + EtherTheme.fontHgtSmall + GAP;
 
-    -- 数量输入框行
+    -- 数量输入行 (数量输入框右对齐, 与上方标题行对齐)
     local cntW = 56;
     local cntX = innerX + innerW - cntW;
     self:_text(cntX - tm:MeasureStringX(UIFont.Small, getTranslate("UI_TrapSpawn_Count")) - math.floor(GAP / 2),
@@ -418,7 +411,7 @@ function EtherLootRollPanel:createChildren()
     cy = cy + EtherTheme.entryH + GAP;
 
     -- 底部区: 生成按钮行 + 使用提示 + 留痕警告 (自下而上: 警告 -> 提示 -> 按钮),
-    -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩;
+    -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩
     local hintLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_Hint"), innerW);
     local warnLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_TraceWarn"), innerW);
     local notesH = (#hintLinesF + #warnLinesF) * EtherTheme.fontHgtHint + GAP * 2;
@@ -472,17 +465,22 @@ function EtherLootRollPanel:createChildren()
     self.spawnBtn.isOnlyInGame = true;
     self:addChild(self.spawnBtn);
 
-    -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册)
-    self.texts = {};
-    local y0 = bottomY + ctrlH + GAP;
-    for i = 1, #hintLinesF do
-        table.insert(self.texts, { x = innerX, y = y0 + (#self.texts) * EtherTheme.fontHgtHint,
-            text = hintLinesF[i], col = EtherTheme.textDim });
+    -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册, 直接进 texts 静态文案表)
+    local function regNote(lines, col)
+        -- 每组从说明区的当前累加行开始 (hint 完接着画 warn, 不重叠)
+        local y0 = bottomY + ctrlH + GAP;
+        for _, t in ipairs(self.texts) do
+            if t.hint then
+                y0 = math.max(y0, t.y + EtherTheme.fontHgtHint);
+            end
+        end
+        for i = 1, #lines do
+            table.insert(self.texts, { x = innerX, y = y0 + (i - 1) * EtherTheme.fontHgtHint,
+                text = lines[i], col = col, hint = true });
+        end
     end
-    for i = 1, #warnLinesF do
-        table.insert(self.texts, { x = innerX, y = y0 + (#self.texts) * EtherTheme.fontHgtHint,
-            text = warnLinesF[i], col = EtherTheme.statusRed });
-    end
+    regNote(hintLinesF, EtherTheme.textDim);
+    regNote(warnLinesF, EtherTheme.statusRed);
 
     -- 状态文字区域 (生成按钮右侧): 只显示动态状态消息 (生成中/已生成/失败),
     -- 空闲时留空 —— 使用提示已改为底部静态注册, 不再在此兜底

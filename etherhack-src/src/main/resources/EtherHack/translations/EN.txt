@@ -433,7 +433,7 @@
     UI_DriveCombat_NoClip = "Vehicle no-clip",
     UI_DriveCombat_Hint = "All three are always ON during navigation. The toggles only apply to manual driving: wiggle = rock back & forth when stopped to crush surrounding zombies; instakill = running over zombies kills instantly; no-clip = drive through walls/trees.",
     UI_CharacterPanel_SuperMultiHitTitle = "Multi-Hit Pro (10-20)",
-    UI_CharacterPanel_CombatHint = "Multi-Hit Pro: once enabled, you can strike every enemy around you; the number entered is the max targets per swing, actual hits still depend on swing radius and facing.",
+    UI_CharacterPanel_CombatHint = "Multi-Hit Pro: once enabled, you can strike every enemy around you; low damage is normal, as it is spread evenly across all zombies hit; combine with Crit Max and Instant Kill mode for best results.",
     UI_TempWeapon_Title = "Temp weapon",
     UI_TempWeapon_Replace = "Swap in",
     UI_TempWeapon_Cancel = "Swap back",

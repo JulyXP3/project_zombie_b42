@@ -532,9 +532,18 @@ public final class AutoDriveController {
         // 绕行横向拉开 (|lat|≥3.5) gap 自动退出, 不拖累绕过后提速。
         // 卌四: 绕行/并入期交给游戏巡航 (regulator) — 油门缓升缓降、从不刹车 = 丝滑;
         // 旧 bang-bang 在 10km/h 目标下加速→超调→刹车→欠调→加速 = 一顿一顿 (实测)。
+        boolean gapActive = !Float.isNaN(obsLon) && Math.abs(obsLat) < IDM_GAP_CORRIDOR;
         if (avoidMode == AVOID_DETOUR || avoidMode == AVOID_RETURN) {
             vehicle.setRegulator(true);
             vehicle.setRegulatorSpeed(AVOID_SPEED_CAP);
+            ctlForward = false;
+            ctlBrake = false;
+        } else if (v0 < cruise - 2.0f && !gapActive) {
+            // 卌九: 弯道剖面/偏航兜底把目标压到低速时, bang-bang 死区相对占比暴涨 →
+            // 走-刹振荡 (实测)。同避障卌四款: 游戏巡航恒速丝滑; min(10, v0) 尊重极锐
+            // 弯剖面。gap 激活时不切 — 保命层需 IDM 刹停 (车-车服务端权威), 绕开自动回归。
+            vehicle.setRegulator(true);
+            vehicle.setRegulatorSpeed(Math.min(AVOID_SPEED_CAP, v0));
             ctlForward = false;
             ctlBrake = false;
         } else {

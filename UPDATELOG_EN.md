@@ -2,6 +2,8 @@
 
 ## [3.2.4] - Current
 
+- Fixed: with "Super Multi-Hit" enabled, only the closest few zombies took meaningful damage per swing (all targets in range now take full damage; combined with attack range bonus, a single swing clears a whole horde).
+- Fixed: repeated braking and re-accelerating when auto-driving through turns on the navigation line (corners are now passed at a steady low speed).
 - Fixed: being pushed back or stopped dead by roadside objects (signs, mailboxes, fences) while no-clipping.
 - Fixed: still slowing down when driving through trees, lamp posts, trash cans (now all static obstacles at full speed).
 - Fixed: overly sharp steering when merging back onto the road after detouring (now merges smoothly).
