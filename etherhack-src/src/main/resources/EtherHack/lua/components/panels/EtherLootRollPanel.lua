@@ -353,18 +353,6 @@ function EtherLootRollPanel:createChildren()
     self:_header(innerX, cy, getTranslate("UI_FishSpawn_Title"), innerW);
     cy = cy + EtherTheme.fontHgtSmall + GAP;
 
-    -- 数量输入行 (数量输入框右对齐, 与上方标题行对齐)
-    local cntW = 56;
-    local cntX = innerX + innerW - cntW;
-    self:_text(cntX - tm:MeasureStringX(UIFont.Small, getTranslate("UI_TrapSpawn_Count")) - math.floor(GAP / 2),
-        cy + EtherTheme.entryLabelDY, getTranslate("UI_TrapSpawn_Count"), EtherTheme.text, UIFont.Small);
-    self.countBox = ISTextEntryBox:new("1", cntX, cy, cntW, EtherTheme.entryH);
-    EtherTheme.styleEntry(self.countBox);
-    self.countBox:initialise();
-    self.countBox:instantiate();
-    self.countBox:setClearButton(false);
-    self:addChild(self.countBox);
-    cy = cy + EtherTheme.entryH + GAP;
 
     -- 过滤行: 名称 + ID (宽度不足时自动拆成两行, 避免标签压住输入框)
     local nameT = getTranslate("UI_ItemCreator_Title_FilterByName");
@@ -411,6 +399,7 @@ function EtherLootRollPanel:createChildren()
     cy = cy + EtherTheme.entryH + GAP;
 
     -- 底部区: 生成按钮行 + 使用提示 + 留痕警告 (自下而上: 警告 -> 提示 -> 按钮),
+    -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩;
     -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩
     local hintLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_Hint"), innerW);
     local warnLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_TraceWarn"), innerW);

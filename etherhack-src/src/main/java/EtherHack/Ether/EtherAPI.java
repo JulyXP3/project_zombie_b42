@@ -135,6 +135,13 @@ public class EtherAPI {
     public boolean isAutoRepairItems;
     public boolean isRepairClothing;
     public boolean isPadClothing;
+    /** 按键绑定 (2026-09-09 框架): featureId -> 键码; 键盘 1..~240, 鼠标合成键 10000+按钮号
+     *  (UIManager 把鼠标按下以 OnKeyPressed(10000+btn) 触发, 与键盘同通道统一分发) */
+    public java.util.Map<String, Integer> keyBindings = new java.util.HashMap<>();
+    private static final java.util.Map<String, Integer> DEFAULT_KEY_BINDS = new java.util.HashMap<>();
+    static {
+        DEFAULT_KEY_BINDS.put("menu", 210); // 呼出菜单: 默认 Insert
+    }
     public boolean isDisableFatigue;
     public boolean isDisableHunger;
     public boolean isDisableThirst;
@@ -281,6 +288,9 @@ public class EtherAPI {
         var3.setProperty("charCreateCustomSkillLevels", csSb.toString());
         var3.setProperty("isVehicleInstantStart", Boolean.toString(this.isVehicleInstantStart));
         var3.setProperty("isFullbright", Boolean.toString(this.isFullbright));
+        for (java.util.Map.Entry<String, Integer> e : this.keyBindings.entrySet()) {
+            var3.setProperty("keyBind." + e.getKey(), Integer.toString(e.getValue()));
+        }
         new File("EtherHack/config").mkdirs();
         try (FileOutputStream var4 = new FileOutputStream(var2);){
             var3.store(var4, (String)null);
@@ -406,6 +416,9 @@ public class EtherAPI {
         }
         this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var3, "isVehicleInstantStart", false);
         this.isFullbright = ConfigUtils.getBooleanFromConfig(var3, "isFullbright", false);
+        for (java.util.Map.Entry<String, Integer> d : DEFAULT_KEY_BINDS.entrySet()) {
+            this.keyBindings.put(d.getKey(), ConfigUtils.getIntFromConfig(var3, "keyBind." + d.getKey(), d.getValue()));
+        }
     }
 
     private void initStartupConfig() {
@@ -519,6 +532,9 @@ public class EtherAPI {
         }
         this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var1, "isVehicleInstantStart", false);
         this.isFullbright = ConfigUtils.getBooleanFromConfig(var1, "isFullbright", false);
+        for (java.util.Map.Entry<String, Integer> d : DEFAULT_KEY_BINDS.entrySet()) {
+            this.keyBindings.put(d.getKey(), ConfigUtils.getIntFromConfig(var1, "keyBind." + d.getKey(), d.getValue()));
+        }
     }
 
     public EtherAPI() {

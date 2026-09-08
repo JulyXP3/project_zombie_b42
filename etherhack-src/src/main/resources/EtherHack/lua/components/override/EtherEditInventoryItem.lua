@@ -1,4 +1,8 @@
 local function EtherEditInventoryItem(player, context, items)
+    -- 多人门控 (2026-09-09 用户决策): 编辑/删除物品属客户端直接改库存,
+    -- 服务器反作弊不认, 点击即被踢; 仅单机保留
+    if isMultiplayer() then return end
+
     local container = nil
     local resItems = {}
     for i,v in ipairs(items) do

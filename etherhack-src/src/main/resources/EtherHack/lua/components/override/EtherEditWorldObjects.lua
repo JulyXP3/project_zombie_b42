@@ -6,6 +6,9 @@ EtherEditWorldObjects.ticked = false;
 
 EtherEditWorldObjects.doEtherContextDebugMenu = function(player, context, worldobjects, test)
 	if test and ISWorldObjectContextMenu.Test then return true end
+	-- 多人门控 (2026-09-09 用户决策): 客户端直接改世界对象(门窗/发电机等)
+	-- 服务器不认, 使用即被踢; 仅单机保留
+	if isMultiplayer() then return end
 
 	EtherEditWorldObjects.doDebugObjectMenu(player, context, worldobjects, test)
 end

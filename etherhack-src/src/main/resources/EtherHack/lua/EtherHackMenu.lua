@@ -12,6 +12,7 @@ require "ISUI/ISPanel"
 local etherModules = {
     "EtherHack/lua/components/ui/EtherTheme.lua",
     "EtherHack/lua/components/ui/EtherI18n.lua",
+    "EtherHack/lua/components/ui/EtherKeyBinds.lua",
     "EtherHack/lua/components/ui/EtherFormPanel.lua",
     "EtherHack/lua/components/override/EtherAdminMenu.lua",
     "EtherHack/lua/components/override/EtherDebugMenu.lua",
@@ -70,7 +71,8 @@ end
 --*********************************************************
 EtherMain                   = ISPanel:derive("EtherMain"); -- Наследование от ISPanel
 EtherMain.instance          = nil; --Экземпляр окна
-EtherMain.menuKeyID         = 210; -- Клавиша открытия окна - Insert (210)
+-- 呼出菜单键已迁入 EtherKeyBinds 绑定框架 (featureId="menu", 默认 Insert/210),
+-- 可在「设置」页改绑; 此处不再持有硬编码键位
 -- 窗口设计尺寸 888x888 (用户不可调): 所有面板按此定宽排版, 不再读取/写入配置里的尺寸。
 -- 注: Java 侧 getPanelWidth/getPanelHeight/setPanelSize 保持不动(冻结契约), 只是 UI 不再使用。
 -- 实际尺寸在 EtherMain:new 里按屏幕钳制, 小分辨率下会小于设计值:
@@ -180,34 +182,32 @@ function EtherMain:render()
 end
 
 --*********************************************************
---* Логика открытия и закрытия меню по нажатию клавиши
+--* Логика открытия и закрытия меню (绑定框架分发: 见文件尾 register)
 --*********************************************************
-function EtherMain.OnOpenPanel(key)
-    if key == EtherMain.menuKeyID then
-        -- Если панель уже существует, переключаем видимость (состояние вкладок/прокрутки сохраняется)
-        if EtherMain.instance ~= nil then
-            if EtherMain.instance:getIsVisible() then
-                EtherMain.instance:setVisible(false);
-                EtherMain.instance:removeFromUIManager();
-            else
-                EtherMain.instance:addToUIManager();
-                EtherMain.instance:setVisible(true);
-            end
-            return
+function EtherMain.toggleMenu()
+    -- Если панель уже существует, переключаем видимость (состояние вкладок/прокрутки сохраняется)
+    if EtherMain.instance ~= nil then
+        if EtherMain.instance:getIsVisible() then
+            EtherMain.instance:setVisible(false);
+            EtherMain.instance:removeFromUIManager();
+        else
+            EtherMain.instance:addToUIManager();
+            EtherMain.instance:setVisible(true);
         end
-
-        -- Создаем новую панель
-        -- 菜单重建 => 面板实例缓存全失效: 缓存面板的标题/说明文字是构建时按当时语言
-        -- 与配置烘焙的, 语言切换/重置设置重建菜单后复用旧实例会永远停在旧文案
-        -- (修: 切换语言不生效)。单纯开关菜单走上方可见性分支, 缓存保留 (保输入状态)。
-        UIButtonsPanel.panelCache = nil;
-        EtherMain.instance  = EtherMain:new();
-        EtherMain.instance:initialise();
-        EtherMain.instance:instantiate();
-        EtherMain.instance:addToUIManager();
-        EtherMain.instance:setVisible(true);
-        EtherMain.instance:setAlwaysOnTop(false);
+        return
     end
+
+    -- Создаем новую панель
+    -- 菜单重建 => 面板实例缓存全失效: 缓存面板的标题/说明文字是构建时按当时语言
+    -- 与配置烘焙的, 语言切换/重置设置重建菜单后复用旧实例会永远停在旧文案
+    -- (修: 切换语言不生效)。单纯开关菜单走上方可见性分支, 缓存保留 (保输入状态)。
+    UIButtonsPanel.panelCache = nil;
+    EtherMain.instance  = EtherMain:new();
+    EtherMain.instance:initialise();
+    EtherMain.instance:instantiate();
+    EtherMain.instance:addToUIManager();
+    EtherMain.instance:setVisible(true);
+    EtherMain.instance:setAlwaysOnTop(false);
 end
 
 --*********************************************************
@@ -262,6 +262,9 @@ local function onGameStart()
     UIMovableMiniMap.instance = nil; -- 上一场游戏的旧实例已失效, 避免 openPanel 误判为已打开
     EtherMain.instance = nil; -- 同上: 旧菜单实例已失效, 下次按键重新构建
     loadConfig("startup");
+    if type(EtherKeyBinds.refresh) == "function" then
+        EtherKeyBinds.refresh(); -- 配置加载后重读按键绑定
+    end
     if clearCharacterBoostCustom ~= nil then
         clearCharacterBoostCustom(); -- 建号名单一次性使用: 进入游戏即清空 (须在 loadConfig 之后, 否则被重新加载)
     end
@@ -284,4 +287,9 @@ function EtherMain.OnKeyPressed(key)
 end
 
 Events.OnKeyPressed.Add(EtherMain.OnKeyPressed);
-Events.OnKeyPressed.Add(EtherMain.OnOpenPanel);
+-- 呼出菜单改走绑定框架 (默认 Insert=210, 可在设置页改绑/还原)
+if type(EtherKeyBinds.register) == "function" then
+    EtherKeyBinds.register("menu", "UI_KeyBind_Menu", function()
+        EtherMain.toggleMenu();
+    end, 210);
+end

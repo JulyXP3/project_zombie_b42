@@ -700,6 +700,22 @@ public class EtherLuaMethods {
         return EtherMain.getInstance().etherAPI.superMultiHitCount;
     }
 
+    /** 按键绑定框架 (2026-09-09): 按 featureId 取键码; 未设置返回 0 (调用方落默认键) */
+    @LuaMethod(name="getKeyBind", global=true)
+    public static int getKeyBind(String id) {
+        if (EtherMain.getInstance().etherAPI == null) return 0;
+        Integer v = EtherMain.getInstance().etherAPI.keyBindings.get(id);
+        return v == null ? 0 : v;
+    }
+
+    /** 按键绑定框架: 写入键码并持久化 (键盘 1..~240; 鼠标合成键 10000+按钮号) */
+    @LuaMethod(name="setKeyBind", global=true)
+    public static void setKeyBind(String id, int code) {
+        if (EtherMain.getInstance().etherAPI == null) return;
+        EtherMain.getInstance().etherAPI.keyBindings.put(id, code);
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="setSuperMultiHitCount", global=true)
     public static void setSuperMultiHitCount(int var0) {
         // 数量钳制 10~20 (研判 §五.1); 输入行即时钳制, 生效开关由 toggleSuperMultiHit 决定
