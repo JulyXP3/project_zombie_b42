@@ -65,9 +65,11 @@ public class GamePatcher {
             // 旧版/独立测试版时代残留: drive 域已并回 EtherHack (2026-09-06), 安装时清理旧目录
             this.removeLegacyDriveDir(currentDirectory);
             try (JarFile jarFile = new JarFile(jarFilePath);){
-                // drive 域 Lua (EtherDriveModule/AutoDriveMap) 位于 EtherHack/lua/components/drive/,
-                // 由 EtherHackMenu requireExtra 引用, 随 EtherHack 前缀一并提取
-                jarFile.stream().filter(entry -> entry.getName().startsWith("EtherHack")).forEach(entry -> {
+                // L3 fileless: Lua 只从 classpath 读 (EtherLuaLoader), 绝不提取
+                // 落地 — 落地文件会被 getLoadedLua/getGameFilesInput 探测 (方案 §3-L3)。
+                // 翻译/图标等非 lua 资源照常提取 (getTranslate 走文件系统)。
+                jarFile.stream().filter(entry -> entry.getName().startsWith("EtherHack")
+                        && !entry.getName().endsWith(".lua")).forEach(entry -> {
                     block9: {
                         try {
                             Path extractPath = currentDirectory.resolve(entry.getName());

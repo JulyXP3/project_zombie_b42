@@ -30,11 +30,8 @@ package EtherHack.Ether;
 import EtherHack.Ether.ChatAPI;
 import EtherHack.Ether.EtherLuaMethods;
 import EtherHack.Ether.EtherMain;
-import EtherHack.Ether.EventProtector;
-import EtherHack.Ether.ProtectionManagerX;
 import EtherHack.Ether.RadioXpAPI;
 import EtherHack.Ether.RecipeAPI;
-import EtherHack.Ether.SafeAPI;
 import EtherHack.Ether.ServerSyncBlocker;
 import EtherHack.GameClientWrapper;
 import EtherHack.annotations.LuaEvents;
@@ -93,10 +90,8 @@ import zombie.network.ZomboidNetData;
 import zombie.vehicles.BaseVehicle;
 
 public class EtherAPI {
-    private final ProtectionManagerX protectionManager;
     private SafeExposer exposer;
     final ConcurrentHashMap<String, Texture> textureCache = new ConcurrentHashMap();
-    private final SafeAPI safeAPI = SafeAPI.getInstance();
     private final ConcurrentHashMap<String, float[]> originalWeaponStats = new ConcurrentHashMap();
     private final ConcurrentHashMap<String, Boolean> critMaxAlwaysKnockdown = new ConcurrentHashMap();
     public Color mainUIAccentColor;
@@ -540,21 +535,16 @@ public class EtherAPI {
     public EtherAPI() {
         this.initStartupConfig();
         EventSubscriber.register(this);
-        this.protectionManager = ProtectionManagerX.getInstance();
     }
 
     @LuaEvents(value={@SubscribeLuaEvent(eventName="OnResetLua"), @SubscribeLuaEvent(eventName="OnMainMenuEnter")})
     public void loadAPI() {
-        Logger.printLog("Loading protected EtherAPI...");
-        this.protectionManager.initializeProtection();
-        this.protectionManager.initializeProtection();
-        EventProtector.getInstance().installProtection();
+        Logger.printLog("Loading EtherAPI...");
         if (this.exposer != null) {
             this.exposer.destroy();
         }
         this.exposer = new SafeExposer(this, LuaManager.converterManager, (Platform)LuaManager.platform, LuaManager.env);
-        SafeEtherLuaMethods protectedMethods = this.createProtectedMethods();
-        this.exposer.exposeAPI(protectedMethods);
+        this.exposer.exposeAPI(this.createProtectedMethods());
         this.exposer.exposeServerSyncBlocker();
             this.exposer.exposeFishingSpawn();
             this.exposer.exposeTrapSpawn();
@@ -563,56 +553,10 @@ public class EtherAPI {
         this.exposer.exposeRecipes();
         this.exposer.exposeRenderingAPI();
         this.exposer.exposeAutoDrive();
-        this.initializeProtectedState();
     }
 
     private SafeEtherLuaMethods createProtectedMethods() {
-        return new SafeEtherLuaMethods(this){
-            public Object invokeMethod(String name, Object ... args) {
-                return this.this$0.protectionManager.invokeFunction(name, args);
-            }
-        };
-    }
-
-    public void handleNetworkPacket(String command, Map<String, Object> data) {
-        this.protectionManager.handlePacket(command, data);
-    }
-
-    private void initializeProtectedState() {
-        try {
-            Object connection = GameClientWrapper.getConnection();
-            if (connection != null) {
-                EtherAPI.setFieldValue(connection);
-                GameClientWrapper wrapper = GameClientWrapper.get();
-                wrapper.clearIncomingNetData();
-            }
-        }
-        catch (Exception e) {
-            Logger.printLog("Error initializing protected state: " + e.getMessage());
-        }
-    }
-
-    private void clearPendingHandshakes() {
-        try {
-            GameClientWrapper wrapper = GameClientWrapper.get();
-            ArrayList<ZomboidNetData> netData = wrapper.getIncomingNetData();
-            if (netData != null) {
-                netData.clear();
-            }
-        }
-        catch (Exception e) {
-            Logger.printLog("Error clearing handshakes: " + e.getMessage());
-        }
-    }
-
-    private static void setFieldValue(Object obj) {
-        try {
-            Field field = FieldCache.getField(obj.getClass(), "validated");
-            FieldCache.setFieldValue(obj, field, true);
-        }
-        catch (Exception e) {
-            Logger.printLog("Error setting field value: " + e.getMessage());
-        }
+        return new SafeEtherLuaMethods(this);
     }
 
     public void resetWeaponsStats() {
@@ -1389,7 +1333,7 @@ public class EtherAPI {
             for (Method method : methods.getClass().getMethods()) {
                 if (!method.isAnnotationPresent(LuaMethod.class)) continue;
                 String originalName = method.getName();
-                String safeName = this.this$0.safeAPI.getSafeName(originalName);
+                String safeName = originalName;
                 this.exposeGlobalFunction(method, safeName);
             }
         }
@@ -1436,7 +1380,6 @@ public class EtherAPI {
                 Logger.printLog("Exposed TrapSpawnAPI method: " + name);
             }
         }
-
 
         public void exposeRadioXp() {
             for (Method method : RadioXpAPI.class.getMethods()) {
@@ -1522,7 +1465,7 @@ public class EtherAPI {
         }
 
         public Object callMethod(String name, Object ... args) {
-            String originalName = this.this$0.safeAPI.getOriginalName(name);
+            String originalName = name;
             if (originalName != null) {
                 try {
                     Method method = this.getClass().getMethod(originalName, this.getParameterTypes(args));

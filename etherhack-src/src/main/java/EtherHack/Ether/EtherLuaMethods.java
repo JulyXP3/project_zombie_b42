@@ -22,7 +22,6 @@ package EtherHack.Ether;
 
 import EtherHack.Ether.EtherLuaCompiler;
 import EtherHack.Ether.EtherMain;
-import EtherHack.Ether.SafeAPI;
 import EtherHack.Ether.ServerAntiCheatBypass;
 import EtherHack.GameClientWrapper;
 import EtherHack.utils.FieldCache;
@@ -66,7 +65,6 @@ import zombie.scripting.objects.Recipe;
 
 public class EtherLuaMethods {
     private static EtherLuaMethods instance = null;
-    private final SafeAPI safeAPI = SafeAPI.getInstance();
     private static final Map<String, Object> methodCache = new HashMap<String, Object>();
     private static Field playerLastUpdateField = null;
     private static Field connectionValidatedField = null;
@@ -209,7 +207,6 @@ public class EtherLuaMethods {
 
     @LuaMethod(name="safePlayerTeleport", global=true)
     public static void safePlayerTeleport(int x, int y) {
-        String key = SafeAPI.getInstance().generateVerificationKey();
         try {
             EtherMain.getInstance().etherAPI.isPlayerInSafeTeleported = true;
             IsoPlayer player = IsoPlayer.getInstance();
@@ -262,7 +259,6 @@ public class EtherLuaMethods {
 
     @LuaMethod(name="learnAllRecipes", global=true)
     public static void learnAllRecipes() {
-        String key = SafeAPI.getInstance().generateVerificationKey();
         try {
             ArrayList<Recipe> recipes;
             IsoPlayer player = IsoPlayer.getInstance();
@@ -280,7 +276,6 @@ public class EtherLuaMethods {
 
     @LuaMethod(name="giveItem", global=true)
     public static void giveItem(InventoryItem item, int count) {
-        String key = SafeAPI.getInstance().generateVerificationKey();
         try {
             IsoPlayer player = IsoPlayer.getInstance();
             if (player != null) {
@@ -1323,234 +1318,14 @@ public class EtherLuaMethods {
 
     @LuaMethod(name="getAntiCheat8Status", global=true)
     public static boolean getAntiCheat8Status() {
-        return EtherLuaMethods.getAntiCheatMovementEnabled();
-    }
-
-    @LuaMethod(name="getAntiCheatMovementEnabled", global=true)
-    public static boolean getAntiCheatMovementEnabled() {
         try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatSpeed == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatSpeed.getValue() > 0;
+            return ServerOptions.instance != null
+                && ServerOptions.instance.antiCheatSpeed != null
+                && ServerOptions.instance.antiCheatSpeed.getValue() > 0;
         }
         catch (Exception e) {
             return false;
         }
-    }
-
-    @LuaMethod(name="getAntiCheatStatus", global=true)
-    public static KahluaTable getAntiCheatStatus() {
-        KahluaTable table = LuaManager.platform.newTable();
-        try {
-            if (ServerOptions.instance == null) {
-                return table;
-            }
-            Function<ServerOptions.EnumServerOption, Integer> getValue = opt -> {
-                try {
-                    return opt != null ? opt.getValue() : 0;
-                }
-                catch (Exception e) {
-                    return 0;
-                }
-            };
-            table.rawset((Object)"movement", (Object)getValue.apply(ServerOptions.instance.antiCheatSpeed));
-            table.rawset((Object)"safety", (Object)getValue.apply(ServerOptions.instance.antiCheatSafety));
-            table.rawset((Object)"hit", (Object)getValue.apply(ServerOptions.instance.antiCheatHit));
-            table.rawset((Object)"packet", (Object)getValue.apply(ServerOptions.instance.antiCheatPacketException));
-            table.rawset((Object)"permission", (Object)getValue.apply(ServerOptions.instance.antiCheatPermission));
-            table.rawset((Object)"xp", (Object)getValue.apply(ServerOptions.instance.antiCheatXp));
-            table.rawset((Object)"fire", (Object)getValue.apply(ServerOptions.instance.antiCheatHit));
-            table.rawset((Object)"safehouse", (Object)getValue.apply(ServerOptions.instance.antiCheatSafeHouse));
-            table.rawset((Object)"recipe", (Object)getValue.apply(ServerOptions.instance.antiCheatXp));
-            table.rawset((Object)"player", (Object)getValue.apply(ServerOptions.instance.antiCheatPlayer));
-            table.rawset((Object)"checksum", (Object)getValue.apply(ServerOptions.instance.antiCheatChecksum));
-            table.rawset((Object)"item", (Object)getValue.apply(ServerOptions.instance.antiCheatPlayer));
-            table.rawset((Object)"serverCustomization", (Object)getValue.apply(ServerOptions.instance.antiCheatChecksum));
-            table.rawset((Object)"POLICY_DISABLED", (Object)0);
-            table.rawset((Object)"POLICY_BAN", (Object)1);
-            table.rawset((Object)"POLICY_KICK", (Object)2);
-            table.rawset((Object)"POLICY_LOG", (Object)3);
-        }
-        catch (Exception e) {
-            Logger.printLog("Error getting anti-cheat status: " + e.getMessage());
-        }
-        return table;
-    }
-
-    @LuaMethod(name="getAntiCheatXpEnabled", global=true)
-    public static boolean getAntiCheatXpEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatXp == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatXp.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatPlayerEnabled", global=true)
-    public static boolean getAntiCheatPlayerEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatPlayer == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatPlayer.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatSafetyEnabled", global=true)
-    public static boolean getAntiCheatSafetyEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatSafety == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatSafety.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatHitEnabled", global=true)
-    public static boolean getAntiCheatHitEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatHit == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatHit.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatPacketEnabled", global=true)
-    public static boolean getAntiCheatPacketEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatPacketException == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatPacketException.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatPermissionEnabled", global=true)
-    public static boolean getAntiCheatPermissionEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatPermission == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatPermission.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatFireEnabled", global=true)
-    public static boolean getAntiCheatFireEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatHit == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatHit.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatSafeHouseEnabled", global=true)
-    public static boolean getAntiCheatSafeHouseEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatSafeHouse == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatSafeHouse.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatRecipeEnabled", global=true)
-    public static boolean getAntiCheatRecipeEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatXp == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatXp.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatChecksumEnabled", global=true)
-    public static boolean getAntiCheatChecksumEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatChecksum == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatChecksum.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatItemEnabled", global=true)
-    public static boolean getAntiCheatItemEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatPlayer == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatPlayer.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatServerCustomizationEnabled", global=true)
-    public static boolean getAntiCheatServerCustomizationEnabled() {
-        try {
-            if (ServerOptions.instance == null || ServerOptions.instance.antiCheatChecksum == null) {
-                return false;
-            }
-            return ServerOptions.instance.antiCheatChecksum.getValue() > 0;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="getAntiCheatSummary", global=true)
-    public static String getAntiCheatSummary() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("Movement: ").append(EtherLuaMethods.getAntiCheatMovementEnabled() ? "ON" : "OFF");
-        sb.append(" | Safety: ").append(EtherLuaMethods.getAntiCheatSafetyEnabled() ? "ON" : "OFF");
-        sb.append(" | Hit: ").append(EtherLuaMethods.getAntiCheatHitEnabled() ? "ON" : "OFF");
-        sb.append(" | Packet: ").append(EtherLuaMethods.getAntiCheatPacketEnabled() ? "ON" : "OFF");
-        sb.append(" | Permission: ").append(EtherLuaMethods.getAntiCheatPermissionEnabled() ? "ON" : "OFF");
-        sb.append(" | XP: ").append(EtherLuaMethods.getAntiCheatXpEnabled() ? "ON" : "OFF");
-        sb.append(" | Fire: ").append(EtherLuaMethods.getAntiCheatFireEnabled() ? "ON" : "OFF");
-        sb.append(" | SafeHouse: ").append(EtherLuaMethods.getAntiCheatSafeHouseEnabled() ? "ON" : "OFF");
-        sb.append(" | Recipe: ").append(EtherLuaMethods.getAntiCheatRecipeEnabled() ? "ON" : "OFF");
-        sb.append(" | Player: ").append(EtherLuaMethods.getAntiCheatPlayerEnabled() ? "ON" : "OFF");
-        sb.append(" | Checksum: ").append(EtherLuaMethods.getAntiCheatChecksumEnabled() ? "ON" : "OFF");
-        sb.append(" | Item: ").append(EtherLuaMethods.getAntiCheatItemEnabled() ? "ON" : "OFF");
-        sb.append(" | ServerConfig: ").append(EtherLuaMethods.getAntiCheatServerCustomizationEnabled() ? "ON" : "OFF");
-        return sb.toString();
     }
 
     @LuaMethod(name="disableAntiCheatLocally", global=true)
@@ -1682,61 +1457,6 @@ public class EtherLuaMethods {
         }
     }
 
-    @LuaMethod(name="safeSyncXp", global=true)
-    public static boolean safeSyncXp(IsoPlayer player) {
-        try {
-            if (player == null) {
-                return false;
-            }
-            if (GameClientWrapper.getInstance() == null) {
-                return true;
-            }
-            if (ServerOptions.instance != null) {
-                int playerPolicy;
-                int xpPolicy = ServerOptions.instance.antiCheatXp != null ? ServerOptions.instance.antiCheatXp.getValue() : 0;
-                int n = playerPolicy = ServerOptions.instance.antiCheatPlayer != null ? ServerOptions.instance.antiCheatPlayer.getValue() : 0;
-                if (xpPolicy == 1 || xpPolicy == 2 || playerPolicy == 1 || playerPolicy == 2) {
-                    Logger.printLog("Skipping sync - anti-cheat would ban/kick");
-                    return false;
-                }
-            }
-            return true;
-        }
-        catch (Exception e) {
-            return false;
-        }
-    }
-
-    @LuaMethod(name="enableStealthMode", global=true)
-    public static void enableStealthMode() {
-        stealthMode = true;
-        bypassActive = true;
-        Logger.printLog("Stealth mode enabled - changes will be applied gradually");
-    }
-
-    @LuaMethod(name="disableStealthMode", global=true)
-    public static void disableStealthMode() {
-        stealthMode = false;
-        Logger.printLog("Stealth mode disabled - instant changes enabled");
-    }
-
-    @LuaMethod(name="isStealthModeEnabled", global=true)
-    public static boolean isStealthModeEnabled() {
-        return stealthMode;
-    }
-
-    @LuaMethod(name="getPendingChangesCount", global=true)
-    public static int getPendingChangesCount() {
-        return targetXpValues.size();
-    }
-
-    @LuaMethod(name="clearQueuedChanges", global=true)
-    public static void clearQueuedChanges() {
-        targetXpValues.clear();
-        originalXpValues.clear();
-        lastSyncTimes.clear();
-    }
-
     @LuaMethod(name="spoofSyncTimestamp", global=true)
     public static boolean spoofSyncTimestamp(IsoPlayer player) {
         if (player == null) {
@@ -1827,25 +1547,6 @@ public class EtherLuaMethods {
         }
     }
 
-    @LuaMethod(name="sendValidationPacket", global=true)
-    public static boolean sendValidationPacket(IsoPlayer player) {
-        if (player == null) {
-            return false;
-        }
-        try {
-            EtherLuaMethods.spoofSyncTimestamp(player);
-            GameClient instance = GameClientWrapper.getInstance();
-            if (instance != null) {
-                instance.sendPlayer(player);
-            }
-            return true;
-        }
-        catch (Exception e) {
-            Logger.printLog("Error sending validation packet: " + e.getMessage());
-            return false;
-        }
-    }
-
     @LuaMethod(name="prepareBypass", global=true)
     public static void prepareBypass(IsoPlayer player) {
         EtherLuaMethods.disableAntiCheatLocally("all");
@@ -1854,85 +1555,6 @@ public class EtherLuaMethods {
             EtherLuaMethods.spoofSyncTimestamp(player);
         }
         bypassActive = true;
-    }
-
-    @LuaMethod(name="safeSyncWithBypass", global=true)
-    public static void safeSyncWithBypass(IsoPlayer player) {
-        if (player == null) {
-            return;
-        }
-        EtherLuaMethods.prepareBypass(player);
-        EtherLuaMethods.sendValidationPacket(player);
-    }
-
-    @LuaMethod(name="enableGlobalBypass", global=true)
-    public static void enableGlobalBypass() {
-        ServerAntiCheatBypass.getInstance().enableGlobalBypass();
-    }
-
-    @LuaMethod(name="disableGlobalBypass", global=true)
-    public static void disableGlobalBypass() {
-        ServerAntiCheatBypass.getInstance().disableGlobalBypass();
-    }
-
-    @LuaMethod(name="enableBypassFor", global=true)
-    public static void enableBypassFor(String type) {
-        ServerAntiCheatBypass.getInstance().enableBypassForType(type);
-    }
-
-    @LuaMethod(name="disableBypassFor", global=true)
-    public static void disableBypassFor(String type) {
-        ServerAntiCheatBypass.getInstance().disableBypassForType(type);
-    }
-
-    @LuaMethod(name="enableAllBypasses", global=true)
-    public static void enableAllBypasses() {
-        ServerAntiCheatBypass.getInstance().enableAllTypeBypasses();
-    }
-
-    @LuaMethod(name="disableAllBypasses", global=true)
-    public static void disableAllBypasses() {
-        ServerAntiCheatBypass.getInstance().disableAllTypeBypasses();
-    }
-
-    @LuaMethod(name="whitelistPlayer", global=true)
-    public static void whitelistPlayer(String username) {
-        ServerAntiCheatBypass.getInstance().whitelistPlayer(username);
-    }
-
-    @LuaMethod(name="unwhitelistPlayer", global=true)
-    public static void unwhitelistPlayer(String username) {
-        ServerAntiCheatBypass.getInstance().unwhitelistPlayer(username);
-    }
-
-    @LuaMethod(name="clearWhitelist", global=true)
-    public static void clearWhitelist() {
-        ServerAntiCheatBypass.getInstance().clearWhitelist();
-    }
-
-    @LuaMethod(name="isGlobalBypassEnabled", global=true)
-    public static boolean isGlobalBypassEnabled() {
-        return ServerAntiCheatBypass.getInstance().isGlobalBypassEnabled();
-    }
-
-    @LuaMethod(name="isBypassEnabledFor", global=true)
-    public static boolean isBypassEnabledFor(String type) {
-        return ServerAntiCheatBypass.getInstance().isBypassEnabledForType(type);
-    }
-
-    @LuaMethod(name="isPlayerWhitelisted", global=true)
-    public static boolean isPlayerWhitelisted(String username) {
-        return ServerAntiCheatBypass.getInstance().isPlayerWhitelisted(username);
-    }
-
-    @LuaMethod(name="resetBypassStats", global=true)
-    public static void resetBypassStats() {
-        ServerAntiCheatBypass.getInstance().resetStatistics();
-    }
-
-    @LuaMethod(name="printBypassStatus", global=true)
-    public static void printBypassStatus() {
-        ServerAntiCheatBypass.getInstance().printStatus();
     }
 
     @LuaMethod(name="safeAddTrait", global=true)
@@ -1969,7 +1591,6 @@ public class EtherLuaMethods {
                     Logger.printLog("Error adding trait (fallback): " + e2.getMessage());
                 }
             }
-            EtherLuaMethods.sendValidationPacket(player);
         }
         catch (Exception e) {
             Logger.printLog("Error adding trait: " + e.getMessage());
@@ -2004,38 +1625,17 @@ public class EtherLuaMethods {
                     Logger.printLog("Error removing trait (fallback): " + e2.getMessage());
                 }
             }
-            EtherLuaMethods.sendValidationPacket(player);
         }
         catch (Exception e) {
             Logger.printLog("Error removing trait: " + e.getMessage());
         }
     }
 
-    @LuaMethod(name="isBypassActive", global=true)
-    public static boolean isBypassActive() {
-        return bypassActive;
-    }
-
-    @LuaMethod(name="getBypassStatus", global=true)
-    public static String getBypassStatus() {
-        StringBuilder status = new StringBuilder();
-        status.append("Bypass: ").append(bypassActive ? "ACTIVE" : "INACTIVE");
-        status.append(" | Stealth: ").append(stealthMode ? "ON" : "OFF");
-        return status.toString();
-    }
-
     @LuaMethod(name="requireExtra", global=true)
     public static void requireExtra(String file) {
-        String key = SafeAPI.getInstance().generateVerificationKey();
         try {
-            Object luaFile;
-            Object object = luaFile = file.endsWith(".lua") ? file : file + ".lua";
-            if (!EtherMain.getInstance().etherLuaManager.luaFilesList.contains(luaFile)) {
-                EtherMain.getInstance().etherLuaManager.luaFilesList.add((String)luaFile);
-            }
-            EtherLuaCompiler.getInstance().addWordToBlacklistLuaCompiler(((String)luaFile).substring(0, ((String)luaFile).lastIndexOf(".")));
-            EtherLuaCompiler.getInstance().addPathToWhiteListLuaCompiler((String)luaFile);
-            LuaManager.RunLua((String)luaFile);
+            Object luaFile = file.endsWith(".lua") ? file : file + ".lua";
+            EtherLuaLoader.load((String)luaFile);
         }
         catch (Exception e) {
             Logger.error("Error in requireExtra", e);
@@ -2047,7 +1647,6 @@ public class EtherLuaMethods {
      */
     @LuaMethod(name="getExtraTexture", global=true)
     public static Texture getExtraTexture(String path) {
-        String key = SafeAPI.getInstance().generateVerificationKey();
         try {
             if (!path.endsWith(".png")) {
                 Logger.printLog("Incorrect path to the image file. Required .png");
@@ -2137,7 +1736,6 @@ public class EtherLuaMethods {
 
     @LuaMethod(name="hackAdminAccess", global=true)
     public static void hackAdminAccess() {
-        String key = SafeAPI.getInstance().generateVerificationKey();
         try {
             GameClient instance = GameClientWrapper.getInstance();
             if (instance != null) {
