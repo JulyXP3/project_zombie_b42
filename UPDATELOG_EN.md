@@ -71,7 +71,7 @@
 - Changed: the Navigation Mode panel is streamlined — the stop button is removed (any driving key takes over instantly, which stops it) along with the duplicated status text while driving; also fixes vanilla error spam when browsing seat containers of a vehicle you have driven far away from.
 - Build: version bumped to 3.2.4.
 
-## [3.2.3] - Current
+## [3.2.3]
 
 - Added: "Guns always hit (ignores environment)" (Character tab - Combat) — firearms no longer miss due to rain, fog, darkness, panic, movement or other conditions; stacks freely with "Headshot only" and "Crit Max".
 - Changed: "Instant kill" no longer extends weapon range; engagement range is back to the weapon's original values. One-hit-kill capability unchanged.

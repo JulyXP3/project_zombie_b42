@@ -613,13 +613,14 @@ end
 --* 标签 + 右对齐按钮 行 (设置页的 语言切换 / 重载 Lua 等)
 --*   key       左侧标签翻译键
 --*   btnTitle  按钮文字 (已翻译或原文, 如语言代码 "RU")
---*   opts      { onlyInGame / onlyNotInGame / width }
+--*   opts      { onlyInGame / onlyNotInGame / width / font }
 --*********************************************************
 function EtherFormPanel:addLabeledButton(key, btnTitle, onClick, opts)
     opts = opts or {};
     local tm = getTextManager();
     local ctrlH = EtherTheme.ctrlH;
     local fhS = EtherTheme.fontHgtSmall;
+    local font = opts.font or UIFont.Small;
     local rowW = self:_rowContentW();
     local y = self:_advance(ctrlH + EtherFormPanel.BOX_PAD_Y * 2 + 6);
     self:_box(EtherFormPanel.PAD_X, y, rowW, ctrlH);
@@ -628,11 +629,15 @@ function EtherFormPanel:addLabeledButton(key, btnTitle, onClick, opts)
     self:addChild(label);
     self:_track(label, opts);
 
-    local bw = opts.width or UIButton.measureWidth(btnTitle);
+    -- 按所选字体量宽 (默认 Small = measureWidth 同源; Medium 等大字体自适应加宽)
+    local bw = opts.width or (font == UIFont.Small
+        and UIButton.measureWidth(btnTitle)
+        or tm:MeasureStringX(font, btnTitle) + EtherTheme.ctrlPadX * 2);
     local maxBw = rowW - EtherFormPanel.BOX_PAD_X;
     if bw > maxBw then bw = maxBw; end
     -- 必须传 maxWidth=bw, 否则 UIButton:new 会按文字把 bw 又撑回去, 上面这行 clamp 白写
     local btn = UIButton:new(EtherFormPanel.PAD_X + rowW - bw - EtherFormPanel.BOX_PAD_X, y, bw, ctrlH, btnTitle, onClick, bw);
+    btn.font = font;
     return self:addWidget(btn, opts);
 end
 

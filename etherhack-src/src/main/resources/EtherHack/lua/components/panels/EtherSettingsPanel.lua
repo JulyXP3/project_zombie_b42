@@ -138,6 +138,7 @@ function EtherSettingsPanel:build()
                     -- 整菜单重建: 所有面板勾选框按默认值重画
                     EtherMain.instance:removeFromUIManager();
                     EtherMain.instance = nil;
+                    EtherKeyBindsPanel.rebuild();
                     EtherMain.toggleMenu();
                 end,
                 canRun = function() return true; end,
@@ -204,6 +205,7 @@ function EtherSettingsPanel:build()
         setLanguage(nextLang);
         EtherMain.instance:removeFromUIManager();
         EtherMain.instance = nil;
+        EtherKeyBindsPanel.rebuild();   -- 子面板文案按旧语言烘焙, 一并重建
         EtherMain.toggleMenu();
     end);
 
@@ -212,46 +214,14 @@ function EtherSettingsPanel:build()
             getCore():ResetLua("default", "Force")
         end, { onlyNotInGame = true });
 
-    -- ================= 按键绑定 (框架: EtherKeyBinds) =================
+    -- ================= 按键绑定 (独立子面板: EtherKeyBindsPanel) =================
     self:addSpacer(EtherFormPanel.SECTION_GAP);
-    if type(EtherKeyBinds) == "table" and type(EtherKeyBinds.order) == "table" then
-        for _, bid in ipairs(EtherKeyBinds.order) do
-            self:addCustomRow(ctrlH, function(bx, by, bw)
-                local r = EtherKeyBinds.registry[bid];
-                if r == nil then return end
-                local label = getTranslate(r.label);
-                local changeT = getTranslate("UI_KeyBind_Change");
-                local resetT = getTranslate("UI_KeyBind_Default");
-                local tms = getTextManager();
-                local labelW = tms:MeasureStringX(UIFont.Small, label) + 8;
-                local resetW = UIButton.measureWidth(resetT);
-                local changeW = math.max(UIButton.measureWidth(changeT), 70);
-                local btnX = bx + bw - changeW - resetW - gap * 2;
-                if btnX < bx + labelW then btnX = bx + labelW; end
-                self:_text(bx, by + EtherTheme.entryLabelDY, label, EtherTheme.text, UIFont.Small);
-                local changeBtn = UIButton:new(btnX, by, changeW, ctrlH,
-                    EtherKeyBinds.keyName(EtherKeyBinds.resolve(bid)) .. "  " .. changeT, function()
-                        EtherKeyBinds.beginCapture(bid);
-                        EtherKeyBinds.onCaptureDone = function(cid, key)
-                            if cid == bid and changeBtn ~= nil then
-                                if key == nil then
-                                    changeBtn.title = EtherKeyBinds.keyName(EtherKeyBinds.resolve(bid)) .. "  " .. changeT;
-                                else
-                                    changeBtn.title = EtherKeyBinds.keyName(key) .. "  " .. changeT;
-                                end
-                            end
-                        end
-                        changeBtn.title = getTranslate("UI_KeyBind_Capture");
-                    end, changeW);
-                self:addWidget(changeBtn);
-                local resetBtn = UIButton:new(btnX + changeW + gap, by, resetW, ctrlH, resetT, function()
-                    EtherKeyBinds.reset(bid);
-                    changeBtn.title = EtherKeyBinds.keyName(EtherKeyBinds.resolve(bid)) .. "  " .. changeT;
-                end, resetW);
-                self:addWidget(resetBtn);
-            end);
-        end
-    end
+    -- 绑定项会随功能域增长, 内嵌设置页会无限拉长 (用户决策) -> 独立窗口,
+    -- 设置页只留一行入口
+    self:addLabeledButton("UI_KeyBind_Title",
+        getTranslate("UI_KeyBind_Open"), function()
+            EtherKeyBindsPanel.open();
+        end, { font = UIFont.Medium });
 
     -- 注: 面板尺寸已固定 888x888 (EtherHackMenu 常量), 故不再提供尺寸调整行。
 

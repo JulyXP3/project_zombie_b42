@@ -59,7 +59,8 @@ local etherModules = {
     "EtherHack/lua/components/override/EtherCharacterCreation.lua",
     "EtherHack/lua/components/panels/EtherCharacterBoostPanel.lua",
     "EtherHack/lua/components/panels/EtherFarmingPanel.lua",
-    "EtherHack/lua/components/panels/EtherSettingsPanel.lua"
+    "EtherHack/lua/components/panels/EtherSettingsPanel.lua",
+    "EtherHack/lua/components/panels/EtherKeyBindsPanel.lua"
 }
 
 for _, module in ipairs(etherModules) do
@@ -88,10 +89,15 @@ EtherMain.accentColor       = {r = getAccentUIColor():getR(), g = getAccentUICol
 
 --*********************************************************
 --* Закрытие окна по нажатию кнопки UI
+--* 主菜单收起时联动收起子面板 (按键绑定等): 否则菜单键切换主面板后,
+--* 子面板悬空在游戏画面上, 主次结构断裂 (实测反馈)
 --*********************************************************
 function EtherMain:close()
 	EtherMain.instance:setVisible(false);
     EtherMain.instance:removeFromUIManager();
+    if EtherKeyBindsPanel ~= nil and EtherKeyBindsPanel.instance ~= nil then
+        EtherKeyBindsPanel.close();
+    end
 end
 
 --*********************************************************
@@ -190,6 +196,10 @@ function EtherMain.toggleMenu()
         if EtherMain.instance:getIsVisible() then
             EtherMain.instance:setVisible(false);
             EtherMain.instance:removeFromUIManager();
+            -- 菜单键收起主面板时联动收起子面板 (同 EtherMain:close)
+            if EtherKeyBindsPanel ~= nil and EtherKeyBindsPanel.instance ~= nil then
+                EtherKeyBindsPanel.close();
+            end
         else
             EtherMain.instance:addToUIManager();
             EtherMain.instance:setVisible(true);
