@@ -1,0 +1,392 @@
+/*
+ * Decompiled with CFR 0.152.
+ * 
+ * Could not load the following classes:
+ *  se.krka.kahlua.integration.annotations.LuaMethod
+ *  zombie.characters.CharacterStat
+ *  zombie.characters.IsoGameCharacter$XP
+ *  zombie.characters.IsoPlayer
+ *  zombie.network.PacketTypes$PacketType
+ *  zombie.network.ZomboidNetData
+ */
+package modcore.core;
+
+import modcore.GameClientWrapper;
+import modcore.utils.FieldCache;
+import modcore.utils.Logger;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import se.krka.kahlua.integration.annotations.LuaMethod;
+import zombie.characters.CharacterStat;
+import zombie.characters.IsoGameCharacter;
+import zombie.characters.IsoPlayer;
+import zombie.characters.skills.PerkFactory;
+import zombie.network.PacketTypes;
+import zombie.network.ZomboidNetData;
+import zombie.network.ZomboidNetDataPool;
+
+public class ServerSyncBlocker {
+    private static ServerSyncBlocker instance;
+    private final GameClientWrapper wrapper;
+    private static final Map<String, CharacterStat> CHARACTER_STAT_CACHE;
+    private volatile boolean blockStatsSync = false;
+    private volatile boolean blockSkillsSync = false;
+    private volatile boolean blockInventorySync = false;
+    private volatile boolean blockTraitsSync = false;
+    private volatile boolean blockVehicleSync = false;
+    private long lastFilterLogTime = 0L;
+    // filterPackets 每 tick 调用 (CoreAPI.updateAPI 与 Lua onTick, 均主线程), 复用缓冲免每 tick 两次 ArrayList 分配
+    private final ArrayList<ZomboidNetData> keptBuffer = new ArrayList<ZomboidNetData>();
+    private final ArrayList<ZomboidNetData> removeBuffer = new ArrayList<ZomboidNetData>();
+    private final Map<CharacterStat, Float> protectedStats = new ConcurrentHashMap<CharacterStat, Float>();
+    private final Map<String, Integer> protectedSkillLevels = new ConcurrentHashMap<String, Integer>();
+    private final Map<String, Float> protectedSkillXP = new ConcurrentHashMap<String, Float>();
+    private final Set<String> protectedTraits = ConcurrentHashMap.newKeySet();
+    private static final Set<Short> SYNC_PACKET_TYPES;
+
+    private ServerSyncBlocker() {
+        this.wrapper = GameClientWrapper.get();
+    }
+
+    public static ServerSyncBlocker getInstance() {
+        if (instance == null) {
+            instance = new ServerSyncBlocker();
+        }
+        return instance;
+    }
+
+    @LuaMethod(name="enableStatsProtection", global=true)
+    public static void enableStatsProtection() {
+        ServerSyncBlocker.getInstance().blockStatsSync = true;
+        Logger.printLog("Stats protection enabled - server sync will be blocked");
+    }
+
+    @LuaMethod(name="disableStatsProtection", global=true)
+    public static void disableStatsProtection() {
+        ServerSyncBlocker.getInstance().blockStatsSync = false;
+        ServerSyncBlocker.getInstance().protectedStats.clear();
+        Logger.printLog("Stats protection disabled");
+    }
+
+    @LuaMethod(name="enableSkillsProtection", global=true)
+    public static void enableSkillsProtection() {
+        ServerSyncBlocker.getInstance().blockSkillsSync = true;
+        Logger.printLog("Skills protection enabled - server sync will be blocked");
+    }
+
+    @LuaMethod(name="disableSkillsProtection", global=true)
+    public static void disableSkillsProtection() {
+        ServerSyncBlocker.getInstance().blockSkillsSync = false;
+        ServerSyncBlocker.getInstance().protectedSkillLevels.clear();
+        ServerSyncBlocker.getInstance().protectedSkillXP.clear();
+        Logger.printLog("Skills protection disabled");
+    }
+
+    @LuaMethod(name="enableFullProtection", global=true)
+    public static void enableFullProtection() {
+        ServerSyncBlocker blocker = ServerSyncBlocker.getInstance();
+        blocker.blockStatsSync = true;
+        blocker.blockSkillsSync = true;
+        blocker.blockInventorySync = true;
+        blocker.blockTraitsSync = true;
+        Logger.printLog("Full protection enabled - all server sync will be blocked");
+    }
+
+    @LuaMethod(name="disableFullProtection", global=true)
+    public static void disableFullProtection() {
+        ServerSyncBlocker blocker = ServerSyncBlocker.getInstance();
+        blocker.blockStatsSync = false;
+        blocker.blockSkillsSync = false;
+        blocker.blockInventorySync = false;
+        blocker.blockTraitsSync = false;
+        blocker.protectedStats.clear();
+        blocker.protectedSkillLevels.clear();
+        blocker.protectedSkillXP.clear();
+        blocker.protectedTraits.clear();
+        Logger.printLog("All protection disabled");
+    }
+
+    @LuaMethod(name="enableVehicleProtection", global=true)
+    public static void enableVehicleProtection() {
+        ServerSyncBlocker.getInstance().blockVehicleSync = true;
+        Logger.printLog("Vehicle protection enabled - vehicle state sync will be blocked");
+    }
+
+    @LuaMethod(name="disableVehicleProtection", global=true)
+    public static void disableVehicleProtection() {
+        ServerSyncBlocker.getInstance().blockVehicleSync = false;
+        Logger.printLog("Vehicle protection disabled");
+    }
+
+    @LuaMethod(name="protectStat", global=true)
+    public static void protectStat(String statName, float value) {
+        try {
+            CharacterStat stat = ServerSyncBlocker.getCharacterStatByName(statName);
+            if (stat != null) {
+                ServerSyncBlocker.getInstance().protectedStats.put(stat, Float.valueOf(value));
+                Logger.printLog("Protected stat: " + statName + " = " + value);
+            } else {
+                Logger.printLog("Invalid stat name: " + statName);
+            }
+        }
+        catch (Exception e) {
+            Logger.printLog("Error protecting stat: " + statName + " - " + e.getMessage());
+        }
+    }
+
+    private static CharacterStat getCharacterStatByName(String name) {
+        return CHARACTER_STAT_CACHE.get(name.toUpperCase());
+    }
+
+    @LuaMethod(name="unprotectStat", global=true)
+    public static void unprotectStat(String statName) {
+        try {
+            CharacterStat stat = ServerSyncBlocker.getCharacterStatByName(statName);
+            if (stat != null) {
+                ServerSyncBlocker.getInstance().protectedStats.remove(stat);
+            }
+        }
+        catch (Exception exception) {
+            // empty catch block
+        }
+    }
+
+    @LuaMethod(name="protectSkill", global=true)
+    public static void protectSkill(String perkName, int level, float xp) {
+        ServerSyncBlocker.getInstance().protectedSkillLevels.put(perkName, level);
+        ServerSyncBlocker.getInstance().protectedSkillXP.put(perkName, Float.valueOf(xp));
+        Logger.printLog("Protected skill: " + perkName + " level=" + level + " xp=" + xp);
+    }
+
+    @LuaMethod(name="reapplyProtectedValues", global=true)
+    public static void reapplyProtectedValues() {
+        ServerSyncBlocker.getInstance().reapplyAllProtectedValues();
+    }
+
+    private void reapplyAllProtectedValues() {
+        try {
+            IsoPlayer player = IsoPlayer.getInstance();
+            if (player == null) {
+                return;
+            }
+            if (this.blockStatsSync && !this.protectedStats.isEmpty()) {
+                for (Map.Entry<CharacterStat, Float> entry : this.protectedStats.entrySet()) {
+                    player.getStats().set(entry.getKey(), entry.getValue().floatValue());
+                }
+            }
+            if (this.blockSkillsSync && !this.protectedSkillLevels.isEmpty()) {
+                for (Map.Entry<String, Integer> entry : this.protectedSkillLevels.entrySet()) {
+                    try {
+                        this.setSkillLevelDirect(player, entry.getKey(), entry.getValue());
+                        Float xp = this.protectedSkillXP.get(entry.getKey());
+                        if (xp == null) continue;
+                        this.setSkillXPDirect(player, entry.getKey(), xp.floatValue());
+                    }
+                    catch (Exception exception) {}
+                }
+            }
+            if (this.blockSkillsSync) {
+                try {
+                    int fitnessLevel = player.getPerkLevel(PerkFactory.Perks.Fitness);
+                    player.getStats().set(CharacterStat.FITNESS, (float)fitnessLevel / 5.0f - 1.0f);
+                }
+                catch (Exception exception) {}
+            }
+        }
+        catch (Exception e) {
+            Logger.printLog("Error reapplying protected values: " + e.getMessage());
+        }
+    }
+
+    private void setSkillLevelDirect(IsoPlayer player, String perkName, int level) {
+        try {
+            Class<?> perkClass = Class.forName("zombie.characters.skills.PerkFactory$Perks");
+            Object perk = null;
+            for (Object enumConstant : perkClass.getEnumConstants()) {
+                if (!enumConstant.toString().equalsIgnoreCase(perkName)) continue;
+                perk = enumConstant;
+                break;
+            }
+            if (perk == null) {
+                Method fromString = FieldCache.getMethod(perkClass, "fromString", String.class);
+                perk = FieldCache.invokeMethod(null, fromString, perkName);
+            }
+            if (perk != null) {
+                Method setMethod = FieldCache.getMethod(player.getClass(), "setPerkLevelDebug", perkClass, Integer.TYPE);
+                FieldCache.invokeMethod(player, setMethod, perk, level);
+            }
+        }
+        catch (Exception e) {
+            Logger.printLog("Could not set skill level directly: " + perkName);
+        }
+    }
+
+    private void setSkillXPDirect(IsoPlayer player, String perkName, float xpValue) {
+        try {
+            IsoGameCharacter.XP xpObj;
+            Class<?> perkClass = Class.forName("zombie.characters.skills.PerkFactory$Perks");
+            Object perk = null;
+            for (Object enumConstant : perkClass.getEnumConstants()) {
+                if (!enumConstant.toString().equalsIgnoreCase(perkName)) continue;
+                perk = enumConstant;
+                break;
+            }
+            if (perk != null && (xpObj = player.getXp()) != null) {
+                try {
+                    Method addXp = FieldCache.getMethod(xpObj.getClass(), "AddXP", perkClass, Float.TYPE);
+                    FieldCache.invokeMethod(xpObj, addXp, perk, Float.valueOf(xpValue));
+                }
+                catch (Exception exception) {}
+            }
+        }
+        catch (Exception exception) {
+            // empty catch block
+        }
+    }
+
+    @LuaMethod(name="filterIncomingSyncPackets", global=true)
+    public static void filterIncomingSyncPackets() {
+        ServerSyncBlocker.getInstance().filterPackets();
+    }
+
+    /**
+     * L1 净化器查询口 (2026-09-10): 该全局名是否为我方注入。
+     * ReportSanitizer 在 verifyLuaGlobals/updateLuaGlobals 上报前用它剔除
+     * 我方全部全局名 (轮换符号 + @LuaMethod 方法名 + ENV_MARKER)。
+     * 本方法名自身也被捕获窗收录, 不会泄露到上报表。
+     */
+    @LuaMethod(name="isPrivateGlobal", global=true)
+    public static boolean isPrivateGlobal(String name) {
+        return modcore.core.PrivateGlobals.contains(name);
+    }
+
+    /**
+     * L1 运行时补捕 (2026-09-10 兼容性加固): 与上次快照差集, 捕获加载窗口
+     * 之外创建的全局名 (lazy init 等)。由 ReportSanitizer 在上报前触发,
+     * 与 _G 被枚举上交的时刻对齐。
+     */
+    @LuaMethod(name="refreshPrivateGlobals", global=true)
+    public static void refreshPrivateGlobals() {
+        modcore.core.PrivateGlobals.refresh();
+    }
+
+    private void filterPackets() {
+        // 门控不含 blockInventorySync: shouldFilterPacket 只过滤 stats/skills/xp/vehicle 四类包,
+        // 仅 inventory/traits 开启时全量 drain 必然零命中 (纯空转+缓冲分配), 直接跳过输出等价
+        if (!(this.blockStatsSync || this.blockSkillsSync || this.blockVehicleSync)) {
+            return;
+        }
+        try {
+            if (GameClientWrapper.getInstance() == null) {
+                return;
+            }
+            int removed = 0;
+            java.util.Queue<ZomboidNetData> queue = this.wrapper.getIncomingNetDataQueue();
+            if (queue != null && !queue.isEmpty()) {
+                ArrayList<ZomboidNetData> kept = this.keptBuffer;
+                kept.clear();
+                ZomboidNetData data;
+                while ((data = queue.poll()) != null) {
+                    if (this.shouldFilterPacket(data)) {
+                        ZomboidNetDataPool.instance.discard(data);
+                        ++removed;
+                        continue;
+                    }
+                    kept.add(data);
+                }
+                queue.addAll(kept);
+            }
+            ArrayList<ZomboidNetData> netData = this.wrapper.getIncomingNetData();
+            if (netData != null && !netData.isEmpty()) {
+                ArrayList<ZomboidNetData> toRemove = this.removeBuffer;
+                toRemove.clear();
+                for (ZomboidNetData packet : netData) {
+                    if (packet == null || !this.shouldFilterPacket(packet)) continue;
+                    toRemove.add(packet);
+                }
+                if (!toRemove.isEmpty()) {
+                    netData.removeAll(toRemove);
+                    removed += toRemove.size();
+                    for (ZomboidNetData packet : toRemove) {
+                        ZomboidNetDataPool.instance.discard(packet);
+                    }
+                }
+            }
+            if (removed > 0) {
+                if (System.currentTimeMillis() - this.lastFilterLogTime > 30000L) {
+                    this.lastFilterLogTime = System.currentTimeMillis();
+                    Logger.printLog("ServerSyncBlocker: filtered " + removed + " sync packet(s)");
+                }
+                this.reapplyAllProtectedValues();
+            }
+        }
+        catch (Exception exception) {
+            // empty catch block
+        }
+    }
+
+    private boolean shouldFilterPacket(ZomboidNetData packet) {
+        try {
+            short packetId = packet.type.getId();
+            if (packetId == PacketTypes.PacketType.PlayerUpdateReliable.getId()) {
+                return this.blockStatsSync || this.blockSkillsSync;
+            }
+            if (packetId == PacketTypes.PacketType.SyncPlayerStats.getId()) {
+                return this.blockStatsSync;
+            }
+            if (packetId == PacketTypes.PacketType.PlayerXp.getId()) {
+                return this.blockSkillsSync;
+            }
+            if (packetId == PacketTypes.PacketType.VehicleUpdate.getId()) {
+                return this.blockVehicleSync;
+            }
+        }
+        catch (Exception exception) {
+            // empty catch block
+        }
+        return false;
+    }
+
+    @LuaMethod(name="isProtectionActive", global=true)
+    public static boolean isProtectionActive() {
+        ServerSyncBlocker blocker = ServerSyncBlocker.getInstance();
+        return blocker.blockStatsSync || blocker.blockSkillsSync || blocker.blockInventorySync || blocker.blockTraitsSync;
+    }
+
+    @LuaMethod(name="getProtectionStatus", global=true)
+    public static String getProtectionStatus() {
+        ServerSyncBlocker blocker = ServerSyncBlocker.getInstance();
+        return String.format("Stats:%b Skills:%b Inventory:%b Traits:%b Vehicle:%b", blocker.blockStatsSync, blocker.blockSkillsSync, blocker.blockInventorySync, blocker.blockTraitsSync, blocker.blockVehicleSync);
+    }
+
+    static {
+        CHARACTER_STAT_CACHE = new HashMap<String, CharacterStat>();
+        try {
+            for (Field field : CharacterStat.class.getDeclaredFields()) {
+                if (!field.getType().equals(CharacterStat.class)) continue;
+                field.setAccessible(true);
+                CharacterStat stat = (CharacterStat)field.get(null);
+                if (stat == null) continue;
+                CHARACTER_STAT_CACHE.put(field.getName().toUpperCase(), stat);
+                CHARACTER_STAT_CACHE.put(field.getName().toLowerCase(), stat);
+            }
+            Logger.print("[ServerSyncBlocker] Cached " + CHARACTER_STAT_CACHE.size() + " CharacterStat values");
+        }
+        catch (Exception e) {
+            Logger.printLog("[ServerSyncBlocker] Failed to cache CharacterStat enum: " + e.getMessage());
+        }
+        SYNC_PACKET_TYPES = new HashSet<Short>();
+        try {
+            SYNC_PACKET_TYPES.add(PacketTypes.PacketType.PlayerUpdateReliable.getId());
+        }
+        catch (Exception e) {
+            Logger.printLog("Error initializing packet types: " + e.getMessage());
+        }
+    }
+}

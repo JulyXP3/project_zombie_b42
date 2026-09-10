@@ -69,9 +69,11 @@ Requirements: **JDK 25** and **Gradle 9.1.0**. The build runs through the includ
 
 1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, renamed to `zombie.jar` (it is only read at compile time and never modified).
 2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-3. Take `EtherHack-3.2.2-B42.jar` from the `build` directory.
+3. Take `modcore-3.2.4-B42.jar` from the `build` directory.
 4. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
-5. Run `install.bat` to install the mod (requires a JDK on the system).
+5. Run `install.bat` to install the mod.
+
+The installer deletes the jar automatically after a successful install. Keep `install.bat`: run it again later (with **no** `modcore-*.jar` in the folder) to uninstall completely. Never delete `projectzomboid.jar` — that is the game itself.
 
 In-game: press **Insert** to open the EtherHack panel.
 

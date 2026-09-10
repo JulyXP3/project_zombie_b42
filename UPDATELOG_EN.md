@@ -2,6 +2,9 @@
 
 ## [3.2.4] - Current
 
+- Fixed: the menu could not be opened after joining a multiplayer server (the loader cache now reloads automatically when the game resets its environment).
+- Added: keybind panel - customize menu hotkeys; settings survive reinstalls.
+- Changed: loot page UI simplified, count input removed (fishing-rod spawn creates one item at a time).
 - Fixed: with "Super Multi-Hit" enabled, only the closest few zombies took meaningful damage per swing (all targets in range now take full damage; combined with attack range bonus, a single swing clears a whole horde).
 - Fixed: repeated braking and re-accelerating when auto-driving through turns on the navigation line (corners are now passed at a steady low speed).
 - Fixed: being pushed back or stopped dead by roadside objects (signs, mailboxes, fences) while no-clipping.
@@ -77,7 +80,6 @@
 - Changed: "Instant kill" no longer extends weapon range; engagement range is back to the weapon's original values. One-hit-kill capability unchanged.
 - Reworked: the "Players" tab — player info and recipes merged into one module, a new "VHS lessons" module added, traits and skills shown as separate sections.
 - Added: "VHS lessons" (Players tab) — search and boost any skill in one click; requires a playing radio/TV nearby (vehicle radios work), and an inventory radio is placed out automatically when none is around; the server's media XP cap setting may limit the effect.
-- Added: "Corpse spawn" (Loot tab, multiplayer only) — a corpse carrying the chosen items instantly appears at your feet; loot it after the kill.
 - Fixed: hint text overlap on the "Loot" tab.
 - Build: version bumped to 3.2.3.
 

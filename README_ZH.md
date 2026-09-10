@@ -69,9 +69,11 @@
 
 1. 准备编译依赖: 将游戏根目录下的 `projectzomboid.jar` 复制到 `etherhack-src/lib/` 目录下, 并改名为 `zombie.jar`(该文件仅用于编译, 不会被修改)。
 2. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
-3. 从 `build` 目录中拿到 `EtherHack-3.2.2-B42.jar`。
+3. 从 `build` 目录中拿到 `modcore-3.2.4-B42.jar`。
 4. 将 jar 和 `etherhack-src/install.bat` 一起复制到游戏根目录。
-5. 运行 `install.bat` 完成安装(需要系统装有 JDK)。
+5. 运行 `install.bat` 完成安装。
+
+安装成功后会**自动删除 jar**。保留 `install.bat`：以后目录里**没有** `modcore-*.jar` 时再运行它，即为完整卸载。切勿删除 `projectzomboid.jar`——那是游戏本体。
 
 游戏中按 **Insert** 打开 EtherHack 面板。
 
