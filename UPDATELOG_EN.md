@@ -2,7 +2,31 @@
 
 ## [3.2.4] - Current
 
+- Fixed: autodrive no longer gets wrongly boxed in by a wreck that sits off to the **side** of the road (it used to keep braking even after steering past it).
+- Fixed: junctions that were wrongly treated as unreachable (neighbourhoods reached via Patton St etc.) - destinations inside road-connected neighbourhoods now get a proper all-on-road route instead of a bogus detour across open country.
+- Fixed: navigation still dropped to 10 km/h for no apparent reason while passing obstacles (it now holds a steady 20 km/h throughout the pass and only brakes when right behind an obstacle).
+- Fixed: routes to a few destinations still had a stretch running across open country (the line now stays on roads; when no road reaches the destination the car stops at the nearest road and tells you to drive the rest).
+- Changed: navigation no longer cuts across open country to reach a destination - if no road reaches it, the car stops at the nearest road and tells you to drive the rest yourself.
+- Improved: road network connectivity for navigation - stretches of road split into separate pieces by the map data are now joined correctly, reducing pointless detours.
+- Fixed: navigation drew detours that swung out and doubled back at some junctions, or cut diagonally across grass (it now goes through the junction along actual roads).
+- Fixed: navigation could stay frozen for a long time after getting wedged among parked cars (it now backs up a short distance and finds a way through).
+- Improved: the "crush by creeping" wiggle and the navigation blocked-creep now share the same motion (same rhythm, range and speed cap).
+- Fixed: navigation to destinations inside compounds / custom maps drew a route straight across open country (it now detours along actual roads - a longer road route is preferred over cutting across terrain).
+- Fixed: navigation came to a complete standstill at rows of parked cars (it now squeezes slowly through passable gaps; when truly boxed in it keeps manoeuvring instead of stopping dead).
+- Fixed: obstacle pass-through speed differed by travel direction on the same road (normal one way, only 10 km/h the other way).
+- Improved: route planning overhaul - routes used to take huge detours or cut across open country (side roads and estate driveways were missed); they now follow actual roads closely.
+- Fixed: left-right weaving while driving straight along the navigation line (now tracks the line smoothly).
+- Fixed: creeping in place and never getting past staggered parked cars (now slaloms through the gaps; stops and waits only when truly boxed in).
+- Fixed: gear hunting 1↔N and a flashing cruise-control light during auto-drive (now drives on the game's vanilla cruise control at a steady speed).
+- Fixed: cruise speed on the vehicle dashboard showing decimals (now integer, same as vanilla).
+- Changed: obstacle pass-through speed raised from 10 km/h to 20 km/h.
+- Fixed: auto-drive could freeze in place after reversing out of the way at a blocked intersection (it now continues the detour).
+- Improved: cornering cruise speed raised from 10 km/h to 30 km/h (sharper corners still slow down further automatically).
 - Fixed: the menu could not be opened after joining a multiplayer server (the loader cache now reloads automatically when the game resets its environment).
+- Improved: navigation now uses the fuller map road data - in areas without named streets (tracks, rural roads, custom maps) it follows visible roads instead of cutting straight across.
+- Fixed: navigation braked too late for corners and overshot (it now slows down ahead of the bend).
+- Fixed: navigation could not get through intersections / staggered parked cars, or scraped other vehicles (it now picks a passable gap; when fully blocked it holds in place to stay mobile instead of stopping dead).
+- Added: "Diagnostics log" toggle in the "Navigation Mode" module (troubleshooting: record a drive and share the log to help pinpoint issues).
 - Added: keybind panel - customize menu hotkeys; settings survive reinstalls.
 - Changed: loot page UI simplified, count input removed (fishing-rod spawn creates one item at a time).
 - Fixed: with "Super Multi-Hit" enabled, only the closest few zombies took meaningful damage per swing (all targets in range now take full damage; combined with attack range bonus, a single swing clears a whole horde).

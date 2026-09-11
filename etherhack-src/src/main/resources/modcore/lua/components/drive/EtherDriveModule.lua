@@ -190,8 +190,10 @@ function EtherDriveModule_addTo(panel)
     local entryH = cruiseEntryRowHeight(innerW);
     local resetBtnW = UIButton.measureGroupWidth({ tr("UI_DrivePanel_ResetVehicle") });
     local resetH = EtherTheme.ctrlH;
+    -- ②.6 诊断日志行 (排障用, 内部模式: 无文字说明, 仅开关)
+    local diagRowH = math.max(18, EtherTheme.fontHgtSmall + 4);
     local hintH = #EtherTheme.wrapHint(tr("UI_DrivePanel_Hint"), innerW - 8) * EtherTheme.fontHgtHint + 2;
-    local contentH = statusH + 6 + entryH + 6 + resetH + 6 + hintH + 2;
+    local contentH = statusH + 6 + entryH + 6 + resetH + 6 + diagRowH + 6 + hintH + 2;
 
     panel:addModule("UI_DrivePanel_Title", contentH + 2, function(bx, by, bw)
         local ix = bx + EtherFormPanel.BOX_PAD_X;
@@ -218,6 +220,14 @@ function EtherDriveModule_addTo(panel)
         resetBtn:instantiate();
         panel:addChild(resetBtn);
         cy = cy + resetH + 6;
+
+        -- ②.6 诊断日志 (排障用, 默认关): 5Hz 状态采样 + 事件 + 路线转储 → CSV
+        local diagCb = UICheckbox:new(ix, cy, tr("UI_DrivePanel_Diag"),
+            autoDriveGetDiagnostics() ~= 0, function(checked)
+                autoDriveSetDiagnostics(checked and 1 or 0);
+            end);
+        panel:addWidget(diagCb);
+        cy = cy + diagRowH + 6;
 
         -- ③ 操作说明 (停止按钮已移除: 任意驾驶键当帧接管 = 停止)
         local hint = HintRow:new(ix, cy + 6, iW, tr("UI_DrivePanel_Hint"));

@@ -86,7 +86,7 @@ function EtherLootRollPanel:render()
         return
     end
 
-    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 按模式取对应状态源,
+    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 钓竿生成状态源,
     -- 长消息按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
     local src = EtherFishSpawn;
     local fishStatus = tostring((src and src.message) or "")
@@ -342,7 +342,6 @@ function EtherLootRollPanel:createChildren()
     self:_group(PAD, g2y, boxW, (cy - g2y) + IP);
 
     -- ================= 分组3: 钓竿生成 (占据剩余高度) =================
-    -- 钓竿生成物品列表与搜索
     local g3y = cy + IP + GGAP;
     -- 矮屏(窗口被钳制)时必须压缩本组而不是兜底撑高: 强制最小高度会把
     -- 盒底推出面板, 组内列表与搜索行全部越界 (实机多轮 "search food 重叠" 根因)。
@@ -453,7 +452,7 @@ function EtherLootRollPanel:createChildren()
     self.spawnBtn.isOnlyInGame = true;
     self:addChild(self.spawnBtn);
 
-    -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册, hint/warn 纵向排列)
+    -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册)
     local y0 = bottomY + ctrlH + GAP;
     for i = 1, #hintLinesF do
         self:_text(innerX, y0 + (i - 1) * EtherTheme.fontHgtHint, hintLinesF[i], EtherTheme.textDim, nil, true);

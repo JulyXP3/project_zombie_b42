@@ -36,6 +36,10 @@ if exist zombie (
     pause
     exit /b 1
 )
+REM Legacy cleanup: old versions wrote logs into the game folder; logs now live in
+REM %USERPROFILE%\Zomboid\modcore\logs. Remove leftover game-folder logs.
+if exist "logs\modcore_*.log" del /f /q "logs\modcore_*.log" >nul 2>nul
+if exist logs rmdir "logs" >nul 2>nul
 
 echo [2/3] Installing modcore (encrypted payload + bootstrap stub)...
 set "JAVA_CMD="
@@ -119,6 +123,10 @@ if exist EtherHack rmdir /s /q EtherHack
 if exist EtherHack (
     echo [WARN] Could not remove the EtherHack folder - remove it manually later.
 )
+REM Legacy cleanup: old versions wrote logs into the game folder; logs now live in
+REM %USERPROFILE%\Zomboid\modcore\logs. Remove leftover game-folder logs.
+if exist "logs\modcore_*.log" del /f /q "logs\modcore_*.log" >nul 2>nul
+if exist logs rmdir "logs" >nul 2>nul
 
 echo.
 echo Uninstall completed. The game is now fully vanilla.

@@ -110,6 +110,22 @@ public final class AutoDriveAPI {
         return INSTANCE().getCruiseSpeed();
     }
 
+    // ================================================================
+    // 诊断日志 (排障用, 默认关; DriveDiag → Zomboid\modcore\logs\drive_*.csv)
+    // ================================================================
+
+    /** 驾驶诊断记录开关 (CSV: 5Hz 状态采样 + 事件 + 路线转储, 见 DriveDiag 头注)。 */
+    @LuaMethod(name = "autoDriveSetDiagnostics", global = true)
+    public static void autoDriveSetDiagnostics(double v) {
+        DriveDiag.setEnabled(v != 0.0 && !Double.isNaN(v));
+        saveConfig();
+    }
+
+    @LuaMethod(name = "autoDriveGetDiagnostics", global = true)
+    public static double autoDriveGetDiagnostics() {
+        return DriveDiag.isEnabled() ? 1.0 : 0.0;
+    }
+
     // 遇阻策略已整体移除 (2026-09-06 用户拍板): 僵尸一律低速硬闯, 车辆/边界照常
     // 硬避让 — setPolicy/getPolicy 与 policy 配置键随之删除。
 
@@ -232,7 +248,7 @@ public final class AutoDriveAPI {
         return INSTANCE().getRouteIndex();
     }
 
-    /** 路线类型: "road" (大地图路网) / "direct" (直线兜底) / "" (IDLE 无路线)。 */
+    /** 路线类型: "road" (命名街道) / "roadwm" (worldmap 图层, C2) / "direct" (直线兜底) / "" (IDLE 无路线)。 */
     @LuaMethod(name = "autoDriveGetRouteKind", global = true)
     public static String autoDriveGetRouteKind() {
         return INSTANCE().getRouteKind();
@@ -260,6 +276,7 @@ public final class AutoDriveAPI {
             AutoDriveController.setCombatWiggle("true".equals(props.getProperty("combatWiggle", "false")));
             AutoDriveController.setCombatZombieKill("true".equals(props.getProperty("combatZombieKill", "false")));
             AutoDriveController.setCombatNoClip("true".equals(props.getProperty("combatNoClip", "false")));
+            DriveDiag.setEnabled("true".equals(props.getProperty("diagnostics", "false")));
             Logger.printLog("[AutoDrive] config loaded (cruise="
                     + props.getProperty("cruiseSpeed") + ")");
         } catch (IOException e) {
@@ -274,6 +291,7 @@ public final class AutoDriveAPI {
             props.setProperty("combatWiggle", String.valueOf(AutoDriveController.isCombatWiggle()));
             props.setProperty("combatZombieKill", String.valueOf(AutoDriveController.isCombatZombieKill()));
             props.setProperty("combatNoClip", String.valueOf(AutoDriveController.isCombatNoClip()));
+            props.setProperty("diagnostics", String.valueOf(DriveDiag.isEnabled()));
             props.remove("policy");   // 旧键清出 (停车等待时代)
             props.remove("policy2");  // 旧键清出 (两档策略时代)
             try (FileOutputStream out = new FileOutputStream(configFile())) {

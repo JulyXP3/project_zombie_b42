@@ -3,6 +3,7 @@
  */
 package modcore.utils;
 
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -15,28 +16,49 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 
 public class Logger {
-    private static final String LOG_DIR = "logs";
     private static final String LOG_FILE_PREFIX = "modcore_";
     private static final long MAX_LOG_SIZE = 0xA00000L;
     private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
     private static final SimpleDateFormat fileFormat = new SimpleDateFormat("yyyy-MM-dd");
     private static String currentLogFile = null;
+    private static File logDir = null;
+
+    /**
+     * 日志目录 = %USERPROFILE%\Zomboid\modcore\logs (与 configDir 同级)。
+     * L4 教训 (2026-09-11): 旧实现用相对路径 "logs" (跟进程 CWD), 游戏从游戏
+     * 目录启动 → 日志落到游戏根 logs\, 内容是明文特征 (modcore/Ether/Corpse
+     * 字样) — 破坏 L4 验收标准"游戏目录零特征"。改为绝对路径, 游戏外 (Core
+     * 未初始化, 如离线自检) 回退用户目录。
+     */
+    public static synchronized File logDir() {
+        if (logDir == null) {
+            File base;
+            try {
+                base = modcore.core.CoreAPI.configDir().getParentFile();
+            } catch (Throwable t) {
+                base = new File(System.getProperty("user.home"), "Zomboid/modcore");
+            }
+            logDir = new File(base, "logs");
+        }
+        return logDir;
+    }
 
     private static void initializeLogDirectory() {
         try {
-            Path logPath = Paths.get(LOG_DIR, new String[0]);
+            Path logPath = Logger.logDir().toPath();
             if (!Files.exists(logPath, new LinkOption[0])) {
                 Files.createDirectories(logPath, new FileAttribute[0]);
             }
         }
-        catch (IOException e) {
+        catch (Exception e) {
             System.err.println("[ModCore] Failed to create logs directory: " + e.getMessage());
         }
     }
 
     private static String getCurrentLogFile() {
         if (currentLogFile == null || Logger.shouldRotateLog()) {
-            currentLogFile = "logs/modcore_" + fileFormat.format(new Date()) + ".log";
+            currentLogFile = new File(Logger.logDir(), LOG_FILE_PREFIX
+                    + fileFormat.format(new Date()) + ".log").getPath();
         }
         return currentLogFile;
     }

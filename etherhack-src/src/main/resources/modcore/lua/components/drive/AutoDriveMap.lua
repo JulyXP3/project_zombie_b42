@@ -82,7 +82,7 @@ local function drawDriveRoute(self)
     -- 颜色按路线类型: 大地图路网 = 蓝实心, 直线兜底 = 橙
     local kind = (type(autoDriveGetRouteKind) == "function") and autoDriveGetRouteKind() or "";
     local r, g, b = 1.0, 0.6, 0.2;
-    if kind == "road" then r, g, b = 0.35, 0.55, 1.0; end
+    if kind == "road" or kind == "roadwm" then r, g, b = 0.35, 0.55, 1.0; end
     local W, H = self:getWidth(), self:getHeight();
     local ux0, uy0 = nil, nil;
     for i = 0, n - 1 do
@@ -167,8 +167,14 @@ end
 --* 那是背包地图物品的阅读界面, 见挂钩 3)。原版 onRightMouseUp 三种走向:
 --*   symbolsUI 消费 → true; admin/调试 → 自建菜单 (网格/传送等) → true;
 --*   普通玩家 → 直接 return false (原版永远无菜单, 这是 M 地图没选项的根因)。
---* 包装: 原版已弹菜单 (admin) 时把锚定追加进已开菜单 — ISContextMenu.get 是
---* "清空+复用"单例, 不能二次 get (会清掉原版选项); 未弹时自建仅有锚定的菜单。
+--* 包装: 别人已弹菜单时把锚定追加进已开菜单 — ISContextMenu.get 是
+--* "清空+复用"单例, 不能二次 get (会清掉别人的选项); 未弹时自建仅有锚定的菜单。
+--*
+--* 「已弹菜单」判定 = 可见性 + 本次点击坐标匹配 (requestX/requestY 由
+--* ISContextMenu.get 写入), 不能只看返回值 — DebugMenu 系 mod 把原版调用
+--* 注释掉并 return nil, 仅靠返回值会误判"没人弹" → 二次 get clear() 掉它刚
+--* 弹的菜单, 其「传送」选项被清掉 (2026-09-11 实测: SP 下 DebugMenu 地图传送
+--* 消失的根因; 该 mod 挂钩有 isAdmin 门禁, SP 恒通过 → 只在 SP/MP-admin 出现)。
 --*********************************************************
 if ISWorldMap ~= nil then
     local _origWorldMapRightUp = ISWorldMap.onRightMouseUp;
@@ -180,18 +186,23 @@ if ISWorldMap ~= nil then
         if self.mapAPI == nil or type(autoDriveTarget) ~= "function" or getPlayer() == nil then
             return consumed;
         end
+        local ax = x + self:getAbsoluteX();
+        local ay = y + self:getAbsoluteY();
         local worldX = self.mapAPI:uiToWorldX(x, y);
         local worldY = self.mapAPI:uiToWorldY(x, y);
-        if consumed then
-            -- symbolsUI 编辑态不弹上下文菜单; 仅 admin 菜单可见时追加
-            local ctx = getPlayerContextMenu(0);
-            if ctx ~= nil and ctx:isVisible() and ctx.addOption ~= nil then
-                ctx:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
-                addResumeAndClearOptions(ctx);
-            end
+        local ctx = getPlayerContextMenu(0);
+        local menuFresh = ctx ~= nil and ctx.addOption ~= nil and ctx:isVisible()
+                and ctx.requestX == ax and ctx.requestY == ay;
+        if menuFresh then
+            -- 已开菜单 (vanilla admin / DebugMenu 系): 追加, 绝不二次 get (清空)
+            ctx:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
+            addResumeAndClearOptions(ctx);
             return true;
         end
-        local context = ISContextMenu.get(0, x + self:getAbsoluteX(), y + self:getAbsoluteY());
+        if consumed then
+            return true;   -- symbolsUI 编辑态消费 (无菜单) — 不另开
+        end
+        local context = ISContextMenu.get(0, ax, ay);
         context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
         addResumeAndClearOptions(context);
         return true;
@@ -214,6 +225,7 @@ end
 --*********************************************************
 --* 挂钩 3: ISMap (背包地图物品阅读界面)。B42 ISMap 无 onRightMouseUp 定义
 --* (基类返回 false), 直接定义即可; 若未来原版加了实现则退化为包装。
+--* 同挂钩 2 加固: 别人 (包装前) 已弹菜单 → 追加不二次 get。
 --*********************************************************
 if ISMap ~= nil then
     local _origISMapRightUp = ISMap.onRightMouseUp;
@@ -221,13 +233,23 @@ if ISMap ~= nil then
         if _origISMapRightUp ~= nil then
             _origISMapRightUp(self, x, y);
         end
-        if self.mapAPI ~= nil and type(autoDriveTarget) == "function" then
-            local context = ISContextMenu.get(0, x + self:getAbsoluteX(), y + self:getAbsoluteY());
-            local worldX = self.mapAPI:uiToWorldX(x, y);
-            local worldY = self.mapAPI:uiToWorldY(x, y);
-            context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
-            addResumeAndClearOptions(context);
+        if self.mapAPI == nil or type(autoDriveTarget) ~= "function" then
+            return;
         end
+        local ax = x + self:getAbsoluteX();
+        local ay = y + self:getAbsoluteY();
+        local worldX = self.mapAPI:uiToWorldX(x, y);
+        local worldY = self.mapAPI:uiToWorldY(x, y);
+        local ctx = getPlayerContextMenu(0);
+        if ctx ~= nil and ctx.addOption ~= nil and ctx:isVisible()
+                and ctx.requestX == ax and ctx.requestY == ay then
+            ctx:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
+            addResumeAndClearOptions(ctx);
+            return;
+        end
+        local context = ISContextMenu.get(0, ax, ay);
+        context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
+        addResumeAndClearOptions(context);
     end
 
     function ISMap:onAutoDriveAnchor(worldX, worldY)

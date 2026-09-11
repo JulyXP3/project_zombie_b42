@@ -79,27 +79,28 @@ public final class AutoDriveController {
     private static final float SPEED_LIMIT_MARGIN = 0.85f; // 硬顶余量 (永不违规, §四)
     /** Stanley 增益: 横向偏差项的收敛快慢 (e=1 格时低速 ~60°/高速 ~6°)。 */
     private static final float K_STANLEY = 1.5f;
+    /** Stanley 输出增益 (A 轮 2026-09-11: 原 2.0 固定, 仿真标定 temp/sim_avoid/pp_compare.py
+     *  — 摆头极限环主因之一是输出增益过高 + 无阻尼)。 */
+    private static final float STEER_GAIN = 1.6f;
+    /** 偏航角速度阻尼 (工业 Stanley 实践标配): 抑制方向角闭环极限环 (实测直线摆头)。 */
+    private static final float K_DAMP = 0.35f;
+    /** psiDot 一阶低通时间常数 (s): 差分噪声抑制。 */
+    private static final float PSI_LP_TAU = 0.2f;
 
-    // ===== 纵向层 (速度剖面 + IDM) 参数 — 单位制: 内部 m/s, 对外 km/h =====
+    // ===== 纵向层 (速度剖面 + gap 安全速) 参数 — 单位制: 内部 m/s, 对外 km/h =====
     /** 弯道横向加速度上限 (m/s²): v = √(a·R) 的 a。 */
     private static final float A_LAT_MAX = 1.8f;   // 旧 2.5 高估 PZ 轮胎抓地 → 弯中甩出 (实测); 1.8 = 保守弯速
     /** 剖面规划舒适减速度 (m/s², 后向传递用; 急刹由 BRAKE_DECEL 负责)。 */
     private static final float A_PLAN_BRAKE = 4.0f;
-    /** IDM: 最大加速度 (m/s²)。 */
-    private static final float IDM_A_MAX = 2.0f;
-    /** IDM: 舒适减速度 (m/s²)。 */
-    private static final float IDM_B = 3.0f;
-    /** IDM: 期望车头时距 (s)。 */
+    /** ACC 期望车头时距 (s): vSafe = (gap−净距−S0)/T (A 轮 2026-09-11 替代 IDM 加速度式)。 */
     private static final float IDM_T = 1.2f;
-    /** IDM: 最小停车间距 (m, 格)。 */
+    /** ACC 最小停车间距 (m, 格)。 */
     private static final float IDM_S0 = 3.0f;
-    /** IDM 虚拟前车兜底 (卅八): 走廊内障碍 = 静止前车, gap 项保命 (s→s0 ⇒ 必刹)。 */
     // gap 走廊必须 << 检测走廊 (3.5): 绕行中障碍 lat 常在 0.5~3.5 徘徊, 走廊重叠
     // 则 gap 深刹与绕行转向互相打架 → 开一下刹一下 (实测卅九)。1.5 = 死线正前
     // (车半宽 1.5), 只有真的正对障碍才触发保命刹; 横向绕开即平滑退出。
     private static final float IDM_GAP_CORRIDOR = 1.5f;
     private static final float IDM_GAP_CLEAR = 3.5f;      // 间隙 = lon - (自车半长1.5 + 障碍包围2.0)
-    private static final float IDM_ACCEL_MIN = -8.0f;     // 深刹下限 (物理可达)
     /** 剖面采样步长 (格)。 */
     private static final float PROFILE_DS = 2.0f;
     private static final long BOUNDARY_TIMEOUT_MS = 45000; // 边界等待超时
@@ -125,7 +126,10 @@ public final class AutoDriveController {
     private float targetY;
     private ArrayList<float[]> path;        // 世界坐标路点 {x, y}
     private int pathIdx;
-    private String routeKind = "";          // 当前路线类型 ("road"/"fallback"/"")
+    private String routeKind = "";          // 当前路线类型 ("road"/"roadwm"/"direct"/"")
+    /** 当前路线是否裁尾 (终点无道路可达, 路线止于最近可达道路点 — A 规则 2026-09-12):
+     *  为真时到达判定锚在路线末点 (真终点可能还在几百格外, 否则永不判到达)。 */
+    private boolean routeEndsAtRoad;
 
     // 持久配置 (AutoDriveAPI.loadConfig/saveConfig 落 modcore/config/drive.properties)
     private float cruiseSpeed = 0.0f;       // 用户巡航目标速, 0 = 自适应
@@ -150,47 +154,114 @@ public final class AutoDriveController {
     private long replanCooldownMs;
     private long lastHandleMs;             // 补丁通道最近一次进 handleControls 的时刻 (看门狗用)
     private boolean worldNoClipApplied;    // chunk 重传去重 (与目标态一致则跳过 refresh)
+    private BaseVehicle lastVehicle;       // 最近受控车辆 (deactivate 时关 regulator 用)
 
-    // ===== 动态避障层 (车辆/残骸 waypoint detour, 2026-09-07 卅一) =====
-    // MP 下车-车碰撞服务端权威 (ghost 下沉治不了, 廿六/廿七实测), 抬高自身车也不
-    // 成立 (raycast 轮不把车顶当接地物, 悬空=驱动失效, 卅零评估) — 唯一真防线 =
-    // 物理上别碰: 感知前方走廊最近挡路车 → 生成绕行目标点 (障碍侧后方空地, 静态物
-    // 反正穿墙, 目标点只需避开车辆) → 车朝目标点直插绕过 → 障碍过车尾回线。
-    // 两侧都无净空 (整条路被车辆堵死) → 前后蠕动防僵尸砸窗 (用户要求)。
+    // ===== 纵向执行器状态 (A 轮 2026-09-11: 原版 regulator 单一执行器) =====
+    private boolean brakeLatched;          // 刹车迟滞闩 (超目标+5 刹, ≤+1 松)
+    private float lastHeading;             // psiDot 差分用
+    private long lastHeadingMs;
+    private float psiDotLp;                // 偏航角速度低通 (rad/s)
+
+    // ===== 动态避障层 (多障碍车道化, B 轮 2026-09-11) =====
+    // MP 下车-车碰撞服务端权威 (ghost 下沉治不了, 廿六/廿七实测) — 唯一真防线 =
+    // 物理上别碰: 局部规划窗内全部车辆 → 车道包络选缝 (B1) → 车朝车道内的
+    // wpA/wpB 直插绕过 → 全过窗尾回线。无缝 (整路堵死) → BLOCKED 前后蠕动
+    // (B2, 相对静止防僵尸砸窗, 绝不完全停车 — 用户拍板)。
     private static final float AVOID_LOOKAHEAD = 18.0f;   // 障碍前瞻 (格, ≈1.1s@55km/h)
-    private static final float AVOID_CLEAR_DIST = 8.0f;   // 障碍过车尾余量 (格, 过了才回线)
-    // 侧向偏移 8 格 (仿真全绿参数): 走廊需求 3.5 + 收敛余量 4.5; 横向绝对锚定障碍
-    // (卅八) 后净空 = 8 - 3.5 = 4.5 格 (旧值 4 穿走廊 / 6 净空仅 1.1, 仿真实测)。
-    private static final float AVOID_LAT_OFFSET = 8.0f;
-    private static final float AVOID_MIN_AHEAD = 6.0f;    // 胡萝卜点最小前视 (障碍贴近后保持平行偏移线)
-    private static final float AVOID_SPEED_CAP = 10.0f;   // 绕行/并入恒速 km/h (卌三, 用户拍板: 慢爬通过;
-                                                          // 旧 25 随模式 50↔25 摆动 = 一顿一顿主源之一)
+    private static final float AVOID_CLEAR_DIST = 8.0f;   // 绕行序列尾部出口余量 (格)
+    private static final float AVOID_WINDOW = 40.0f;      // 局部规划窗 (格): 窗内全部障碍参与决策
+    private static final float AVOID_CLEAR = 3.5f;        // 侧向禁入半宽 (自车1.5 + 障碍2.0)
+    private static final float AVOID_LANE_MAX = 10.0f;    // 横向偏移搜索范围 ± (格)
+    private static final float AVOID_SPEED_CAP = 20.0f;   // 绕行/并入恒速 km/h (2026-09-11 用户裁定 10→20)
+    /** 挤缝模式净空 (格, C 修复 2026-09-11): 硬净空 AVOID_CLEAR=3.5 = 自车半宽 1.5 +
+     *  障碍**包围圆** 2.0 — 圆模型对平行/斜列停放车辆明显偏大 (车横向半宽只有 ~1.0),
+     *  密集错位车流恒判无解 → 原地静止 (实测)。硬解无解时降到 2.5 格
+     *  (= 自车半宽 1.5 + **平行停放车辆**横向半宽 ~0.9, 留 0.2 余量; 两车中心距 ≥ 4.8 格
+     *  才放行, 小于此值车体会重叠) 再规划一次, 限速 8 km/h 挤过去 ——
+     *  比"不动"安全 (不动会被僵尸围, 用户红线)。
+     *  边界: 该值按"障碍车与路线同向/近平行"标定; 垂直停放的车辆横向半长 ~2.2,
+     *  2.5 格不足以完全避免轻擦 —— 低速下可接受, 实机若出现擦碰则回调 2.5→3.0 或
+     *  关闭挤缝 (回落到蠕动接近)。 */
+    private static final float SQUEEZE_CLEAR = 2.4f;
+    private static final float SQUEEZE_SPEED_CAP = 8.0f;  // 挤缝限速 km/h
+    /** BLOCKED 蠕动接近律 (C 修复): ACC 跟车律的平衡点是 净距3.5+停车距3.0 = 6.5 格,
+     *  比蠕动门控 (IDM_GAP_CLEAR+1.5 = 5.0 格) 更远 → 车永远停在 6.5 格外、蠕动永不
+     *  触发 = 完全静止 (实测 csv obsLon=6.56 / v0=0.19 与公式精确吻合)。堵死场景改用
+     *  固定低速抵近到 BLOCKED_GAP, 交给"贴住蠕动"分支 (绝不完全停车)。 */
+    private static final float BLOCKED_CREEP_KMH = 6.0f;
+    private static final float BLOCKED_GAP = IDM_GAP_CLEAR + 1.5f;
+    /** 绕行/并入态贴住护栏 (F 修复 2026-09-12, 用户裁定"绕行恒速 20"): 时距跟车律
+     *  (IDM_T = 1.2s) 在障碍于正前 10 格时给 (10 − 6.5)/1.2 × 3.6 = 10.5 km/h ——
+     *  但绕行层本来就是"横向让开"的解法, 时距项与横向剖面互相打架 (实测避障期掉到
+     *  10km/h 的根因: 障碍一进 ±1.5 正前走廊就压速, 横向让开后 obsLon=NaN 又回 20,
+     *  表现为"有时候变 10")。绕行/并入期间豁免时距项, 只留**纯距离贴住护栏**:
+     *  ≥ 6.5 格 (= ACC 停车平衡点 净距3.5 + 停车距3.0) 完全不干预, 5.0 格刹停,
+     *  之间线性降速 —— 横向剖面失效 (车没让开) 时才起作用。 */
+    private static final float AVOID_HOLD_GAP = IDM_GAP_CLEAR + 1.5f;   // 5.0 格刹停线
+    private static final float AVOID_HOLD_T = 0.25f;                    // 护栏坡度 (s)
+    /** 卡死脱困 (C 二轮 2026-09-11): 绕行中目标速 >3 却连续 STUCK_MS 车速 ≈0 =
+     *  楔住 (实测 20km/h 目标下静止 12s+, 只靠 regulator 永远出不来) → 倒车
+     *  UNSTICK_MS 脱困 + 复位绕行参考系重选缝; 冷即 UNSTICK_COOLDOWN_MS 防死循环。 */
+    private static final float STUCK_SPEED = 1.0f;        // km/h
+    private static final long STUCK_MS = 1200;
+    private static final long UNSTICK_MS = 1500;
+    private static final long UNSTICK_COOLDOWN_MS = 2500;
+    private long stuckSinceMs;
+    private long unstickUntilMs;
+    private long unstickReadyMs;
+    /** 绕行决策切入距离 (格): 最近障碍比这远时不进绕行, 沿路线正常 gap 跟车 —
+     *  旧实现 40 格外就锁参考系整窗选缝, 远距离误判 BLOCKED 原地蠕动 (实测)。 */
+    private static final float AVOID_ENGAGE = 30.0f;
+    /** 横向剖面 DP: 候选偏移步长 (格) / 偏心代价权重 (偏向中线)。 */
+    /** 横向候选偏移步长 (格): 1.0 时整数栅格在窄缝处放不下 —— 5.2 格缝的中点 2.6
+     *  取不到整数候选, 净空 2.5 也无解 (C 修复 2026-09-11 实测: 该场景本可通过却被判
+     *  无解)。降到 0.5 让剖面能用缝的真实中点; 候选数 21→41, DP 代价 O(n·K²) 仍微秒级。 */
+    private static final float LATTICE_STEP = 0.5f;
+    private static final float LATTICE_CENTER_W = 0.05f;
     private static final int AVOID_NONE = 0;              // 无绕行
-    private static final int AVOID_DETOUR = 1;            // 目标点绕行中
-    private static final int AVOID_BLOCKED = 2;           // 双侧堵死 (蠕动)
-    private static final int AVOID_RETURN = 3;            // 并入段: 纯追踪回线 (卌一)
-    // RETURN 并入参数 (仿真 S1-S6 全绿): 截获角 ≤ atan(e/LOOKAHEAD) 有界 → 平滑收敛;
-    // |cte| < CTE_EXIT 交回 Stanley (近线后 Stanley 良态)。
-    private static final float AVOID_RETURN_LOOKAHEAD = 12.0f;
+    private static final int AVOID_DETOUR = 1;            // 缺口序列绕行中
+    private static final int AVOID_BLOCKED = 2;           // 无可行横向剖面 (贴近后蠕动)
+    private static final int AVOID_RETURN = 3;            // 并入段: Stanley 回线 (卌一)
+    // RETURN 并入参数: |cte| < CTE_EXIT 交回 Stanley (近线后 Stanley 良态)。
     private static final float AVOID_RETURN_CTE_EXIT = 1.5f;
     private int avoidMode = AVOID_NONE;
     private float avoidTargetX;                           // 绕行目标点 (世界坐标)
     private float avoidTargetY;
-    private float avoidObstacleX = Float.NaN;             // 当前挡路障碍 (感知)
-    private float avoidObstacleY = Float.NaN;
+    private float avoidOriginX, avoidOriginY;             // 锁定参考系原点 (自车位置)
     private boolean avoidDiagHit;          // AvoidDiag 节流 (状态变化才打)
-    private float avoidSide;               // 锁定的绕行侧 (+1/-1): 进入 DETOUR 时定, 过障碍前不变 (卅七)
     private int avoidDiagMode = -1;        // AvoidDiag 模式节流 (模式变化才打)
-    private float detourDirX, detourDirY;  // 进入 DETOUR 时锁定的行进方向 (固定参考系, 卌)
-    private float avoidWpBX, avoidWpBY;    // 障碍后方 waypoint (固定几何, 卌)
-    private float obsLon = Float.NaN;      // 障碍纵向投影 (IDM gap 用, NaN = 走廊内无障碍)
+    private float detourDirX, detourDirY;  // 进入绕行时锁定的行进方向 (固定参考系, 卌)
+    private float obsLon = Float.NaN;      // 走廊最近障碍纵向投影 (IDM gap 用, NaN = 无)
     private float obsLat = Float.NaN;
+    // 窗内全部车辆位置缓存 (scanObstacle 150ms 刷新; 车道决策数据源)
+    private final ArrayList<float[]> avoidObsList = new ArrayList<float[]>();
+    // item 收集缓冲 (updateAvoidance 每帧用, 免分配; 上限外忽略 — 现实中不会超)
+    private final float[] itemLon = new float[128];
+    private final float[] itemLat = new float[128];
+    private final float[] itemX = new float[128];
+    private final float[] itemY = new float[128];
+    // 横向剖面 DP 缓冲 (免分配): 候选偏移数 = 2*AVOID_LANE_MAX/step+1
+    private static final int LATTICE_N = (int) (2 * AVOID_LANE_MAX / LATTICE_STEP) + 1;
+    private final float[] dpPrev = new float[LATTICE_N];
+    private final float[] dpCur = new float[LATTICE_N];
+    private final int[] bkRow = new int[LATTICE_N * 128];   // 回溯表 (障碍数 ≤128)
+    // 绕行路径点 (锁定系 lon/lat; DP 输出, 每次 updateAvoidance 重算)
+    private final float[] wpLon = new float[130];
+    private final float[] wpLat = new float[130];
+    private int wpCount;
     private float minDistToTarget = Float.MAX_VALUE;   // 终点最近点追踪 (绕行残留偏移>到达半径时防冲过, 仿真 S5)
     // 碰撞恢复宽限: 退出接管时车可能正在墙里/树下, 立即恢复静态碰撞会被 Bullet
     // 把嵌着的车往地下挤 (实测: 概率黑屏 + 下车发现车埋地下)。宽限期内保持可穿,
     // 玩家驶离后再恢复。伤害/冲量豁免不受宽限 (isWorldNoClip 仍按状态严格门控)。
     private long pendingNoClipOffMs;
     private static final long NOCLIP_GRACE_MS = 15000;
+
+    // 诊断采样 stash (DriveDiag.sample 用; 每帧由 stanleySteer/driveTick 写入):
+    private float diagPhi;      // 最近一次 Stanley 航向误差 (rad)
+    private float diagCTE;      // 最近一次 Stanley 横向偏差 e (格)
+    private int diagSeg = -1;   // 最近一次投影段号
+    private float diagCorner;   // 当帧弯道参考速 km/h
+    private float diagV0;       // 当帧最终目标速 km/h
 
     private AutoDriveController() {
     }
@@ -233,6 +304,25 @@ public final class AutoDriveController {
      * 导航中 / 手动秒杀开关 / **蠕动秒杀激活** (蠕动含秒杀, 用户卅六需求)。 */
     public static boolean isZombieKillActive() {
         return INSTANCE.state != STATE_IDLE || combatZombieKillManual || INSTANCE.manualWiggleOn;
+    }
+
+    /** 蠕动速度上限 (km/h): 超过即踩刹车收速 (导航 BLOCKED 与蠕动秒杀共用)。 */
+    private static final float WIGGLE_SPEED_KMH = 6.0f;
+
+    /**
+     * 蠕动动作 (导航 BLOCKED 与「蠕动秒杀」**共用同一套**, 2026-09-11 用户要求统一):
+     * 前进/后退互补 + 锚点 ±WIGGLE_RANGE 限位 + 范围内 1s 节拍 + 方向回正 +
+     * 超 WIGGLE_SPEED_KMH 踩刹车 (蠕动是"原地前后蹭", 不是开走)。
+     * 结果写入 ctlForward/ctlBackward/ctlBrake/ctlSteer (导航路径由 writeControls 下发;
+     * 手动路径由调用方写 clientControls)。
+     */
+    private void applyWiggleMotion(BaseVehicle vehicle, long now, float absSpeed) {
+        if (vehicle.isRegulator()) vehicle.setRegulator(false);
+        boolean fwd = wiggleForward(vehicle, now);
+        ctlForward = fwd;
+        ctlBackward = !fwd;
+        ctlBrake = absSpeed > WIGGLE_SPEED_KMH;
+        ctlSteer = 0.0f;
     }
 
     /** 蠕动方向决策 (导航 BLOCKED 与手动共用): 锚点限位优先, 范围内按 1s 节拍。 */
@@ -297,6 +387,7 @@ public final class AutoDriveController {
                 deactivate();
                 return false;
             }
+            lastVehicle = vehicle;   // deactivate 时关 regulator (还玩家干净车况)
             // 接管判定: 原始键态, 按键当帧取消并放行原版键位读取 (§五)
             if (takeoverRequested(vehicle)) {
                 cancel("UI_DrivePanel_MsgTakeover");
@@ -351,12 +442,14 @@ public final class AutoDriveController {
             wiggleAnchored = false;     // 本次蠕动刚接手 → 重新锚定
         }
         manualWiggleOn = true;
-        boolean goFwd = wiggleForward(vehicle, System.currentTimeMillis());
+        // 与导航 BLOCKED 蠕动同一套动作 (用户 2026-09-11: 「蠕动秒杀」做成 C 里的那个蠕动)
+        applyWiggleMotion(vehicle, System.currentTimeMillis(),
+                Math.abs(vehicle.getCurrentSpeedKmHour()));
         CarController.ClientControls c = cc.clientControls;
-        c.steering = 0.0f;
-        c.forward = goFwd;
-        c.backward = !goFwd;
-        c.brake = false;
+        c.steering = ctlSteer;
+        c.forward = ctlForward;
+        c.backward = ctlBackward;
+        c.brake = ctlBrake;
         c.shift = false;
         return true;
     }
@@ -400,6 +493,13 @@ public final class AutoDriveController {
             lastScanMs = now;
         }
 
+        // 诊断采样 (5Hz + 自动异常标记; 关闭时零开销), 全状态覆盖 (含等待/刹边界)
+        if (DriveDiag.isEnabled()) {
+            DriveDiag.sample(vehicle, now, diagV0, diagCorner, diagPhi, diagCTE, pathIdx, diagSeg,
+                    avoidMode, obsLon, obsLat, throttleState, vehicle.isRegulator(),
+                    state, arrivalBrake, ctlSteer);
+        }
+
         if (state == STATE_WAIT_LOAD) {
             waitTick(vehicle, dtMs, absSpeed, now);
             return;
@@ -420,6 +520,13 @@ public final class AutoDriveController {
     // ---------------- DRIVING ----------------
 
     private void driveTick(BaseVehicle vehicle, float dtMs, float absSpeed, long now) {
+        // 踏板复位 (B 修复 2026-09-11): 各分支只显式置自己需要的位, 上一帧蠕行/
+        // 倒车的 ctlBackward 会残留 — 与后续 ctlForward 同真 = 原版双键刹车,
+        // 车停死 (路口实测); 或 forward=false 时车自然后退。根因收口在这一处。
+        ctlForward = false;
+        ctlBackward = false;
+        ctlBrake = false;
+
         // 引擎持续熄火 (油尽/报废) → 取消; 点火瞬间 (Idle) 由 5s 窗口容忍
         if (vehicle.getEngineState() != BaseVehicle.engineStateTypes.Running) {
             engineDeadMs += dtMs;
@@ -435,7 +542,17 @@ public final class AutoDriveController {
         // 最近点追踪: 绕行残留横向偏移 (~8格) > 到达半径 (4格) 时距离判定永不满足,
         // 车冲过终点继续狂奔 (仿真 S5 实测冲过 300 格) — 过最近点 (minDist<12 且
         // 开始远离) 即触发刹停。
-        float distToTarget = dist(vehicle.getX(), vehicle.getY(), targetX, targetY);
+        // A 规则 (F 修复 2026-09-12): 路线裁尾时 (终点无道路可达) 到达锚点 = 路线末点
+        // (最近可达道路点) —— 真终点还在几百格外, 锚在真终点则到达条件永不满足, 车会
+        // 停在道路尽头原地空转。
+        float ax = targetX;
+        float ay = targetY;
+        if (routeEndsAtRoad && path != null && !path.isEmpty()) {
+            float[] end = path.get(path.size() - 1);
+            ax = end[0];
+            ay = end[1];
+        }
+        float distToTarget = dist(vehicle.getX(), vehicle.getY(), ax, ay);
         if (distToTarget < minDistToTarget) {
             minDistToTarget = distToTarget;
         }
@@ -450,7 +567,9 @@ public final class AutoDriveController {
             ctlBrake = absSpeed > 0.4f;
             ctlSteer = stanleySteer(vehicle, absSpeed);   // 边刹边回线 (绕行残留偏移, 仿真 S5)
             if (absSpeed <= 0.4f) {
-                setState(STATE_ARRIVED, "UI_DrivePanel_MsgArrived");
+                // 裁尾路线: 到达即"已停在最近道路", 用 A 规则提示保留"剩余自行驾驶"语义
+                setState(STATE_ARRIVED, routeEndsAtRoad
+                        ? "UI_DrivePanel_MsgRoadEnd" : "UI_DrivePanel_MsgArrived");
                 deactivate();
             }
             return;
@@ -469,52 +588,78 @@ public final class AutoDriveController {
             }
         }
 
-        // ===== 动态避障 (车辆/残骸 waypoint detour, 卅一) =====
+        // ===== 动态避障 (车辆/残骸 缺口序列绕行, A 轮 2026-09-11) =====
         // MP 下车-车碰撞服务端权威 → 唯一真防线 = 别碰上: 感知在 scanObstacle,
-        // 此处每帧决策: 生成绕行目标点 (障碍侧后方空地) 朝其直插, 过车尾回线。
+        // 决策在 updateAvoidance — 窗内全部障碍 → 横向剖面 DP (缺口序列) 串缝绕过。
+        updatePsiDot(vehicle, now);
         float avoidCap = updateAvoidance(vehicle, now);
-        if (avoidMode == AVOID_BLOCKED) {
-            // 双向堵死: 接近段 (>10km/h) 先 IDM gap 刹停 — 锚定设在降速后 (检出点
-            // 锚定会被 50km/h 惯性滑行冲穿, 仿真 S3 drift 20+ 格教训); 降速后蠕动
-            // (锚定 ±2 格 + 1s 节拍, 6km/h 低速, 车不动但驱动僵尸远离门窗)。
-            // 阈值 10 > 蠕动峰值 9km/h: 蠕动自身加速不触发清锚 (否则锚点反复重置
-            // 净倒车漂移, 仿真 S3 二轮教训)。
-            if (absSpeed > 10f) {
-                wiggleAnchored = false;
-                float vmsB = absSpeed / 3.6f;
-                float sGap = Float.isNaN(obsLon) ? 5.0f
-                        : Math.max(obsLon - IDM_GAP_CLEAR, 0.5f);
-                float sStarB = IDM_S0 + vmsB * IDM_T
-                        + vmsB * vmsB / (2.0f * (float) Math.sqrt(IDM_A_MAX * IDM_B));
-                float accelB = Math.max(-IDM_A_MAX * (sStarB / sGap) * (sStarB / sGap),
-                        IDM_ACCEL_MIN);
-                updateThrottle(vmsB, 6.0f / 3.6f, accelB, dtMs);
-                ctlSteer = 0.0f;
-                return;
+
+        // ===== 卡死脱困 (C 二轮修复 2026-09-11) =====
+        // 绕行/挤缝中目标速有值却连续 1.2s 车速 ≈0 → 楔在车阵/墙里; 倒车一段 + 复位
+        // 绕行参考系 (下次扫描按新位置重新规划)。蠕动态 (前后蹭) 也走这条路: 卡住不动
+        // 时倒车比原地蹭更有效。
+        if (avoidMode != AVOID_NONE && absSpeed < STUCK_SPEED) {
+            if (stuckSinceMs == 0) {
+                stuckSinceMs = now;
             }
-            ctlForward = wiggleForward(vehicle, now);
-            ctlBackward = !ctlForward;
-            ctlBrake = absSpeed > 6f;
+        } else {
+            stuckSinceMs = 0;
+        }
+        if (now < unstickUntilMs) {
+            // 倒车窗口: 不给油不给刹, 方向回正 (纯后退 3~4 格)
+            if (vehicle.isRegulator()) vehicle.setRegulator(false);
+            ctlForward = false;
+            ctlBackward = true;
+            ctlBrake = false;
             ctlSteer = 0.0f;
+            return;
+        }
+        if (stuckSinceMs != 0 && now - stuckSinceMs > STUCK_MS && now >= unstickReadyMs) {
+            unstickUntilMs = now + UNSTICK_MS;
+            unstickReadyMs = unstickUntilMs + UNSTICK_COOLDOWN_MS;
+            stuckSinceMs = 0;
+            resetAvoidance();
+            DriveDiag.event("UNSTICK", "reverse " + (int) UNSTICK_MS + "ms");
+            if (vehicle.isRegulator()) vehicle.setRegulator(false);
+            ctlForward = false;
+            ctlBackward = true;
+            ctlBrake = false;
+            ctlSteer = 0.0f;
+            return;
+        }
+        if (avoidMode == AVOID_BLOCKED && absSpeed < 2.0f
+                && !Float.isNaN(obsLon) && obsLon < IDM_GAP_CLEAR + 1.5f) {
+            // 无可行横向剖面且已贴住堵点: 原地蠕动 (相对静止防僵尸砸窗, 用户规则;
+            // 锚定 ±2 格 + 1s 节拍)。远距离不再蠕动 (旧实现 39 格外就原地蹭, 实测
+            // DETOUR↔BLOCKED 对翻不前) — 沿路线以 gap 安全速接近到贴住为止。
+            applyWiggleMotion(vehicle, now, absSpeed);
             return;
         }
         wiggleAnchored = false;     // 非蠕动态: 锚点失效
 
-        // ===== 纵向: 弯道剖面 + 偏航安全网 + 边界 + 绕行限速 =====
-        // 静态物穿墙, 僵尸碾杀 (战损钩子), 车辆/残骸绕行 (本层)。
+        // ===== 纵向目标: 巡航/弯道剖面 + 偏航安全网 + 绕行限速 =====
+        // 静态物穿墙, 僵尸碾杀 (战损钩子), 车辆/残骸缺口序列绕行 (本层)。
         float vehicleMax = Math.max(vehicle.getMaxSpeed(), 20.0f);
         float cruise = cruiseSpeed > 0 ? Math.min(cruiseSpeed, vehicleMax)
                 : Math.min(Math.min((float) ServerOptions.instance.speedLimit.getValue()
                         * SPEED_LIMIT_MARGIN, vehicleMax), CRUISE_ADAPTIVE);
-        float v0 = Math.min(cruise, cornerRefSpeed(vehicle, cruise));
+        float cornerLimit = cornerRefSpeed(vehicle, cruise);
+        diagCorner = cornerLimit;
+        float v0 = Math.min(cruise, cornerLimit);
         v0 = Math.min(v0, avoidCap);   // 绕行限速 (转向物理余量)
 
-        // 偏航安全网 (Stanley 收敛失败时兜底, 阈值放宽)
-        float cte = crossTrackError(vehicle);
-        if (cte > 4.0f) {
-            v0 = Math.min(v0, 10.0f);
-        } else if (cte > 2.5f) {
-            v0 = Math.min(v0, 18.0f);
+        // 偏航安全网 (Stanley 收敛失败时兜底, 阈值放宽) — **只在正常跟线时生效**
+        // (E 修复 2026-09-11): 绕行层本身要求横向偏移 ±10 格, 用"相对原路线的偏差"
+        // 衡量会把有效绕行全程压到 10 km/h (实测反向绕行 cte=5.27 → 22 格爬 8.2 秒,
+        // 正反向速度不一致的根因)。绕行/并入/堵死期间速度由绕行层自己的限速负责
+        // (绕行 20 / 挤缝 8 / 蠕动 6)。
+        if (avoidMode == AVOID_NONE) {
+            float cte = crossTrackError(vehicle);
+            if (cte > 4.0f) {
+                v0 = Math.min(v0, 10.0f);
+            } else if (cte > 2.5f) {
+                v0 = Math.min(v0, 18.0f);
+            }
         }
 
         // 未加载边界刹停线: 制动距离 + 4 格富余 (停于 3×3 物理守卫带内)
@@ -524,45 +669,36 @@ public final class AutoDriveController {
             return;
         }
 
-        // ===== 执行器: 速度死区 bang-bang + 刹车闩锁 =====
-        // accel = a_max·[1-(v/v0)^4 - (s*/s)²]: 自由流项 + **虚拟前车 gap 项** (卅八)。
-        // gap: 走廊内 (|lat|<3.5) 障碍 = 静止前车, s = lon-3.5, Δv = v;
-        // s→s0 ⇒ accel 深负必刹 — 距离收敛到 0 ⇔ 速度收敛到 0, 与横向绕行层
-        // 是否正常无关 (ACC/AEB 层叠思路: 横向负责绕, 纵向保命)。
-        // 绕行横向拉开 (|lat|≥3.5) gap 自动退出, 不拖累绕过后提速。
-        // 卌四: 绕行/并入期交给游戏巡航 (regulator) — 油门缓升缓降、从不刹车 = 丝滑;
-        // 旧 bang-bang 在 10km/h 目标下加速→超调→刹车→欠调→加速 = 一顿一顿 (实测)。
-        boolean gapActive = !Float.isNaN(obsLon) && Math.abs(obsLat) < IDM_GAP_CORRIDOR;
-        if (avoidMode == AVOID_DETOUR || avoidMode == AVOID_RETURN) {
-            vehicle.setRegulator(true);
-            vehicle.setRegulatorSpeed(AVOID_SPEED_CAP);
-            ctlForward = false;
-            ctlBrake = false;
-        } else if (v0 < cruise - 2.0f && !gapActive) {
-            // 卌九: 弯道剖面/偏航兜底把目标压到低速时, bang-bang 死区相对占比暴涨 →
-            // 走-刹振荡 (实测)。同避障卌四款: 游戏巡航恒速丝滑; min(10, v0) 尊重极锐
-            // 弯剖面。gap 激活时不切 — 保命层需 IDM 刹停 (车-车服务端权威), 绕开自动回归。
-            vehicle.setRegulator(true);
-            vehicle.setRegulatorSpeed(Math.min(AVOID_SPEED_CAP, v0));
-            ctlForward = false;
-            ctlBrake = false;
-        } else {
-            if (vehicle.isRegulator()) vehicle.setRegulator(false);
-            float vms = absSpeed / 3.6f;
-            float v0ms = Math.max(v0 / 3.6f, 0.5f);
-            float accel = IDM_A_MAX * (1.0f - (float) Math.pow(vms / v0ms, 4.0f));
-            if (!Float.isNaN(obsLon) && Math.abs(obsLat) < IDM_GAP_CORRIDOR) {
-                float sGap = Math.max(obsLon - IDM_GAP_CLEAR, 0.5f);
-                float sStar = IDM_S0 + vms * IDM_T
-                        + vms * vms / (2.0f * (float) Math.sqrt(IDM_A_MAX * IDM_B));
-                accel -= IDM_A_MAX * (sStar / sGap) * (sStar / sGap);
-            }
-            updateThrottle(vms, v0ms, accel, dtMs);
-        }
+        // 跟车安全速: 正常跟车 = ACC 时间间隙律 (gap 越小目标越低); 无可行剖面的
+        // 堵死态 = 蠕动接近律 (固定低速抵近到 BLOCKED_GAP, 交给蠕动分支); 绕行/并入
+        // = 恒速 20 (F 修复 2026-09-12: 豁免时距项, 只留贴住护栏 —— 见 AVOID_HOLD_GAP)。
+        // 三者不可混用 —— ACC 在堵死态会把车停在 6.5 格外, 而蠕动门控要求 5.0 格,
+        // 互锁成完全静止 (C 修复 2026-09-11, 实测证据见常量区注释)。
+        float vSafe = gapSafeSpeed(avoidMode, obsLon, obsLat);
+        float target = Math.min(v0, vSafe);
+        diagV0 = target;   // 诊断采样: 当帧最终目标速 (边界检查之后 = 实际执行值)
 
-        // ===== 横向: 绕行模式 = 朝目标点直插 / 正常 = Stanley 跟线 =====
-        // waypoint detour: 绕行中不跟路径, 直接朝绕行目标点 (障碍侧后方空地) 开,
-        // 静态物穿墙所以目标点只需避开车辆; 障碍过车尾后回路径 (updateAvoidance 切换)。
+        // ===== 执行器: 原版 regulator 拉锁 + 刹车迟滞 (见常量区原版语义注释) =====
+        int targetKmh = Math.max(0, Math.round(target));
+        if (vehicle.isRegulator()) {
+            vehicle.setRegulatorSpeed(targetKmh);
+        } else if (absSpeed <= targetKmh + BRAKE_RELEASE_KMH) {
+            // 单次重挂 (刹车帧游戏自动取消 regulator :401; 回落到目标附近才挂回)
+            vehicle.setRegulator(true);
+            vehicle.setRegulatorSpeed(targetKmh);
+        }
+        if (absSpeed > targetKmh + BRAKE_OVER_KMH) {
+            brakeLatched = true;
+        } else if (absSpeed <= targetKmh + BRAKE_RELEASE_KMH) {
+            brakeLatched = false;
+        }
+        ctlBrake = brakeLatched;
+        ctlForward = false;
+        ctlBackward = false;
+        throttleState = brakeLatched ? THROTTLE_BRAKE
+                : (vehicle.isRegulator() ? THROTTLE_COAST : THROTTLE_FWD);
+
+        // ===== 横向: 绕行模式 = 朝缺口序列当前点直插 / 正常 = Stanley 跟线 =====
         if (avoidMode == AVOID_DETOUR && !Float.isNaN(avoidTargetX)) {
             ctlSteer = steerToPoint(vehicle, absSpeed, avoidTargetX, avoidTargetY);
         } else if (avoidMode == AVOID_RETURN) {
@@ -585,6 +721,33 @@ public final class AutoDriveController {
     }
 
     /**
+     * gap 安全速纯函数 (纵向目标速的下限来源; 抽成 static = 离线自检可调, 见
+     * temp/drivetest/AvoidSpeedTest): 返回 km/h 上限, MAX_VALUE = 不干预。
+     *  · 正常跟车: ACC 时间间隙律 (净距/时距),
+     *  · 绕行/并入: 豁免时距项, 只留贴住护栏 (恒速 20 由 avoidCap 负责),
+     *  · 堵死态: 不在此处 (由蠕动接近律接管)。
+     */
+    static float gapSafeSpeed(int mode, float obsLon, float obsLat) {
+        if (mode == AVOID_BLOCKED) {
+            return (!Float.isNaN(obsLon) && obsLon <= BLOCKED_GAP) ? 0.0f : BLOCKED_CREEP_KMH;
+        }
+        if (mode == AVOID_DETOUR || mode == AVOID_RETURN) {
+            // 绕行/并入: 让开由横向剖面负责, 纵向恒速 20 (用户裁定); 只在贴住区
+            // (正前 |obsLat| < 1.5) 降速。检测走廊是 ±3.5 — 侧前 3.4 格的障碍
+            // 只是"在走廊里", 不挡道, 误刹会把车整段停死 (2026-09-12 05:22 版
+            // 回归实测: 一辆侧向残骸 → UNSTICK×6 → 接管)。
+            if (Float.isNaN(obsLon) || Math.abs(obsLat) >= IDM_GAP_CORRIDOR) {
+                return Float.MAX_VALUE;
+            }
+            return Math.max(0.0f, (obsLon - AVOID_HOLD_GAP) / AVOID_HOLD_T) * 3.6f;
+        }
+        if (!Float.isNaN(obsLon) && Math.abs(obsLat) < IDM_GAP_CORRIDOR) {
+            return Math.max(0.0f, (obsLon - IDM_GAP_CLEAR - IDM_S0) / IDM_T) * 3.6f;
+        }
+        return Float.MAX_VALUE;
+    }
+
+    /**
      * 弯道参考速 (速度剖面, velocity profiling 标准法): 沿路径自 pathIdx 前向
      * 采样 (步长 PROFILE_DS), 每采样点用三点外接圆估曲率 → v = √(A_LAT_MAX·R);
      * 后向传递 v_j = min(v_j, √(v_{j+1}² + 2·A_PLAN_BRAKE·Δs)) 保证"到弯前能刹
@@ -592,14 +755,25 @@ public final class AutoDriveController {
      * 平滑、有预见 — 这是替代"看当前角误差限速"的根治。
      */
     private float cornerRefSpeed(BaseVehicle vehicle, float capKmh) {
-        if (path == null || pathIdx >= path.size()) return capKmh;
-        // 采样: 从 pathIdx 对应的路点起 (不是车辆实际位置 — 穿墙/偏离时"车→路点"
-        // 对角线段会造出假曲率尖峰 → v0 被砸到地板, 实测"穿墙非常慢"根因之一)
+        if (path == null || pathIdx >= path.size() - 1) return capKmh;
+        // 采样起点 = **车在当前段上的投影点** (B 修复 2026-09-11): 旧实现从段起点
+        // path.get(pathIdx) 起算, 车常行驶在长段中间 (实测段距车 70+ 格), 剖面的
+        // 减速距离从段起点算 → 车到了弯前 v0 还没降 (实测 88km/h 冲到弯点才收到
+        // 限速, "减速不及时冲出去"根因)。投影点在路径线上, 不引入"车→路点"对角
+        // 弦的假曲率 (旧注释担心的尖峰不成立 — 投影 ≠ 车辆实际位置)。
+        float[] a0 = path.get(pathIdx);
+        float[] b0 = path.get(pathIdx + 1);
+        float dx0 = b0[0] - a0[0];
+        float dy0 = b0[1] - a0[1];
+        float l20 = dx0 * dx0 + dy0 * dy0;
+        float tProj = l20 > 1e-6f
+                ? clamp(((vehicle.getX() - a0[0]) * dx0 + (vehicle.getY() - a0[1]) * dy0) / l20, 0.0f, 1.0f)
+                : 0.0f;
         ArrayList<float[]> pts = new ArrayList<float[]>(24);
         float acc = 0;
-        float[] prev = path.get(pathIdx);
+        float[] prev = new float[]{a0[0] + dx0 * tProj, a0[1] + dy0 * tProj};
         outer:
-        for (int i = pathIdx; i < path.size(); i++) {
+        for (int i = pathIdx + 1; i < path.size(); i++) {
             float[] wp = path.get(i);
             float seg = dist(prev[0], prev[1], wp[0], wp[1]);
             // 长段内插补采样点
@@ -646,61 +820,34 @@ public final class AutoDriveController {
         return Math.min(vms[0] == Float.MAX_VALUE ? capKmh : vms[0] * 3.6f, capKmh);
     }
 
-    // ===== 执行器状态机 (速度死区 bang-bang, 数值仿真 temp/longitudinal_sim.ps1 同构) =====
-
+    // ===== 执行器 (A 轮 2026-09-11: 原版 regulator 单一执行器, bang-bang 已删) =====
+    //
+    // 依据原版语义 (CarController 亲读, analysis/pz_sync_analysis):
+    //   • regulator 开 = 低于目标速自动给油 / 高于滑行, control_NoControl **不脱档**
+    //     (:441 isRegulator 门控); 关 = 无油门无刹车即强制 N 档 (:441), 刹车也 N (:455)。
+    //   • 原版刹车间 regulator 会被游戏自己取消 (:401 isBreak 分支) — 我们不逐帧抢挂,
+    //     只在速度回落到目标附近后**单次**重挂 (迟滞), 否则就是实测的"疯狂开关巡航"。
+    //   • regulatorSpeed 原版只 ±5 整数改速 (:385); 仪表盘直接画浮点
+    //     (ISVehicleDashboard.lua:406) → 目标速必须取整 (实测巡航小数点来源)。
+    // 旧 FWD/COAST bang-bang 每次松油门都置 N (低速 1↔N 对翻), 已整体删除;
+    // 跟车安全速改为目标速合成: vSafe = (gap-净距-停车距)/时距 (ACC 时间间隙律)。
     private static final int THROTTLE_FWD = 0;
     private static final int THROTTLE_COAST = 1;
     private static final int THROTTLE_BRAKE = 2;
-    /** 死区半宽 (m/s): ±2 km/h — 巡航 20 时 22 收油滑行, 18 重新给油, 不点刹 (用户实测: 旧 ±5 刹到 15 重启 = 刹停感)。 */
+    /** 死区半宽 (m/s): 剖面种子裕度 (cornerRefSpeed 用)。 */
     private static final float THROTTLE_BAND_MS = 2.0f / 3.6f;
-    /** v 超剖面 (2×BAND) m/s → 刹车 (真超速, 滑行追不回的陡降); 常规超速由滑行自然回落。 */
-    private static final float THROTTLE_BRAKE_GAP_MS = 4.0f / 3.6f;
-    private static final long THROTTLE_MIN_DWELL_MS = 800;   // FWD↔COAST 防颤振
-    private static final long THROTTLE_BRAKE_DWELL_MS = 400; // 刹车出口驻留 (短)
+    /** 刹车迟滞 (km/h): 超目标速此值才刹车 / 回落到目标+1 松刹。 */
+    private static final float BRAKE_OVER_KMH = 5.0f;
+    private static final float BRAKE_RELEASE_KMH = 1.0f;
 
-    private int throttleState = THROTTLE_COAST;
-    private long throttleDwellMs;
-
-    /** 油门/刹车执行器状态机 (v, vCmd, IDM acc 均 m/s 制)。 */
-    private void updateThrottle(float v, float vCmd, float accel, float dtMs) {
-        boolean brakeWant = accel < -1.5f || v > vCmd + THROTTLE_BAND_MS + THROTTLE_BRAKE_GAP_MS;
-        int next = throttleState;
-        // 刹车进入即时 (安全态不受驻留节流)
-        if (brakeWant && throttleState != THROTTLE_BRAKE) {
-            next = THROTTLE_BRAKE;
-        } else {
-            switch (throttleState) {
-                case THROTTLE_FWD:
-                    if (throttleDwellMs >= THROTTLE_MIN_DWELL_MS && v >= vCmd + THROTTLE_BAND_MS) {
-                        next = THROTTLE_COAST;
-                    }
-                    break;
-                case THROTTLE_BRAKE:
-                    if (throttleDwellMs >= THROTTLE_BRAKE_DWELL_MS && v <= vCmd + 0.3f) {
-                        next = THROTTLE_COAST;   // 紧出口: 末端滑行兜得住
-                    }
-                    break;
-                default:    // COAST
-                    if (throttleDwellMs >= THROTTLE_MIN_DWELL_MS && v < vCmd - THROTTLE_BAND_MS) {
-                        next = THROTTLE_FWD;
-                    }
-                    break;
-            }
-        }
-        if (next != throttleState) {
-            throttleState = next;
-            throttleDwellMs = 0;
-        } else {
-            throttleDwellMs += (long) dtMs;
-        }
-        ctlForward = throttleState == THROTTLE_FWD;
-        ctlBackward = false;
-        ctlBrake = throttleState == THROTTLE_BRAKE;
-    }
+    private int throttleState = THROTTLE_COAST;   // 诊断列语义保留 (0 FWD/1 巡航/2 刹车)
 
     /**
      * Stanley 横向控制 (Hoffmann et al.,斯坦福 DARPA 挑战赛):
-     * δ = φ + atan2(k·e, v), 返回归一化舵量 [-1,1]。
+     * δ = φ + atan2(k·e, v) − kd·ψ̇, 输出归一化舵量 [-1,1]。
+     * A 轮 2026-09-11: 加偏航角速度阻尼 (kd=0.35, 低通 0.2s) + 输出增益 2.0→1.6
+     * — 旧实现无阻尼 + PZ 舵机一阶滞后, 直线上满舵极限环 (实测摆头全程;
+     * 仿真 pp_compare.py: 方向穿越 20→3)。
      * 投影窗口自适应延伸 (起点 pathIdx-2, 加倍延伸上限 64 段)。
      * 绕行 (waypoint detour) 时不走本方法 — 由 steerToPoint 直插目标点 (卅一)。
      */
@@ -770,8 +917,28 @@ public final class AutoDriveController {
         // → 车头来回过冲甩尾 (实测弯道摆头)。限 ±0.4rad 让航向项主导, 误差项只微调。
         float eTerm = (float) Math.atan2(K_STANLEY * e, v);
         eTerm = Math.max(-0.4f, Math.min(0.4f, eTerm));
-        float delta = phi + eTerm;
-        return clamp(delta * 2.0f, -1.0f, 1.0f);
+        float delta = phi + eTerm - K_DAMP * psiDotLp;
+        // 诊断采样 stash (DriveDiag.sample 读: 摆头/段跳变/饱和的事件证据)
+        diagPhi = phi;
+        diagCTE = e;
+        diagSeg = bestSeg;
+        return clamp(delta * STEER_GAIN, -1.0f, 1.0f);
+    }
+
+    /** 偏航角速度低通 (每 tick 一次, driveTick 头部调用)。 */
+    private void updatePsiDot(BaseVehicle vehicle, long now) {
+        float h = heading(vehicle);
+        if (lastHeadingMs > 0) {
+            float dt = (now - lastHeadingMs) / 1000.0f;
+            if (dt > 0.001f && dt < 0.5f) {
+                float rate = wrapPi(h - lastHeading) / dt;
+                psiDotLp += (rate - psiDotLp) * Math.min(1.0f, dt / PSI_LP_TAU);
+            }
+        } else {
+            psiDotLp = 0;
+        }
+        lastHeading = h;
+        lastHeadingMs = now;
     }
 
     // ---------------- WAIT_LOAD (黑边等待 + 自动续驶, §六) ----------------
@@ -834,280 +1001,350 @@ public final class AutoDriveController {
     // ================================================================
 
     /**
-     * 障碍感知 + 绕行决策 (每 150ms 感知节拍随 scan 调用):
-     * 扫描前方 AVOID_LOOKAHEAD 内其他车辆 → 取路径走廊内最近一辆为挡路障碍。
-     * 挡路判定 = 障碍中心到路径投影段距离 < 车半宽和 (≈2 格走廊)。静态物不判
-     * (照穿), 僵尸不判 (照碾) — 只处理车辆/残骸 (MP 碰撞服务端权威, 客户端唯一
-     * 真防线 = 别碰上)。
-     * 侧向选择 (卅七): 进入绕行时按障碍偏移符号选最小偏航侧并**锁定** (绕行中自车
-     * 偏移会让障碍相对符号翻转, 不锁定则目标点来回跳 → 摆动撞车); 瞄准点纵向锚定
-     * 障碍自身位置 (AVOID_MIN_AHEAD 钳底), 侧向偏移 AVOID_LAT_OFFSET; 障碍过车尾
-     * AVOID_CLEAR_DIST 才回线 (无"目标点到达"早退)。
+     * 障碍感知 (每 150ms 感知节拍随 scan 调用, B 轮多障碍版):
+     * 收集**全部**窗内车辆位置到 avoidObsList (车道包络决策数据源, 不做单障碍筛选);
+     * 同时维护 avoidDiagHit 状态变化日志。静态物不判 (照穿), 僵尸不判 (照碾) —
+     * 只处理车辆/残骸 (MP 碰撞服务端权威, 客户端唯一真防线 = 别碰上)。
      */
     private void scanObstacle(BaseVehicle vehicle, float absSpeed) {
         float vx = vehicle.getX();
         float vy = vehicle.getY();
         float selfZ = vehicle.getZ();
-        // 前瞻距离随速扩展 (高速要更早看到)
-        float look = AVOID_LOOKAHEAD + brakingDistance(absSpeed);
-        BaseVehicle best = null;
-        float bestDist = Float.MAX_VALUE;
+        // 收集半径 = max(前瞻, 窗+裕量) — 窗内全部障碍都要入列
+        float look = Math.max(AVOID_LOOKAHEAD + brakingDistance(absSpeed), AVOID_WINDOW + 8.0f);
+        avoidObsList.clear();
         int cx = (int) (vx / 8.0f);
         int cy = (int) (vy / 8.0f);
-        for (int dy = -4; dy <= 4; ++dy) {
-            for (int dx = -4; dx <= 4; ++dx) {
+        for (int dy = -5; dy <= 5; ++dy) {
+            for (int dx = -5; dx <= 5; ++dx) {
                 IsoChunk chunk = IsoWorld.instance.currentCell.getChunk(cx + dx, cy + dy);
                 if (chunk == null) continue;
-                best = scanObstacleChunk(chunk.vehicles, vehicle, vx, vy, selfZ, look, best, bestDist == Float.MAX_VALUE ? Float.MAX_VALUE : bestDist);
-                if (best != null) {
-                    bestDist = dist(vx, vy, best.getX(), best.getY());
-                }
-            }
-        }
-        // cell 全量兜底 (生成车不一定在 chunk 登记 — 廿四实测)
-        java.util.Set<BaseVehicle> cellVehicles = IsoWorld.instance.currentCell.getVehicles();
-        for (BaseVehicle v : cellVehicles) {
-            if (v == vehicle) continue;
-            if (Math.abs(v.getZ() - selfZ) > 1.0f) continue;
-            float d = dist(vx, vy, v.getX(), v.getY());
-            if (d > look || d >= bestDist) continue;
-            best = v;
-            bestDist = d;
-        }
-        if (best != null) {
-            // 路线横向门 (卌三): 障碍须贴近路线才值得绕 — 转向中航向扫过走廊
-            // 误锁路外车 (实测 SmallCar02 lat=15) 会引发无谓绕行
-            float[] proj = pathProject(best.getX(), best.getY());
-            if (proj != null && proj[2] > 5.5f) best = null;
-        }
-        if (best != null) {
-            avoidObstacleX = best.getX();
-            avoidObstacleY = best.getY();
-            if (!avoidDiagHit) {
-                Logger.printLog("[AvoidDiag] obstacle: " + best.getScriptName()
-                        + " at " + (int) best.getX() + "," + (int) best.getY()
-                        + " dist=" + (int) dist(vehicle.getX(), vehicle.getY(), best.getX(), best.getY())
-                        + " look=" + (int) look);
-                avoidDiagHit = true;
-            }
-        } else {
-            // 障碍锁定 (hysteresis): 绕行期间扫描丢失 (z 波动/chunk 边界/车已绕到
-            // 障碍侧面横向偏出走廊) 不清状态 — 保持旧坐标继续绕, 清除只由
-            // updateAvoidance 的"过车尾"判定负责 (实测: 找到→丢失→找到 抖动,
-            // 绕行刚激活即被打断 → 直行撞上)。
-            if (avoidDiagHit) {
-                Logger.printLog("[AvoidDiag] obstacle lost");
-                avoidDiagHit = false;
-            }
-        }
-    }
-
-    /** chunk 车辆列表内的挡路筛选 (返回更近者或原 best)。 */
-    private BaseVehicle scanObstacleChunk(java.util.ArrayList<BaseVehicle> list, BaseVehicle self,
-            float vx, float vy, float selfZ, float look, BaseVehicle best, float bestDist) {
-        for (int i = 0; i < list.size(); ++i) {
-            BaseVehicle v = list.get(i);
-            if (v == self) continue;
-            if (Math.abs(v.getZ() - selfZ) > 1.0f) continue;
-            float d = dist(vx, vy, v.getX(), v.getY());
-            if (d > look || d >= bestDist) continue;
-            if (!isInCorridor(v, self)) continue;
-            best = v;
-            bestDist = d;
-        }
-        return best;
-    }
-
-    /** 障碍挡路判定: 自车前进走廊与障碍包围圆相交 (圆半径=车长半 ≈2 格, 覆盖横向车)。 */
-    private boolean isInCorridor(BaseVehicle obs, BaseVehicle self) {
-        float ox = obs.getX() - self.getX();
-        float oy = obs.getY() - self.getY();
-        // 纵向: 自车朝向分量 (前向才算挡路)
-        Vector3f fwd = self.getForwardVector(fwdVec);
-        float lon = ox * fwd.x + oy * fwd.z;
-        if (lon < -2.0f) {   // 纵向上限不设: scanObstacle 的欧氏 d>look 已过滤 (lon<=d), 双重过滤曾致边界抖动
-            return false;
-        }
-        // 横向: 障碍圆与自车走廊相交判定 — 走廊半宽 = 自车半宽(1.5) + 障碍包围半径(2.0)。
-        // 旧实现 corridorHalf=2.2 只看中心点, 横向车/残骸中心偏出即漏判 → 直接撞 (实测)。
-        float lat = ox * fwd.z - oy * fwd.x;
-        float corridorHalf = 3.5f;   // 1.5 自车半宽 + 2.0 障碍包围半径 (车长约 4 格)
-        return Math.abs(lat) < corridorHalf;
-    }
-
-    /**
-     * 检查目标点是否被其他车辆/残骸占用 (静态物不查 — 反正穿墙)。半径 3 格。
-     */
-    private boolean pointClearOfVehicles(float px, float py, BaseVehicle self) {
-        int cx = (int) (px / 8.0f);
-        int cy = (int) (py / 8.0f);
-        for (int dy = -1; dy <= 1; ++dy) {
-            for (int dx = -1; dx <= 1; ++dx) {
-                IsoChunk chunk = IsoWorld.instance.currentCell.getChunk(cx + dx, cy + dy);
-                if (chunk == null) continue;
-                for (int i = 0; i < chunk.vehicles.size(); ++i) {
-                    BaseVehicle v = chunk.vehicles.get(i);
-                    if (v == self) continue;
-                    if (Math.abs(v.getZ() - self.getZ()) > 1.0f) continue;
-                    if (dist(px, py, v.getX(), v.getY()) < 3.0f) return false;
-                }
+                collectObstacles(chunk.vehicles, vehicle, vx, vy, selfZ, look);
             }
         }
         // cell 全量兜底 (生成车不一定在 chunk 登记 — 廿四实测)
         for (BaseVehicle v : IsoWorld.instance.currentCell.getVehicles()) {
-            if (v == self) continue;
-            if (Math.abs(v.getZ() - self.getZ()) > 1.0f) continue;
-            if (dist(px, py, v.getX(), v.getY()) < 3.0f) return false;
+            collectObstacle(v, vehicle, vx, vy, selfZ, look);
         }
-        return true;
+        if (!avoidObsList.isEmpty()) {
+            if (!avoidDiagHit) {
+                Logger.printLog("[AvoidDiag] obstacles: " + avoidObsList.size()
+                        + " in window (nearest check next frame)");
+                DriveDiag.event("OBS_HIT", "count=" + avoidObsList.size());
+                avoidDiagHit = true;
+            }
+        } else if (avoidDiagHit) {
+            Logger.printLog("[AvoidDiag] obstacles lost");
+            DriveDiag.event("OBS_LOST", "");
+            avoidDiagHit = false;
+        }
+    }
+
+    /** 单障碍入列 (去重: chunk 列表与 cell 兜底可能重复)。 */
+    private void collectObstacle(BaseVehicle v, BaseVehicle self,
+            float vx, float vy, float selfZ, float look) {
+        if (v == self) return;
+        if (Math.abs(v.getZ() - selfZ) > 1.0f) return;
+        if (dist(vx, vy, v.getX(), v.getY()) > look) return;
+        for (int i = 0; i < avoidObsList.size(); ++i) {
+            float[] o = avoidObsList.get(i);
+            if (o[0] == v.getX() && o[1] == v.getY()) return;
+        }
+        avoidObsList.add(new float[]{v.getX(), v.getY()});
+    }
+
+    /** chunk 车辆列表内收集 (scanObstacle 用)。 */
+    private void collectObstacles(java.util.ArrayList<BaseVehicle> list, BaseVehicle self,
+            float vx, float vy, float selfZ, float look) {
+        for (int i = 0; i < list.size(); ++i) {
+            collectObstacle(list.get(i), self, vx, vy, selfZ, look);
+        }
     }
 
     /**
-     * 绕行决策 (waypoint detour, 卅一): 前方走廊有挡路车 →
-     * ① 算障碍两侧候选绕行目标点 = 障碍中心 + 侧向偏移 4 格 + 前向偏移 6 格
-     *    (朝障碍侧后方空地直插, 静态物反正穿墙, 目标点只需避开车辆);
-     * ② 首选障碍偏外侧 (障碍偏右 → 从左绕), 该侧被其他车占用 → 换另一侧;
-     * ③ 两侧都占用 (整路被车堵死) → AVOID_BLOCKED (前后蠕动, 用户要求不刹停);
-     * ④ 障碍过车尾 (AVOID_CLEAR_DIST) → 回路径。
+     * 绕行决策 (A 轮 2026-09-11: 缺口序列 = 局部栅格 DP, 业界 local lattice):
+     * ① 决策距离门控: 最近障碍 > AVOID_ENGAGE 不进绕行, 沿路线正常 gap 跟车 —
+     *    旧实现 40 格外就锁窗整缝选道, 远距离误判 BLOCKED 原地蹭 (实测 39 格外蹭 20s);
+     * ② 锁参考系 (路线切向 + 原点, 卌三);
+     * ③ 横向剖面 DP (planLattice): 障碍按 lon 排序逐个选横向偏移, 净空可行 +
+     *    Δlat² 平滑代价 + 偏中线代价 → (lon,lat) 序列 + 窗尾出口点 → S 形串缝
+     *    (错位车流单条直线车道切不进, 旧 chooseLane 因此恒 NaN → BLOCKED 对翻);
+     * ④ 无可行剖面 → BLOCKED: gap 安全速沿路线接近, 贴住后蠕动 (driveTick);
+     * ⑤ 全窗障碍过尾 → RETURN 并入段 (Stanley 回线)。
      * 返回绕行限速 km/h (无绕行 = Float.MAX_VALUE)。
      */
     private float updateAvoidance(BaseVehicle vehicle, long now) {
+        // IDM gap 数据源: 自车系走廊 (|lat|<AVOID_CLEAR) 内最近障碍 (保命层用)
+        refreshGapFields(vehicle);
+
         if (avoidMode == AVOID_RETURN) {
-            // 并入段: 模式不受障碍影响, 由 cte 退出 (卌一); 但扫描期若重新锁到
-            // 障碍, 保持 obsLon/obsLat 新鲜 — IDM gap 纵向保命网并入期也活着 (卌三)
-            if (!Float.isNaN(avoidObstacleX)) {
-                Vector3f fr = vehicle.getForwardVector(fwdVec);
-                float orx = avoidObstacleX - vehicle.getX();
-                float ory = avoidObstacleY - vehicle.getY();
-                obsLon = orx * fr.x + ory * fr.z;
-                obsLat = orx * fr.z - ory * fr.x;
-            } else {
-                obsLon = Float.NaN;
-                obsLat = Float.NaN;
-            }
-            return AVOID_SPEED_CAP;
+            return AVOID_SPEED_CAP;   // 并入段: 不受障碍影响, 由 cte 退出
         }
-        boolean hasObstacle = !Float.isNaN(avoidObstacleX);
-        if (!hasObstacle) {
-            if (avoidMode == AVOID_DETOUR) {
-                // 绕行中锁丢 (不应发生, 保险): 也走并入段而非硬切 Stanley
+        boolean tracking = (avoidMode == AVOID_DETOUR || avoidMode == AVOID_BLOCKED);
+        float fx, fy, ox0, oy0;
+        if (tracking) {
+            fx = detourDirX;
+            fy = detourDirY;
+            ox0 = avoidOriginX;
+            oy0 = avoidOriginY;
+        } else {
+            Vector3f fwd = vehicle.getForwardVector(fwdVec);
+            fx = fwd.x;
+            fy = fwd.z;
+            ox0 = vehicle.getX();
+            oy0 = vehicle.getY();
+        }
+        float eLon = (vehicle.getX() - ox0) * fx + (vehicle.getY() - oy0) * fy;
+        float eLat = (vehicle.getX() - ox0) * fy - (vehicle.getY() - oy0) * fx;
+        float back = tracking ? AVOID_CLEAR : 2.0f;
+        int n = collectItems(fx, fy, ox0, oy0, eLon, back);
+        if (n == 0) {
+            if (tracking) {
+                // 全窗障碍过尾 → 并入段 (卅一); 新绕行全新规划
                 avoidMode = AVOID_RETURN;
+                avoidTargetX = Float.NaN;
+                avoidTargetY = Float.NaN;
+                logAvoidMode(AVOID_RETURN, "");
                 return AVOID_SPEED_CAP;
             }
             avoidMode = AVOID_NONE;
             return Float.MAX_VALUE;
         }
-        // 障碍相对自车: 纵向 lon / 横向 lat (自车坐标系; 存字段供 IDM gap 纵向兜底)
-        Vector3f fwd = vehicle.getForwardVector(fwdVec);
-        float ox = avoidObstacleX - vehicle.getX();
-        float oy = avoidObstacleY - vehicle.getY();
-        float lon = ox * fwd.x + oy * fwd.z;
-        float lat = ox * fwd.z - oy * fwd.x;
-        obsLon = lon;
-        obsLat = lat;
-        // 障碍已在车尾后方 → 绕行完成, 回路径
-        if (lon < -AVOID_CLEAR_DIST) {
-            // 障碍已远在车后 → 并入段 (卌一: 旧硬切 NONE, e≈8 时低速大偏差 →
-            // Stanley 转弯过猛 → 偏移 → 再回线 → 振荡循环, 实测)
-            avoidMode = AVOID_RETURN;
-            avoidObstacleX = Float.NaN;
-            avoidObstacleY = Float.NaN;
-            obsLon = Float.NaN;
-            obsLat = Float.NaN;
-            return AVOID_SPEED_CAP;
-        }
-        // ===== 固定参考系 waypoint pair (卌, 仿真 S1-S6 全绿) =====
-        // 卅八胡萝卜的致命缺陷: 横向偏移垂直于**当前车头** — 车追点 → 车头转 →
-        // 点跟着移 → 再追 = 追逐自己的尾巴, 绕过障碍后在障碍后方走出长方形闭环
-        // (实测; 日志佐证: 障碍 lat=-14 早不挡路, DETOUR 仍维持)。
-        // 修复: 进入 DETOUR 锁定 detourDir (当时的行进方向), 全程固定几何:
-        //   wpA = 障碍 ± perp(dir)·LAT_OFFSET           (侧向通过点)
-        //   wpB = wpA + dir·AVOID_CLEAR_DIST             (障碍后方, 保持偏移)
-        // 车纵向未过障碍 → 追 wpA; 过了 → 追 wpB; wpB 到达 (<3 格) → NONE 回 Stanley。
-        // 侧锁定 (卅七): 侧只在进入 DETOUR 时选一次 (最小偏航侧), 过障碍前不变。
         if (avoidMode == AVOID_NONE) {
-            // 参考系只在全新绕行时锁一次 (卌二), 且取**路线切向**而非当前车头 (卌三):
-            // 锁航向的缺陷 = 转向/纠偏中航向斜指时, 绕行几何整体斜置 → "过障碍"
-            // 判定沿斜轴, 实际没过 → 回线后障碍仍在正前方 → 反向重绕 → 来回乱开
-            // (实测: side=+ 绕后回线又 side=- 绕, target 随车头旋转)。路线切向 =
-            // 道路方向, 几何永远与行驶方向对齐; 无路线 (直线兜底) 退回车头。
-            float[] tan = pathProject(avoidObstacleX, avoidObstacleY);
+            // 决策距离门控: 没到切入距离不锁参考系 (避免远距误判)
+            float minLonAll = Float.MAX_VALUE;
+            for (int i = 0; i < n; ++i) minLonAll = Math.min(minLonAll, itemLon[i]);
+            if (minLonAll > AVOID_ENGAGE) {
+                avoidMode = AVOID_NONE;
+                return Float.MAX_VALUE;
+            }
+            // 全新绕行: 锁参考系 (路线切向优先, 卌三); 原点 = 自车位置
+            int ni = 0;
+            for (int i = 1; i < n; ++i) if (itemLon[i] < itemLon[ni]) ni = i;
+            float[] tan = pathProject(itemX[ni], itemY[ni]);
             if (tan != null) {
                 detourDirX = tan[0];
                 detourDirY = tan[1];
             } else {
+                Vector3f fwd = vehicle.getForwardVector(fwdVec);
                 detourDirX = fwd.x;
                 detourDirY = fwd.z;
             }
-            avoidSide = lat >= 0.0f ? 1.0f : -1.0f;
+            avoidOriginX = vehicle.getX();
+            avoidOriginY = vehicle.getY();
+            fx = detourDirX;
+            fy = detourDirY;
+            ox0 = avoidOriginX;
+            oy0 = avoidOriginY;
+            eLon = 0.0f;
+            eLat = 0.0f;
+            n = collectItems(fx, fy, ox0, oy0, eLon, 2.0f);
+            if (n == 0) {
+                avoidMode = AVOID_NONE;
+                return Float.MAX_VALUE;
+            }
         }
-        float lonD = (vehicle.getX() - avoidObstacleX) * detourDirX
-                + (vehicle.getY() - avoidObstacleY) * detourDirY;
-        // 卌四: 已绕过的障碍不再重复接敌 — 并入期转向中车头扫过障碍时会把它
-        // 重新扫进走廊 (实测 f:6737 obs lon=-7 身后障碍触发重绕), lonD>0 = 已过 → 清锁。
-        if (avoidMode == AVOID_NONE && lonD > 0.0f) {
-            avoidObstacleX = Float.NaN;
-            avoidObstacleY = Float.NaN;
-            obsLon = Float.NaN;
-            obsLat = Float.NaN;
-            avoidMode = AVOID_NONE;
-            return Float.MAX_VALUE;
-        }
-        float[] sides = {avoidSide, -avoidSide};
-        int mode = AVOID_BLOCKED;
-        for (int i = 0; i < 2; ++i) {
-            float side = sides[i];
-            float wpAx = avoidObstacleX + (-detourDirY) * side * AVOID_LAT_OFFSET;
-            float wpAy = avoidObstacleY + (detourDirX) * side * AVOID_LAT_OFFSET;
-            float wpBx = wpAx + detourDirX * AVOID_CLEAR_DIST;
-            float wpBy = wpAy + detourDirY * AVOID_CLEAR_DIST;
-            if (!pointClearOfVehicles(wpBx, wpBy, vehicle)
-                    || !pointClearOfVehicles(wpAx, wpAy, vehicle)) continue;
-            avoidSide = side;      // 锁定侧被占则切另一侧 (并更新锁定)
-            avoidWpBX = wpBx;
-            avoidWpBY = wpBy;
-            if (lonD < 0.0f) {
-                // 未过障碍 → 追 wpA (提前建立侧偏, 到障碍处已全偏移)
-                avoidTargetX = wpAx;
-                avoidTargetY = wpAy;
-                mode = AVOID_DETOUR;
+        // 硬净空无解 → 挤缝净空再规划一次 (C 修复 2026-09-11): 密集/错位车流下
+        // 3.5 格舒适净空恒无解, 旧实现直接 BLOCKED 原地蹭 (实测"有缝也不动")。
+        // 挤缝剖面可行 = 仍走 DETOUR (诊断列语义不变) 但限速降到 8 km/h。
+        boolean squeeze = false;
+        if (!planLattice(n, eLat, AVOID_CLEAR)) {
+            if (planLattice(n, eLat, SQUEEZE_CLEAR)) {
+                squeeze = true;
             } else {
-                // 已过 → 追 wpB (保持偏移); 到达 → RETURN 并入段
-                // (卌一根因: 此处比较反了 — 过障碍后追**身后** wpA → 掉头 U-turn
-                //  → 回线振荡循环, 实测; 仿真轨迹追踪确诊)
-                if (dist(vehicle.getX(), vehicle.getY(), wpBx, wpBy) < 3.0f) {
-                    // 进入 RETURN 必须清障碍锁 (卌二): 不清 → RETURN 结束后重进场,
-                    // mode≠DETOUR 触发参考系重锁 (用车头) → 目标点随车头旋转 →
-                    // 车追目标 = 绕障碍公转转圈 (实测); 旧锁的 obsLon 还会让 IDM
-                    // gap 在并入后段 (|lat|<1.5 且 lon>-8) 以 -8 深刹
-                    mode = AVOID_RETURN;
-                    avoidTargetX = Float.NaN;
-                    avoidObstacleX = Float.NaN;
-                    avoidObstacleY = Float.NaN;
-                    obsLon = Float.NaN;
-                    obsLat = Float.NaN;
-                } else {
-                    avoidTargetX = wpBx;
-                    avoidTargetY = wpBy;
-                    mode = AVOID_DETOUR;
+                avoidMode = AVOID_BLOCKED;
+                avoidTargetX = Float.NaN;
+                avoidTargetY = Float.NaN;
+                logAvoidMode(AVOID_BLOCKED, "");
+                return AVOID_SPEED_CAP;   // 蠕动接近律 (driveTick); 贴住后原地蠕动
+            }
+        }
+        // 当前目标点 = 序列中第一个在车前方的点 (DP 每感知重算, 无状态重选:
+        // 车前进则目标点自然切到下一个 — 旧 wpA/wpB 双点特判删除)
+        float px = fy;
+        float py = -fx;
+        float tx = Float.NaN;
+        float ty = Float.NaN;
+        for (int i = 0; i < wpCount; ++i) {
+            if (wpLon[i] > eLon + 0.5f) {
+                tx = ox0 + fx * wpLon[i] + px * wpLat[i];
+                ty = oy0 + fy * wpLon[i] + py * wpLat[i];
+                break;
+            }
+        }
+        if (Float.isNaN(tx)) {
+            // 全部序列点在车后 (越过了窗尾) → 并入段
+            avoidMode = AVOID_RETURN;
+            avoidTargetX = Float.NaN;
+            avoidTargetY = Float.NaN;
+            logAvoidMode(AVOID_RETURN, "");
+            return AVOID_SPEED_CAP;
+        }
+        avoidTargetX = tx;
+        avoidTargetY = ty;
+        avoidMode = AVOID_DETOUR;
+        logAvoidMode(AVOID_DETOUR, " wp=" + wpCount + (squeeze ? " squeeze" : ""));
+        return squeeze ? SQUEEZE_SPEED_CAP : AVOID_SPEED_CAP;
+    }
+
+    /** 横向剖面 DP: 约束行合并跨距 (格) — 纵向距 < 此值的障碍车是同时面对的,
+     *  净空约束取并集 (S10b 实证: 不合并则横排车被当"先后通过"直接穿车)。 */
+    private static final float LATTICE_ROW_SPAN = 6.0f;
+
+    /** 候选 lat 对障碍 j 可行 = 对纵向距 < LATTICE_ROW_SPAN 的全部相关障碍
+     *  (前后双向) 都满足 |lat−obsLat| ≥ clear。itemLon 已按升序, n 为总数。
+     *  clear 参数化 (C 修复): AVOID_CLEAR = 舒适净空, SQUEEZE_CLEAR = 挤缝降级净空。 */
+    private boolean latticeFeasible(int n, int j, float lat, float clear) {
+        int lo = j;
+        while (lo > 0 && itemLon[j] - itemLon[lo - 1] < LATTICE_ROW_SPAN) --lo;
+        int hi = j;
+        while (hi < n - 1 && itemLon[hi + 1] - itemLon[j] < LATTICE_ROW_SPAN) ++hi;
+        for (int q = lo; q <= hi; ++q) {
+            if (Math.abs(lat - itemLat[q]) < clear) return false;
+        }
+        return true;
+    }
+
+    /**
+     * 横向剖面 DP (local lattice): 障碍按 lon 升序, 候选偏移
+     * {-AVOID_LANE_MAX..+AVOID_LANE_MAX} 步长 LATTICE_STEP。
+     * dp[j][k] = 障碍 j 处取候选 k 的最小累计代价; 可行 = latticeFeasible (约束行并集);
+     * 转移代价 = Δlat² (平滑, 隐式限斜率) + 偏心 lat²·w (偏中线); 起步项 = 自车 eLat。
+     * 输出 (lon,lat) 序列 + 窗尾出口点到 wpLon/wpLat。无可行剖面返回 false。
+     */
+    private boolean planLattice(int n, float eLat, float clear) {
+        // 障碍按 lon 升序 (选择排序, n ≤128)
+        for (int i = 0; i < n; ++i) {
+            int mi = i;
+            for (int j = i + 1; j < n; ++j) if (itemLon[j] < itemLon[mi]) mi = j;
+            if (mi != i) {
+                float tl = itemLon[i]; itemLon[i] = itemLon[mi]; itemLon[mi] = tl;
+                float ta = itemLat[i]; itemLat[i] = itemLat[mi]; itemLat[mi] = ta;
+            }
+        }
+        int K = LATTICE_N;
+        float[] cand = new float[K];
+        for (int k = 0; k < K; ++k) cand[k] = -AVOID_LANE_MAX + k * LATTICE_STEP;
+        // 起步: 自车 (lon=0, eLat) → 障碍 0
+        for (int k = 0; k < K; ++k) {
+            if (!latticeFeasible(n, 0, cand[k], clear)) {
+                dpPrev[k] = Float.POSITIVE_INFINITY;
+                continue;
+            }
+            float d = cand[k] - eLat;
+            dpPrev[k] = d * d + LATTICE_CENTER_W * cand[k] * cand[k];
+        }
+        // 逐障碍转移 (bkRow = 回溯表, 行 = 障碍序号)
+        for (int j = 1; j < n; ++j) {
+            int bkBase = j * K;
+            for (int k = 0; k < K; ++k) {
+                dpCur[k] = Float.POSITIVE_INFINITY;
+                bkRow[bkBase + k] = -1;
+                if (!latticeFeasible(n, j, cand[k], clear)) continue;
+                float best = Float.POSITIVE_INFINITY;
+                int arg = -1;
+                for (int p = 0; p < K; ++p) {
+                    if (dpPrev[p] == Float.POSITIVE_INFINITY) continue;
+                    float d = cand[k] - cand[p];
+                    float c = dpPrev[p] + d * d;
+                    if (c < best) {
+                        best = c;
+                        arg = p;
+                    }
+                }
+                if (arg >= 0) {
+                    dpCur[k] = best + LATTICE_CENTER_W * cand[k] * cand[k];
+                    bkRow[bkBase + k] = arg;
                 }
             }
-            break;
+            System.arraycopy(dpCur, 0, dpPrev, 0, K);
         }
-        // 两侧都占用 → 堵死 (蠕动) ; 否则绕行
-        if (mode != avoidDiagMode) {
-            avoidDiagMode = mode;
-            if (mode == AVOID_DETOUR) {
-                Logger.printLog("[AvoidDiag] mode: DETOUR side=" + (avoidSide > 0 ? "+" : "-")
-                        + " target=" + (int) avoidTargetX + "," + (int) avoidTargetY
-                        + " obs lon=" + (int) lon + " lat=" + (int) lat);
-            } else {
-                Logger.printLog("[AvoidDiag] mode: "
-                        + (mode == AVOID_BLOCKED ? "BLOCKED" : (mode == AVOID_RETURN ? "RETURN" : "NONE")));
+        // 终态取最优; 全 INF = 无可行剖面
+        int bestK = -1;
+        float bestC = Float.POSITIVE_INFINITY;
+        for (int k = 0; k < K; ++k) {
+            if (dpPrev[k] < bestC) {
+                bestC = dpPrev[k];
+                bestK = k;
             }
         }
-        avoidMode = mode;
-        return mode == AVOID_DETOUR ? AVOID_SPEED_CAP : Float.MAX_VALUE;
+        if (bestK < 0) return false;
+        // 回溯 → (lon,lat) 序列 (正向)
+        int[] sel = new int[n];
+        sel[n - 1] = bestK;
+        for (int j = n - 1; j > 0; --j) sel[j - 1] = bkRow[j * K + sel[j]];
+        wpCount = 0;
+        for (int j = 0; j < n; ++j) {
+            wpLon[wpCount] = itemLon[j];
+            wpLat[wpCount] = cand[sel[j]];
+            wpCount++;
+        }
+        // 窗尾出口点: 沿末偏移再走 AVOID_CLEAR_DIST, 给回线预留直线段
+        wpLon[wpCount] = itemLon[n - 1] + AVOID_CLEAR_DIST;
+        wpLat[wpCount] = cand[sel[n - 1]];
+        wpCount++;
+        return true;
+    }
+
+    /** IDM gap 保命层数据源: 自车系走廊 (|lat|<AVOID_CLEAR) 内最近前向障碍。 */
+    private void refreshGapFields(BaseVehicle vehicle) {
+        Vector3f fwd = vehicle.getForwardVector(fwdVec);
+        float vx = vehicle.getX();
+        float vy = vehicle.getY();
+        float bestLon = Float.MAX_VALUE;
+        float bestLat = Float.NaN;
+        for (int i = 0; i < avoidObsList.size(); ++i) {
+            float[] o = avoidObsList.get(i);
+            float ox = o[0] - vx;
+            float oy = o[1] - vy;
+            float lon = ox * fwd.x + oy * fwd.z;
+            float lat = ox * fwd.z - oy * fwd.x;
+            if (lon < -2.0f) continue;
+            if (Math.abs(lat) >= AVOID_CLEAR) continue;
+            if (lon < bestLon) {
+                bestLon = lon;
+                bestLat = lat;
+            }
+        }
+        if (bestLon == Float.MAX_VALUE) {
+            obsLon = Float.NaN;
+            obsLat = Float.NaN;
+        } else {
+            obsLon = bestLon;
+            obsLat = bestLat;
+        }
+    }
+
+    /** 窗内障碍收集到 item 数组 (锁定系或车头系; 返回条数)。 */
+    private int collectItems(float fx, float fy, float ox0, float oy0, float eLon, float back) {
+        int n = 0;
+        for (int i = 0; i < avoidObsList.size() && n < itemLon.length; ++i) {
+            float[] o = avoidObsList.get(i);
+            float rx = o[0] - ox0;
+            float ry = o[1] - oy0;
+            float flon = rx * fx + ry * fy;
+            float flat = rx * fy - ry * fx;
+            float rel = flon - eLon;
+            if (rel < -back || rel > AVOID_WINDOW) continue;
+            if (Math.abs(flat) > AVOID_LANE_MAX + AVOID_CLEAR) continue;
+            itemLon[n] = flon;
+            itemLat[n] = flat;
+            itemX[n] = o[0];
+            itemY[n] = o[1];
+            ++n;
+        }
+        return n;
+    }
+
+    /** 模式变化日志 (AvoidDiag 节流)。 */
+    private void logAvoidMode(int mode, String detail) {
+        if (mode == avoidDiagMode) return;
+        avoidDiagMode = mode;
+        String name = mode == AVOID_DETOUR ? "DETOUR"
+                : mode == AVOID_BLOCKED ? "BLOCKED"
+                : mode == AVOID_RETURN ? "RETURN" : "NONE";
+        Logger.printLog("[AvoidDiag] mode: " + name + detail);
+        DriveDiag.event("AVOID", name + detail);
     }
 
     /** 绕行状态复位 (start/resumeRoute)。 */
@@ -1115,10 +1352,12 @@ public final class AutoDriveController {
         avoidMode = AVOID_NONE;
         avoidTargetX = 0.0f;
         avoidTargetY = 0.0f;
-        avoidObstacleX = Float.NaN;
-        avoidObstacleY = Float.NaN;
+        avoidOriginX = 0.0f;
+        avoidOriginY = 0.0f;
         obsLon = Float.NaN;
         obsLat = Float.NaN;
+        avoidObsList.clear();
+        wpCount = 0;
     }
 
     // ================================================================
@@ -1240,16 +1479,48 @@ public final class AutoDriveController {
         return dist(px, py, ax + dx * t, ay + dy * t);
     }
 
+    /** 命名街道吸附合格线 (格): 超过则优先用 worldmap 数据源 (C2)。 */
+    private static final float STREET_SNAP_OK = 40.0f;
+
+    /**
+     * 路线源选择 (C2 双源): streets 优先 (起终点都贴近命名街道时行为与旧版完全一致),
+     * 否则 worldmap (更完整的道路图层); worldmap 失败回退 streets 宽松; 全失败 null
+     * (调用方 direct)。成功时写 routeKind ("road" / "roadwm")。
+     */
+    private ArrayList<float[]> computeRoute(float sx, float sy, float tx, float ty) {
+        RoadNetwork.resetRouteFlags();   // 每次规划复位: 只看本次的位移/裁尾标志
+        float snapS = RoadNetwork.snapDistance(sx, sy);
+        float snapT = RoadNetwork.snapDistance(tx, ty);
+        if (snapS <= STREET_SNAP_OK && snapT <= STREET_SNAP_OK) {
+            ArrayList<float[]> r = RoadNetwork.findRoute(sx, sy, tx, ty);
+            if (r != null && !r.isEmpty()) {
+                routeKind = "road";
+                return r;
+            }
+        }
+        ArrayList<float[]> wm = RoadNetwork.findRouteWorldMap(sx, sy, tx, ty);
+        if (wm != null && !wm.isEmpty()) {
+            routeKind = "roadwm";
+            return wm;
+        }
+        ArrayList<float[]> r = RoadNetwork.findRoute(sx, sy, tx, ty);
+        if (r != null && !r.isEmpty()) {
+            routeKind = "road";
+            return r;
+        }
+        return null;
+    }
+
     /**
      * 路线规划 (一次性路线语义, 2026-09-06 用户拍板): 锚定一次 → 规划一条路线,
      * 车沿这条线一直走到终点; 路线平时冻结, 只允许两个事件改动它 — 向前续段
      * (append=true: 路线尽头/边界等待续段)。周期性重规划已删除。
      *
-     * 路线来源 = 大地图同源道路矢量 (RoadNetwork, worldmap.xml.bin 的 highway
-     * 路网): 起终点各吸附最近路网节点, Dijkstra 中心折线, 末尾追加精确终点 —
-     * 整图数据一次性可得, 无流式加载限制, 首段即全程 (不再有"止于已加载边缘"
-     * 的续段需求)。路网不可用/断裂 → 直线直奔兜底 (routeKind="direct",
-     * 穿墙保证可达)。
+     * 路线来源 (C2 双源): ① 起终点都贴近命名街道 (snap ≤ STREET_SNAP_OK) →
+     * streets.xml 路网 (现役行为, 城镇内优先); ② 否则 worldmap 道路图层路网
+     * (更完整: 无名路/小区路/林区路) — routeKind="roadwm"; ③ worldmap 不可用
+     * 回退 streets 宽松; ④ 都失败 → 直线直奔 (direct, 穿墙保证可达)。
+     * 整图数据一次性可得, 无流式加载限制。
      *
      *                    新段替换 pathIdx 之后的部分
      * @return false = 规划失败 (冷却期内返回"路线仍有效"布尔)
@@ -1258,19 +1529,24 @@ public final class AutoDriveController {
         if (now < replanCooldownMs) return path != null && pathIdx < path.size();
         replanCooldownMs = now + REPLAN_COOLDOWN_MS;
 
-        ArrayList<float[]> assembled = RoadNetwork.findRoute(
+        ArrayList<float[]> assembled = computeRoute(
                 vehicle.getX(), vehicle.getY(), targetX, targetY);
         if (assembled != null && !assembled.isEmpty()) {
-            routeKind = "road";
+            // routeKind / routeEndsAtRoad 已由 computeRoute 写入
+            routeEndsAtRoad = RoadNetwork.lastRouteTrimmed;
         } else {
             assembled = new ArrayList<float[]>();
             assembled.add(new float[]{targetX, targetY});
             routeKind = "direct";
+            routeEndsAtRoad = false;
         }
         // 路线事件常开日志 (每次规划/续段/尾段替换一条, 供实机诊断)
         Logger.printLog("[AutoDrive] route=" + (replaceTail ? "tail-swap " : append ? "extend " : "plan ")
                 + routeKind + " (" + assembled.size() + " wp, "
                 + (int) dist(vehicle.getX(), vehicle.getY(), targetX, targetY) + " cells to target)");
+        // 诊断: 路线全量转储 (坐标 + 类型; 复现"奇怪路线"用)
+        DriveDiag.route(replaceTail ? "tail-swap" : append ? "extend" : "plan",
+                routeKind, assembled, vehicle.getX(), vehicle.getY(), targetX, targetY);
 
         if (append && path != null) {
             // 续段/尾段替换: 跳过新段中距车辆当前位置 <1 格的头部点 (防起步回走)
@@ -1311,14 +1587,15 @@ public final class AutoDriveController {
         this.targetX = x;
         this.targetY = y;
         this.arrivalBrake = false;
+        this.routeEndsAtRoad = false;   // 由本次 planRoute 按结果重设
         this.engineDeadMs = 0;
         this.lastTickMs = 0;
         this.lastScanMs = 0;
         this.replanCooldownMs = 0;
         this.throttleState = THROTTLE_COAST;
-        this.throttleDwellMs = 0;
         this.pendingNoClipOffMs = 0;
         resetAvoidance();
+        resetDiagFields();
         path = null;
         pathIdx = 0;
         routeKind = "";
@@ -1326,10 +1603,24 @@ public final class AutoDriveController {
         if (!planRoute(vehicle, System.currentTimeMillis(), false, false)) {
             this.state = STATE_IDLE;
             this.messageKey = "UI_DrivePanel_MsgNoPath";
+            DriveDiag.closeSession();   // 规划失败: 关掉可能已被路线转储打开的会话
             return false;
         }
-        setState(STATE_DRIVING, "UI_DrivePanel_StatusDriving");
+        // A 规则 (2026-09-12 用户拍板): 目标无道路可达时, 路线终点 = 最近可达道路点,
+        // 明确提示用户"到道路尽头, 剩余一段自行驾驶", 而不是画一条穿野直线。
+        // F 修复 (2026-09-12): 判定改用"路线是否真的裁了尾"(lastRouteTrimmed) —— 旧实现
+        // 按吸附位移判定, 位移大但路线仍带精确终点短驳时 (同分量的远距目标) 会谎报
+        // "已停在最近道路"; 现在提示 / 画线 / 到达判定三者同源。
+        if (routeEndsAtRoad) {
+            setState(STATE_DRIVING, "UI_DrivePanel_MsgRoadEnd");
+            log("target beyond road network: snapped " + (int) RoadNetwork.lastSnapDisplacement
+                    + " cells to nearest reachable road point");
+        } else {
+            setState(STATE_DRIVING, "UI_DrivePanel_StatusDriving");
+        }
         refreshWorldNoClip();
+        DriveDiag.event("SESSION", "start @" + (int) vehicle.getX() + "," + (int) vehicle.getY()
+                + " -> " + (int) x + "," + (int) y + " kind=" + routeKind);
         return true;
     }
 
@@ -1353,12 +1644,23 @@ public final class AutoDriveController {
         this.lastScanMs = 0;
         this.replanCooldownMs = 0;
         this.throttleState = THROTTLE_COAST;
-        this.throttleDwellMs = 0;
         this.lastHandleMs = 0;
         resetAvoidance();
+        resetDiagFields();
         setState(STATE_DRIVING, "UI_DrivePanel_StatusDriving");
         refreshWorldNoClip();
+        DriveDiag.event("SESSION", "resume @" + (int) vehicle.getX() + "," + (int) vehicle.getY());
         return true;
+    }
+
+    /** 诊断字段复位 (start/resumeRoute): 防上一会话残留 (上局 seg 值 → 新会话首采
+     *  发假 SEG_JUMP, 实测 csv 开局 seg 8->0 即此)。 */
+    private void resetDiagFields() {
+        diagPhi = 0.0f;
+        diagCTE = 0.0f;
+        diagSeg = -1;
+        diagCorner = 0.0f;
+        diagV0 = 0.0f;
     }
 
     private void setState(int newState, String statusKey) {
@@ -1366,6 +1668,7 @@ public final class AutoDriveController {
         this.messageKey = statusKey;
         this.stateSinceMs = System.currentTimeMillis();
         log("state -> " + newState);
+        DriveDiag.event("STATE", newState + " " + statusKey);
     }
 
     /** 世界碰撞豁免开关跟随状态: 目标态与已应用态一致则跳过, 切换时重传已加载 chunk。 */
@@ -1413,8 +1716,16 @@ public final class AutoDriveController {
         this.lastTickMs = 0;
         this.engineDeadMs = 0;
         this.throttleState = THROTTLE_COAST;
-        this.throttleDwellMs = 0;
+        this.brakeLatched = false;
+        this.psiDotLp = 0;
+        this.lastHeadingMs = 0;
         this.lastHandleMs = 0;
+        // 原版巡航还玩家干净车况: 不关的话玩家松开油门后车会自己保持旧目标速
+        if (lastVehicle != null && lastVehicle.isRegulator()) {
+            lastVehicle.setRegulator(false);
+        }
+        lastVehicle = null;
+        DriveDiag.closeSession();   // 诊断会话收尾 (接管/到达/取消) 
         if (worldNoClipApplied) {
             // 碰撞恢复宽限: 立即恢复会把嵌在墙里的车往地下挤 (实测黑屏+埋车)
             this.pendingNoClipOffMs = System.currentTimeMillis() + NOCLIP_GRACE_MS;
@@ -1572,7 +1883,7 @@ public final class AutoDriveController {
         return pathIdx;
     }
 
-    /** 路线类型: "road" / "fallback"。退出接管后保留 (地图导航线持续到下次锚定)。 */
+    /** 路线类型: "road" (命名街道) / "roadwm" (worldmap 道路图层, C2) / "direct"。退出接管后保留 (地图导航线持续到下次锚定)。 */
     public String getRouteKind() {
         return routeKind == null ? "" : routeKind;
     }
