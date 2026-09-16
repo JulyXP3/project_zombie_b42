@@ -35,6 +35,7 @@ local etherModules = {
     "modcore/lua/components/ui/EtherExchange.lua",
     "modcore/lua/components/ui/EtherAmmoFarm.lua",
     "modcore/lua/components/ui/UIMap.lua",
+    "modcore/lua/components/ui/EtherPick.lua",
     -- 自动驾驶地图锚定 (drive 域): 在 UIMap 之后加载
     "modcore/lua/components/drive/AutoDriveMap.lua",
     "modcore/lua/components/ui/UISkillTable.lua",

@@ -51,6 +51,26 @@ local function probe()
         print("[SelfProbe] OK-L2: no Ether-prefixed globals");
     end
 
+    -- 2b. 符号表来源 (2026-09-14 部署断链修复): 构建期扫描 = 全量符号;
+    --     运行时扫描 = symbols.txt 没随载荷落地 (部署有洞, 功能仍保住);
+    --     手写兜底 = 已降级, 2026-09-10 之后新增的符号会裸奔 (EtherPick 即此类)。
+    --     全 pcall 守卫: 函数没暴露或抛错都只降级成 WARN, 不影响探针其余部分。
+    local symbolSource = nil;
+    if type(luaSymbolSource) == "function" then
+        local srcOk, src = pcall(luaSymbolSource);
+        if srcOk and type(src) == "string" then
+            symbolSource = src;
+        end
+    end
+    if symbolSource == nil then
+        print("[SelfProbe] WARN-L2: symbol-table source unavailable");
+    elseif string.find(symbolSource, "handwritten", 1, true) ~= nil then
+        print("[SelfProbe] WARN-L2: symbol-table source = " .. symbolSource
+            .. " (L2 degraded)");
+    else
+        print("[SelfProbe] OK-L2: symbol-table source = " .. symbolSource);
+    end
+
     -- 3. 虚拟 FS 文件枚举: 我方 Lua 不应出现 (L3 fileless)
     --    签名 = getLoadedLuaCount() + getLoadedLua(i) (LuaManager.java:3770-3777)
     if type(getLoadedLuaCount) == "function" and type(getLoadedLua) == "function" then
@@ -99,5 +119,52 @@ probe();
 if type(Events) == "table" and type(Events.OnGameStart) == "table" then
     Events.OnGameStart.Add(function()
         probe();
+    end);
+end
+
+--*********************************************************
+--* 功能自检 (八十八): 确认安装后功能面完整 —— 我方 Java 全局是否暴露、
+--* 依赖的原版类是否在册。只 print 本地日志, 零网络。
+--* 分两批: 我方 API 加载期即可查; 原版类要等游戏 Lua 加载完 (OnGameStart)。
+--* 缺失 = 安装没生效/版本错配/暴露循环漏接。
+--*********************************************************
+local OUR_APIS = {
+    { "E2-pick",    function() return type(pickObjectAt) == "function" and type(pickObjectInfoAt) == "function" and EtherPick ~= nil end },
+    { "E3-online",  function() return type(onlinePlayersInfo) == "function" and type(onlinePlayersChanged) == "function" end },
+    { "A1-rate",    function() return type(rateLimited) == "function" and type(rateLimiterRemaining) == "function" end },
+    { "D4-ref",     function() return type(refIsValidContainer) == "function" and type(refIsValidObject) == "function" end },
+    { "C1-seat",    function() return type(vehicleSeatInfo) == "function" and type(vehicleEnterSeat) == "function" end },
+    { "A2-receipt", function() return type(timedActionState) == "function" end },
+    { "C3-hop",     function() return type(vehicleNativeProbeRead) == "function" and type(vehicleNativeHop) == "function"
+                              and type(vehicleNativeDestReady) == "function" and type(vehicleNativeVerify) == "function"
+                              and type(vehicleNativeRollback) == "function" and type(vehicleNativePhysicsZ) == "function"
+                              and type(vehicleNativeUpright) == "function" end },
+};
+
+local VANILLA_DEPS = {
+    { "B1-repair",  function() return ISRepairLightbar ~= nil and ISInventoryTransferUtil ~= nil end },
+    { "E2-hittest", function() return IsoObjectPicker ~= nil and IsoObjectPicker.Instance ~= nil end },
+};
+
+local function checkFeatureList(list, tag)
+    local bad = {};
+    for i = 1, #list do
+        local ok, res = pcall(list[i][2]);
+        if not ok or res ~= true then
+            bad[#bad + 1] = list[i][1];
+        end
+    end
+    if #bad == 0 then
+        print("[SelfProbe] OK-" .. tag .. ": " .. #list .. "/" .. #list .. " feature checks passed");
+    else
+        print("[SelfProbe] FAIL-" .. tag .. ": " .. table.concat(bad, ", "));
+    end
+end
+
+checkFeatureList(OUR_APIS, "FEAT");
+if type(Events) == "table" and type(Events.OnGameStart) == "table" then
+    Events.OnGameStart.Add(function()
+        checkFeatureList(OUR_APIS, "FEAT");
+        checkFeatureList(VANILLA_DEPS, "FEAT-V");
     end);
 end

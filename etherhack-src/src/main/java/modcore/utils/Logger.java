@@ -110,7 +110,19 @@ public class Logger {
     }
 
     public static void error(String message, Throwable throwable) {
-        String errorMsg = message + " - " + throwable.getMessage();
+        // B 修复 (2026-09-14 八十二): 旧实现直接 throwable.getMessage() —— 传 null 时 NPE,
+        // 而 NPE 发生在**消息拼装阶段** (println 之前) → 连 message 本身都没打出来,
+        // 把真正的诊断 (如 "Patch target not found: zombie/network/GameServer#kickPlayer")
+        // 吞掉整整一轮。两条路径都做空安全; 异常的 getMessage() 为 null 时退化为类名。
+        if (throwable == null) {
+            Logger.error(message);
+            return;
+        }
+        String detail = throwable.getMessage();
+        if (detail == null) {
+            detail = throwable.getClass().getName();
+        }
+        String errorMsg = message + " - " + detail;
         System.err.println("[ModCore ERROR]: " + errorMsg);
         System.out.println((Object)("[ModCore]: " + errorMsg));
         Logger.writeToFile("ERROR", errorMsg);
@@ -122,10 +134,15 @@ public class Logger {
         System.err.println("[ModCore CRASH]: " + crashMsg);
         System.out.println((Object)("[ModCore CRASH]: " + crashMsg));
         Logger.writeToFile("CRASH", crashMsg);
-        Logger.logException(throwable);
+        if (throwable != null) {
+            Logger.logException(throwable);
+        }
     }
 
     public static void logException(Throwable throwable) {
+        if (throwable == null) {
+            return;   // 空安全 (2026-09-14 八十二): 旧实现 throwable.printStackTrace NPE
+        }
         try {
             String logFile = Logger.getCurrentLogFile();
             try (FileWriter fw = new FileWriter(logFile, true);

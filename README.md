@@ -2,32 +2,52 @@
 
 A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) for Project Zomboid Build 42.
 
-The main additions over the original mod are **Farming / Map teleport (pathfind & fast-move) / Reveal Map / True Night Vision / Vehicles / Loot reroll / ESP / Item Search + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
+The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Loot reroll / ESP / Item Radar + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
 
 > **Important:** **Any form of commercial use is prohibited** (including selling and paywalled downloads), and forks/modifications **must credit the original authors**. See the License section at the end for details.
 
 ## Feature Overview
 
-UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, the menu reopens on your last tab and scroll position. Features grouped by nav page:
+UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, the menu reopens on your last tab and scroll position; the menu key and every hotkey can be rebound on the Settings page. Features grouped by nav page:
 
-### Character
+### Info
 
-- **Combat**: One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / Increase Fire Rate / Group-Hit on zombies / Zombies don't attack the player (MP-ready) / Infinite ammo (auto-refill, ammo count configurable) / No jamming / Infinite durability for held items / Auto-repair inventory items
-- **Survival**: Unlimited carry / Infinite stamina / Fast health regen (not godmode) / Disable muscle strain / Disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / Keep optimal calories & weight
-- **Special modes**: Creative mode (high risk) / Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / God mode / NoClip / Invisible (last three: SP only, requires "Unlock debug privileges (SP)")
+- Anticheat status (privilege / movement anticheat / custom log system / BikiniTools availability), online player list (with invisible markers), warnings, authors & contact
 
-### Items
+### Survival
+
+- **Items & carry**: infinite durability for held items / auto-repair inventory items / unlimited carry weight
+- **Moodles & needs**: infinite stamina / fast health regen (not godmode) / disable muscle strain / disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / keep optimal calories / keep optimal weight / repair worn clothing / pad worn clothing with leather strips
+- **Debug privileges (SP only)**: God mode / NoClip / Invisible / instant progress bars — requires "Unlock debug privileges (SP)" on the Other page first
+- **Special modes**: Creative mode / Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / Zombies don't attack the player (MP-ready)
+
+### Combat
+
+- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (auto-refill, ammo count configurable) / No jamming
+- **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; damage is split among targets, so per-zombie damage is lower — combine with CritMax / One-Shot Kill)
+- **Temp Weapon**: locally spawn a firearm and swap it into your hands (searchable full firearm list + swap/restore)
+
+### Items (SP)
 
 - **Item creator**: filter by name/category/ID, grant ×1/×2/×5/×10
-- **Item search + minimap markers**: scans loaded tiles within 56 tiles (floor ±1) — furniture/containers, ground items & bags, corpses, vehicle containers; matches shown as gray squares (with counts); markers refresh as you move; minimap quick-toggle bar (Me/Players/Vehicles/Zombies/Items) two-way synced with the Map tab checkboxes
+
+### Item Radar
+
+- Full item database list (name/ID search) + "Show on map" + "ESP tracking" (three-way synced with the minimap "Items" toggle)
 
 ### Traps
 
-- Search & spawn food (stand next to a placed trap; multiplayer)
+- **Mode switch**: food / weapon; search + click to spawn (food: stand next to a placed trap; weapon: the trap is placed at your feet automatically and auto-collected, a few seconds per item); count can be looped
+
+### Swap
+
+- Trade a **clothing/bag** item from your inventory for a chosen target item (both lists searchable by name/ID; one item per swap)
 
 ### Player
 
-- Skill levels ± / add XP / max all skills; trait add/remove; calorie editing; survival-days / zombie-kill editing (enable "Server sync protection" in multiplayer)
+- **Player info & recipes**: edit survival time / edit zombie kills / learn all available crafting recipes
+- **VHS teaching**: trainable skill list (searchable) + level up the selected skill / level up all skills (requires a powered-on radio/TV/car radio within 10 tiles at volume 5+; if none, your own device is placed for you; 30s cooldown per skill, XP capped at level 3 by default depending on server config)
+- **Traits**: add/remove traits; **Skills**: skill level ± / add XP / max all skills
 
 ### ESP
 
@@ -36,28 +56,45 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Map
 
 - **Reveal map**: reveals the entire unexplored area with one click (recorded server-side in multiplayer)
-- **Pathfind & fast-move**: right-click any spot on the map — glides at 18 tiles/s along walkable paths, no longer triggers the movement anticheat, unlimited range, WASD/Space cancels anytime; single-player keeps instant teleport
+- **Right-click menu** (identical on the M world map, the panel and the minimap): fast-move (glides along walkable paths at 17 tiles/s, does not trigger the movement anticheat, unlimited range), fast-move (through walls), **vehicle teleport** (shown while seated in the driver's seat: hops the vehicle and everyone aboard to the target in steps bounded by the server's speed budget; can cross water), plus navigate-here / clear route / resume navigation
 - Minimap: movable window + quick-toggle bar; show local player / other players / zombies / vehicles / items
 
 ### Loot
 
 - **Reset loot (F9)**: adjustable radius (default 10); reopened containers get re-rolled (gun cabinets/ammo boxes can yield weapons and ammo; multiplayer only)
 - **Ammo farming**: spawn ammo per magazine/weapon type
+- **Fishing-rod spawn**: with a fishing rod equipped, spawn any listed item into your inventory (~5–8s; multiplayer only)
 
 ### Vehicles
 
-- **Start engine unconditionally** (once / auto-retry, auto-unchecks on success) / repair / refuel (the engine still needs fuel and battery; must be seated in the vehicle)
+- **Engine & starting**: start engine unconditionally (once / auto-retry, auto-unchecks on success; the engine still needs fuel and battery)
+- **Repair & supply**: repair vehicle (uses items already in this vehicle's trunk/glovebox/seats as tokens by default, so nothing is consumed; per-step overhead feedback) / direct repair (instant full condition, one server log line per part) / refuel
+- **Remote entry**: enter the nearest vehicle within 20m (driver seat) / stuff the nearest other online player into the driver seat of the vehicle near them (multiplayer)
+- **Navigation mode**: auto-drive along the road network — get in the driver's seat, start the engine, press M and right-click "navigate here"; re-anchor while driving to reroute; cruise speed is adaptive or set manually (hard-capped by the server speed limit); any driving key takes over instantly; ends on arrival / exit / engine stall
 
 ### Farming
 
 - **Crop management**: adjustable N×N range (default 3×3) — grow to next stage / grow to harvest / water to max / remove water / cure all / infect +25 / harvest / destroy / clear remains; live plant counter distinguishing stubble/empty tiles; growth applies by the next 10-minute in-game tick
-- **Sowing**: full seed list with name/ID search, tool-free digging, seed-free sowing, auto-watered after sowing
+- **Sowing**: full seed list with name/ID search, tool-free digging / seed-free sowing / sow on tilled ground around you, auto-watered after sowing
+
+### Fun
+
+- **Impersonate chat**: pick a channel (server-wide / say 30 tiles) and a target name, then send (the impersonated player does not see it)
+- **Zombie skin**: rotten face / heavily decayed / slightly decayed / restore skin
 
 ### Create Char
 
 - **Custom Edit**: freely add/remove traits (searchable list, click to toggle) and set skill levels (0-10) for your new character; lists are persisted
 - **Creation Boost**: all traits / max skills / unlock all clothing (the game's own full outfit picker appears at character creation — dress freely) / trait points (slider)
 - Everything applies the moment you confirm creation; untick before confirming to opt out
+
+### Other
+
+- Unlock debug privileges (SP) / Server sync protection (stops the server from rolling back stats & skills) / admin menu (8 types) and attempt privilege escalation (12 types) / debug menu (main) · game debug menu · vehicle mechanics menu · medical menu / grant all materials of the selected recipe / block the default logger / block files mentioning cheats / block files with suspicious words
+
+### Settings
+
+- UI language (CN/EN/RU) / key bindings (separate sub-panel) / accent colour / player · vehicle · zombie UI element colours / profile list (save/load/delete/reload) / reload all Lua elements / reset to defaults
 
 ### Other changes / fixes
 
@@ -86,16 +123,16 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/EtherHack-3.2.2-B42.jar`. The build embeds the Lua sources from `src/main/resources/EtherHack/lua/`.
+The output jar is at `etherhack-src/build/modcore-3.2.4-B42.jar`. The build embeds the Lua sources from `src/main/resources/modcore/lua/`.
 
 ## Testing
 
 ```bat
 rem Lua smoke test (scan + debounce + movement refresh + toggle logic)
-temp\tools\lua51\lua5.1.exe tests\run_scan_test.lua etherhack-src\src\main\resources\EtherHack\lua\components\ui\EtherItemSearch.lua
+temp\tools\lua51\lua5.1.exe tests\run_scan_test.lua etherhack-src\src\main\resources\modcore\lua\components\ui\EtherItemSearch.lua
 
 rem Kahlua compatibility static check (banned API patterns)
-temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main\resources\EtherHack\lua\components\ui\EtherItemSearch.lua etherhack-src\src\main\resources\EtherHack\lua\components\ui\UIItemTables.lua etherhack-src\src\main\resources\EtherHack\lua\components\ui\UIMap.lua etherhack-src\src\main\resources\EtherHack\lua\components\ui\UIMovableMiniMap.lua
+temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main\resources\modcore\lua\components\ui\EtherItemSearch.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIItemTables.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIMap.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIMovableMiniMap.lua
 ```
 
 Note: `temp/` is a local scratch directory and is not part of the repository.
@@ -104,10 +141,10 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/EtherHack-3.2.2-B42.jar` | Ready-to-use build (current release) |
+| `etherhack-src/build/modcore-3.2.4-B42.jar` | Ready-to-use build (current release) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
-| `analysis/` | Decompiled class extracts used for verification |
+| `analysis/` | Reverse-engineering evidence and design docs (`analysis/**/*.md` is tracked; decompiled sources stay local only) |
 
 ## Known limitations
 

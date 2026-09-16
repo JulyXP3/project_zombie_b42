@@ -271,7 +271,8 @@ function EtherCharacterPanel:build()
         {
             title = "UI_CharacterPanel_Group_Items",
             items = {
-                { key = "UI_CharacterPanel_UnlimitedCondition", on = toggleUnlimitedCondition,   get = isUnlimitedCondition },
+                -- 「手中物品无限耐久」已去除 (2026-09-14 用户指令): UI 入口与配置读取一并移除,
+                -- 后端标志永久为 false (无入口可开)
                 { key = "UI_CharacterPanel_AutoRepairsItems",   on = toggleAutoRepairItems,      get = isAutoRepairItems },
                 { key = "UI_CharacterPanel_RepairClothing",     on = toggleRepairClothing,       get = isRepairClothing },
                 -- 填充皮革条: 修复衣物的镜像操作 — 对覆盖部位伪造满级皮革衬垫(原版补丁数据), 防御叠加

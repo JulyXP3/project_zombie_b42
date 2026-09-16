@@ -56,6 +56,19 @@ if not defined JAVA_CMD (
 )
 "%JAVA_CMD%" -jar "%MC_JAR%" --install
 
+REM C (2026-09-14): the installer exits non-zero when one or more game classes could
+REM not be patched (they stay vanilla, so the features they carry are missing).
+REM Do not claim success in that case - keep the jar so the user can retry.
+if errorlevel 1 (
+    echo.
+    echo [ERROR] Installation finished with ERRORS: one or more game classes were NOT patched.
+    echo         The affected features are MISSING. See the messages above and
+    echo         %%USERPROFILE%%\Zomboid\modcore\logs for details.
+    echo         The installer jar was KEPT - fix the cause and run this installer again.
+    pause
+    exit /b 1
+)
+
 if not exist "zombie\coreboot.class" (
     echo.
     echo [ERROR] Installation failed: bootstrap stub was not created.

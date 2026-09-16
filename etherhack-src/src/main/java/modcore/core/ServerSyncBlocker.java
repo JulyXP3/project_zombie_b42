@@ -267,6 +267,18 @@ public class ServerSyncBlocker {
     }
 
     /**
+     * L2 符号表来源自检口 (2026-09-14 部署断链修正): 返回
+     * "build-time scan (54)" / "runtime scan (54)" / "handwritten fallback (59)"。
+     * 构建期扫描 = 正常; 运行时扫描 = symbols.txt 没随载荷落地 (部署有洞但功能保住);
+     * 手写兜底 = 已降级 (滞后于 Lua 树, 新增符号会裸奔)。SelfProbe 打印此值,
+     * 让「L2 静默降级」在游戏日志里可见。
+     */
+    @LuaMethod(name="luaSymbolSource", global=true)
+    public static String luaSymbolSource() {
+        return modcore.core.LuaLoader.getSymbolSource();
+    }
+
+    /**
      * L1 运行时补捕 (2026-09-10 兼容性加固): 与上次快照差集, 捕获加载窗口
      * 之外创建的全局名 (lazy init 等)。由 ReportSanitizer 在上报前触发,
      * 与 _G 被枚举上交的时刻对齐。

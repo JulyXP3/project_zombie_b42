@@ -86,8 +86,8 @@ function EtherLootRollPanel:render()
         return
     end
 
-    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 钓竿生成状态源,
-    -- 长消息按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
+    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 长消息按可用宽度折行,
+    -- 且结果缓存 (render 每帧调用, 不能每帧测量)
     local src = EtherFishSpawn;
     local fishStatus = tostring((src and src.message) or "")
     if fishStatus ~= "" and self.statusX ~= nil then

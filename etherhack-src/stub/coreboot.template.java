@@ -40,7 +40,12 @@ public class coreboot {
             // 解包到游戏目录 (classpath "./" 可见, 目录名中性):
             //   class -> AppCL 惰性解析; lua -> LuaLoader classpath 读取
             //   (L3 语义不变, KWRR Checksum 只扫 media/lua mod 目录树);
-            //   translations/media -> 文件系统读取
+            //   translations/media -> 文件系统读取;
+            //   symbols.txt (符号轮换表) + lua-prefix.properties (每构建随机前缀)
+            //   -> LuaLoader 静态块直接读, 缺任一个 L2 都会静默降级: 符号表退化为
+            //   手写清单 (2026-09-10 之后新增的符号裸奔), 前缀退化为固定 "q0"
+            //   (随机轮换形同虚设)。白名单保持逐条显式列举, 不放开整棵 modcore\
+            //   树 (载荷里还有仅安装期使用的补丁器类, 不进游戏目录)。
             JarInputStream jin = new JarInputStream(new java.io.ByteArrayInputStream(jarBytes));
             JarEntry entry;
             while ((entry = jin.getNextJarEntry()) != null) {
@@ -50,7 +55,9 @@ public class coreboot {
                         || name.startsWith("modcore/lua/")
                         || name.startsWith("modcore/translations/")
                         || name.startsWith("modcore/media/")
-                        || name.equals("modcore/modcore.properties"));
+                        || name.equals("modcore/modcore.properties")
+                        || name.equals("modcore/symbols.txt")
+                        || name.equals("modcore/lua-prefix.properties"));
                 if (entry.isDirectory() || !wanted) {
                     continue;
                 }

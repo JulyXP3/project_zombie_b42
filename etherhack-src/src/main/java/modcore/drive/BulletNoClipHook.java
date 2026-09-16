@@ -183,19 +183,31 @@ public final class BulletNoClipHook {
     // ============ 车辆重置 ============
 
     /**
-     * 车辆重置 (「车辆重置」按钮): 把本车变换抬回正常行驶高度。
-     * 嵌墙车在宽限到期后被原版贴地逻辑/静态碰撞挤进地里 (实测), 按钮兜底 —
+     * 车辆重置 (「车辆重置」按钮): 把本车变换抬回正常行驶高度 (+ 翻了先扶正)。
+     * 嵌墙车在宽限到期后被原版贴地逻辑/静态碰撞挤进地里 (实测), 按钮兜底 ——
      * x/z 不动, 仅重建 y (原生高度轴): 地面 z=0 → 原生 y≈0, 朝向保留。
-     * 返回 true = 已重置 (Lua 提示成功)。
+     *
+     * **一百零八 两处修正 (用户实测: "1.5 层楼传送落下途中翻车, 点重置车辆会直接坠落到地下")**:
+     * ① **只抬不压**: 原实现无条件 `t.origin.y = 0.0f` —— 平地上是"抬回地面", 但**有地形起伏时
+     *    y=0 低于地表网格** → 车被塞到地表以下 → 物理引擎穿地。现改为仅在 `y < 0` (真嵌地, 即本按钮
+     *    的原用途) 时抬回 0; 停在坡上/高处的车 (y > 0) 保持原高度, 不再被压下去。
+     * ② **翻车先扶正**: `VehicleTeleportAPI.uprightIfFlipped` (物理数组通道, 保留朝向 + 清零残速)。
+     *
+     * 返回 true = 已处理 (Lua 提示成功)。
      */
     public static boolean resetVehiclePose(BaseVehicle self) {
         if (self == null || self.isRemovedFromWorld()) {
             return false;
         }
+        // ① 翻覆先扶正 (未翻则零动作); 走物理数组通道, 与 C3 跳步同一机制
+        modcore.core.VehicleTeleportAPI.uprightIfFlipped(self);
+        // ② 只在嵌地 (y < 0) 时抬回地面层, 绝不把坡上的车压到 0
         zombie.core.physics.Transform t = BaseVehicle.allocTransform();
         self.getWorldTransform(t);
-        t.origin.y = 0.0f;   // 地面行驶层 (update() 的 zi 换算: y/2.44949 ≈ 层 0)
-        self.setWorldTransform(t);
+        if (t.origin.y < 0.0f) {
+            t.origin.y = 0.0f;   // 地面行驶层 (update() 的 zi 换算: y/2.44949 ≈ 层 0)
+            self.setWorldTransform(t);
+        }
         BaseVehicle.releaseTransform(t);
         return true;
     }

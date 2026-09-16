@@ -55,8 +55,15 @@ end
 EtherContainerPOC = EtherContainerPOC or { radius = 10 }
 -- F9 快捷键与「战利品重掷」选项卡共用此入口
 
--- 重置附近容器战利品: 服务端 clearContainerExplore 无校验地
--- 清空 explored 标记 + 房间程序化生成记录 -> 再次搜索重新 roll 战利品
+-- 重置附近容器战利品: 对齐原版 "Refill Container" (ISInventoryPage.lua:1390-1417,
+-- ISLootZed.cheat/isAdmin 门控的同款动作) 的完整语义 ——
+--   MP: 逐件正规移除 (ISRemoveItemTool.removeItem, 每件一个移除包) → clearContainerExplore
+--       (清 explored + 房间程序化生成记录) → 客户端清视图 → requestServerItemsForContainer
+--       (服务端对未探索空容器重新生成并推送) → setExplored(true) + updateOverlaySprite。
+--   修订 (2026-09-14): 旧链只有 clear+request 两步 —— 服务端**不清空容器内已有物品**,
+--   对客户端已见过内容的容器重掷时, 服务端把原物品原 ID 重新推送, 客户端 containsID
+--   判定 "Dupe item ID" 丢弃 (AddInventoryItemToContainerPacket:92-95) ⇒ 刷屏且容器实际没换。
+--   SP: 原版单机分支 (清记录 → 本地 ItemPicker.fillContainer 重掷)。
 -- 半径可调: 选项卡输入框 / ` 键 Lua 控制台(需 -debug 启动) EtherContainerPOC.radius = 2
 function EtherContainerPOC.reset()
     local player = getPlayer();
@@ -65,6 +72,10 @@ function EtherContainerPOC.reset()
     local ok, err = pcall(function()
         local px, py, pz = math.floor(player:getX()), math.floor(player:getY()), math.floor(player:getZ());
         local count = 0;
+        local skipped = 0;
+        -- A1: 统一发包限速; 移除包按件计, 整容器提交型预算: 物品数 + 3 (clear/request/overlay),
+        -- 预算不足整容器跳过 (部分移除会留中间态), 留到下一秒再点
+        local isMP = isClient();
         for dy = -R, R do
             for dx = -R, R do
                 local sq = getCell():getGridSquare(px + dx, py + dy, pz);
@@ -77,17 +88,45 @@ function EtherContainerPOC.reset()
                             for ci = 0, nCont - 1 do
                                 local c = obj:getContainerByIndex(ci);
                                 if c ~= nil and c:getSourceGrid() ~= nil and c:getSourceGrid():getRoom() ~= nil then
-                                    c:setExplored(false); -- 客户端本地标记也要清, 否则打开时跳过向服务端请求, 只显示旧缓存
-                                    sendClientCommand(player, "object", "clearContainerExplore", {
-                                        x = sq:getX(), y = sq:getY(), z = sq:getZ(),
-                                        index = i, containerIndex = ci,
-                                    });
-                                    -- 即时刷新 (容器战利品重掷链-分析.md §四 方式B, 已按反编译验证):
-                                    -- requestServerItemsForContainer 就是发 RequestItemsForContainer 包,
-                                    -- 与同事 C++ 直发同款 —— 服务端清完标记后见容器未探索即重新 roll 并推送,
-                                    -- 无需手动重开箱子。注意: 每容器发 2 包, 大半径密集区注意反作弊阈值(~100包)。
-                                    c:requestServerItemsForContainer();
-                                    count = count + 1;
+                                    local room = c:getSourceGrid():getRoom();
+                                    if isMP then
+                                        local cost = c:getItems():size() + 3;
+                                        if rateLimiterRemaining("item") < cost then
+                                            skipped = skipped + 1;
+                                        elseif not refIsValidContainer(sq:getX(), sq:getY(), sq:getZ(), i, ci) then
+                                            -- D4: index 型命令发出前校验目标仍指向同一容器 (加载/卸载会错位)
+                                            skipped = skipped + 1;
+                                        else
+                                            local items = c:getItems();
+                                            for k = items:size() - 1, 0, -1 do
+                                                local v = items:get(k);
+                                                if v ~= nil then ISRemoveItemTool.removeItem(v, player); end
+                                            end
+                                            local args = { x = sq:getX(), y = sq:getY(), z = sq:getZ(),
+                                                index = i, containerIndex = ci };
+                                            sendClientCommand(player, "object", "clearContainerExplore", args);
+                                            c:removeItemsFromProcessItems();
+                                            c:clear();
+                                            c:requestServerItemsForContainer();
+                                            c:setExplored(true);
+                                            sendClientCommand(player, "object", "updateOverlaySprite", args);
+                                            count = count + 1;
+                                        end
+                                    else
+                                        -- SP: 原版 Refill 单机分支 (本地直接重掷, 零包)
+                                        local roomDef = room:getRoomDef();
+                                        if roomDef and roomDef:getProceduralSpawnedContainer() then
+                                            roomDef:getProceduralSpawnedContainer():clear();
+                                        end
+                                        c:removeItemsFromProcessItems();
+                                        c:clear();
+                                        ItemPicker.fillContainer(c, player);
+                                        if c:getParent() then
+                                            ItemPicker.updateOverlaySprite(c:getParent());
+                                        end
+                                        c:setExplored(true);
+                                        count = count + 1;
+                                    end
                                 end
                             end
                         end
@@ -95,7 +134,8 @@ function EtherContainerPOC.reset()
                 end
             end
         end
-        print("[ContainerPOC] reset+refresh " .. tostring(count) .. " containers nearby, loot re-rolled instantly");
+        print("[ContainerPOC] refill " .. tostring(count) .. " containers nearby"
+            .. (skipped > 0 and (" (rate-limited: " .. tostring(skipped) .. " skipped, retry after a second)") or ""));
     end)
     if not ok then
         print("[ContainerPOC] failed: " .. tostring(err));
@@ -210,7 +250,7 @@ function UIItemTables:createChildren()
     EtherTheme.styleList(self.datas);
     self:addChild(self.datas);
 
-    -- ================= 按钮行 (给物品 x1/x2/x5/x10 + 地图标记) =================
+    -- ================= 按钮行 (给物品 x1/x2/x5/x10 生成) =================
     local bx = innerX;
     local function spawnSelected(count)
         local sel = self.datas.selected;
@@ -223,7 +263,9 @@ function UIItemTables:createChildren()
     for i = 1, #specs do
         local n = specs[i].n;
         local btn = UIButton:new(bx, rowBtnY, giveW, ctrlH, getTranslate(specs[i].key),
-            function() spawnSelected(n); end, giveW);
+            function()
+                spawnSelected(n);
+            end, giveW);
         btn:initialise();
         btn:instantiate();
         btn:setAnchorLeft(true);
@@ -295,6 +337,13 @@ function UIItemTables:createChildren()
     self:updatePanel();
 end
 
+--*********************************************************
+--* [一百 已移除] InvMng 自投链 (B2): 该链**必须两个在线玩家**才能产生任何效果 ——
+--* 服务端转发循环显式跳过发送者自己的连接 (`GameServer.receiveInvMngGetItem:1530-1538`),
+--* 自发恒为静默空操作; 而投给他人只会在对方客户端留下本地幻影物品 (服务端不建物/不落档)。
+--* 单人红队环境无第二人 → 用户裁定放弃, 按钮/三语键/Lua 入口/Java 工具一并移除。
+--* 结论留档见 analysis/InvMng管理员链-分析(不可用).md 与 B 设计方案 §B2。
+--*********************************************************
 --*********************************************************
 --* Обновление панели
 --*********************************************************

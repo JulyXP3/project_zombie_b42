@@ -104,6 +104,16 @@ function EtherVisualsPanel:build()
                 { key = "UI_VisualsPanel_DrawLineToVehicles",      on = toggleVisualDrawLineToVehicle, get = isVisualDrawLineToVehicle },
             },
         },
+        -- E2 鼠标拾取模块 (八十八): **2026-09-14 九十一 用户裁定暂时隐藏** —— 目前没有消费方
+        -- (原定给 F 类对象编辑/D2; D2 成品不需要它)。接口 (MousePickAPI/EtherPick/SelfProbe)
+        -- 全部保留, 将来接 F 类时把下面这块取消注释即可恢复 UI。
+        -- {
+        --     title = "UI_Pick_Group",
+        --     items = {
+        --         { key = "UI_Pick_HoverOutline", on = setPickHover, get = isPickHover },
+        --         { key = "UI_Pick_ShowInfo",     on = setPickInfo,  get = isPickInfo },
+        --     },
+        -- },
         {
             title = "UI_VisualsPanel_Group_Zombies",
             items = {

@@ -2,8 +2,9 @@
 --* AutoDriveMap: 伪·自动驾驶地图锚定 (研判 §五「地图联动」)
 --*
 --* 三处挂钩 (EtherDriveModule 同款防御式, 类不存在时自动跳过):
---*   1. 自有 UIMap (主构建 minimap): 重定义 onRightMouseUp — 原体 (传送选项)
---*      照抄 + 追加「伪 · 自动驾驶至此」并列选项 (锚定不限区块有效性: 终点可以是
+--*   1. 自有 UIMap (主构建 minimap): 重定义 onRightMouseUp — 传送选项统一走
+--*      addTeleportOptions (2026-09-15 九十八: 车内=汽车传送/车外=步行两档)
+--*      + 追加「伪 · 自动驾驶至此」并列选项 (锚定不限区块有效性: 终点可以是
 --*      未探索区, 与滚动规划衔接);
 --*   2. 原版 M 大地图 ISWorldMap: 包装 onRightMouseUp — 普通玩家原版直接
 --*      return false 无任何菜单 (实测 M 地图没选项的根因), 我们补出自有菜单;
@@ -133,21 +134,45 @@ local function drawDriveMarker(self)
 end
 
 --*********************************************************
+--* 传送选项统一入口 (2026-09-15 九十八 修复): 三处地图菜单 (自有 UIMap / 原版 M 大地图
+--* ISWorldMap / 背包地图 ISMap) 都走这里 —— 车内 = 「汽车传送」独立项 (乘客可见, 点了被
+--* 明确拒绝), 车外 = 步行两档; 区块无效则不加传送项 (锚定项不受此限)。
+--* 事故背景: 本文件整体替换 UIMap.onRightMouseUp (九十六的「汽车传送」只加在 UIMap 侧,
+--* 被吞掉), 且 M 地图包装从未接传送项 → 用户 MP 实测: 面板/minimap 只有步行两档、
+--* M 大地图只有锚定项。传送方法统一挂 UIMap 类表 (方法自会用 getPlayer() 兜底)。
+--*********************************************************
+local function addTeleportOptions(context, worldX, worldY)
+    if type(UIMap) ~= "table" or type(UIMap.startVehicleTeleport) ~= "function" then return; end
+    if not getWorld():getMetaGrid():isValidChunk(worldX / 10, worldY / 10) then return; end
+    local player = getPlayer();
+    if player ~= nil and player:getVehicle() ~= nil then
+        -- 车内: 仅车辆档 (九十六 用户裁定: 步行两档在车内本就无效, 隐藏)
+        context:addOption(getTranslate("UI_Map_VehTeleportContext"), UIMap, UIMap.startVehicleTeleport, worldX, worldY);
+    else
+        context:addOption(getTranslate("UI_Map_TeleportContext"), UIMap, UIMap.onTeleport, worldX, worldY);
+        -- 穿墙档: 直线路径不查连通 (antiCheatNoClip 开启的服会撞检查被踢)
+        context:addOption(getTranslate("UI_Map_TeleportLinear"), UIMap, UIMap.onTeleportLinear, worldX, worldY);
+    end
+end
+
+--*********************************************************
 --* 挂钩 1: 自有 UIMap。防御式: UIMap 不存在时整体跳过。
 --*********************************************************
 if UIMap ~= nil and UIMap.onRightMouseUp ~= nil then
     -- 重定义 onRightMouseUp: 原体保留 (传送选项), 追加锚定选项。
     -- (不 wrap 复调: 原实现内部自建 ISContextMenu, 二次 get 会叠出第二个菜单)
+    -- ⚠ 本函数**整体替换** UIMap.onRightMouseUp 且本模块加载在后 (才是实际生效的菜单),
+    --   UIMap 侧新增右键选项必须在此同步 —— 2026-09-14 教训: 「快速移动(穿墙)」只加在
+    --   UIMap 侧, 被本替换吞掉 (用户实测右键缺失)。传送统一走 addTeleportOptions。
     function UIMap:onRightMouseUp(x, y)
         local context = ISContextMenu.get(0, x + self:getAbsoluteX(), y + self:getAbsoluteY());
         local worldX = self.mapAPI:uiToWorldX(x, y);
         local worldY = self.mapAPI:uiToWorldY(x, y);
-        if getWorld():getMetaGrid():isValidChunk(worldX / 10, worldY / 10) then
-            context:addOption(getTranslate("UI_Map_TeleportContext"), self, self.onTeleport, worldX, worldY);
-        end
+        addTeleportOptions(context, worldX, worldY);
         -- 自动驾驶锚定: 不做 isValidChunk 门禁 — 终点允许落在未探索区 (滚动规划衔接)
         context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
         addResumeAndClearOptions(context);
+        return true;
     end
 
     function UIMap:onAutoDriveAnchor(worldX, worldY)
@@ -195,6 +220,7 @@ if ISWorldMap ~= nil then
                 and ctx.requestX == ax and ctx.requestY == ay;
         if menuFresh then
             -- 已开菜单 (vanilla admin / DebugMenu 系): 追加, 绝不二次 get (清空)
+            addTeleportOptions(ctx, worldX, worldY);
             ctx:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
             addResumeAndClearOptions(ctx);
             return true;
@@ -203,6 +229,7 @@ if ISWorldMap ~= nil then
             return true;   -- symbolsUI 编辑态消费 (无菜单) — 不另开
         end
         local context = ISContextMenu.get(0, ax, ay);
+        addTeleportOptions(context, worldX, worldY);
         context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
         addResumeAndClearOptions(context);
         return true;
@@ -243,11 +270,13 @@ if ISMap ~= nil then
         local ctx = getPlayerContextMenu(0);
         if ctx ~= nil and ctx.addOption ~= nil and ctx:isVisible()
                 and ctx.requestX == ax and ctx.requestY == ay then
+            addTeleportOptions(ctx, worldX, worldY);
             ctx:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
             addResumeAndClearOptions(ctx);
             return;
         end
         local context = ISContextMenu.get(0, ax, ay);
+        addTeleportOptions(context, worldX, worldY);
         context:addOption(tr("UI_Drive_MapAnchor"), self, self.onAutoDriveAnchor, worldX, worldY);
         addResumeAndClearOptions(context);
     end

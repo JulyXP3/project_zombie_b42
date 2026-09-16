@@ -43,6 +43,12 @@ import modcore.utils.Exposer;
 import modcore.utils.FieldCache;
 import modcore.utils.Logger;
 import modcore.utils.PlayerUtils;
+import modcore.utils.PacketRateLimiter;
+import modcore.utils.WorldRef;
+import modcore.core.VehicleSeatAPI;
+import modcore.core.MousePickAPI;
+import modcore.core.TimedActionReceipt;
+import modcore.core.OnlinePlayersAPI;
 import modcore.utils.Rendering;
 import modcore.utils.VehicleUtils;
 import modcore.utils.ZombieUtils;
@@ -210,6 +216,82 @@ public class CoreAPI {
         return dir;
     }
 
+    /*
+     * A3 (2026-09-13, analysis/DLL分析/A-隐蔽性工程件-设计方案(待实施).md):
+     * 配置键名中性化 —— 落盘的 .properties 里不再出现任何"自证词"键名
+     * (旧键名如 GodMode/Noclip/AlwaysHit 直接可读)。语义键 → 中性码,
+     * 存盘前正映射、读盘后逆映射, 旧配置文件无需手工迁移: 旧键在首次读入后
+     * 即生效, 下一次存盘自动以新键覆写。代码 ↔ 语义对照只保留在本表
+     * (仓库内可审计), 不落盘。新增功能键一律走本表 + 中性码。
+     */
+    private static final java.util.Map<String, String> CONFIG_KEY_CODES = new java.util.HashMap<String, String>();
+    private static final java.util.Map<String, String> CONFIG_CODE_TO_KEY = new java.util.HashMap<String, String>();
+    static {
+        String[][] m = {
+            {"isPlayerInSafeTeleported", "k01"}, {"isMultiHitZombies", "k02"},
+            {"isExtraDamage", "k03"}, {"isTimedActionCheat", "k04"},
+            {"isEnableGodMode", "k05"}, {"isEnableNoclip", "k06"},
+            {"isEnableInvisible", "k07"}, {"isEnableNightVision", "k08"},
+            {"isZombieDontAttack", "k09"}, {"isNoRecoil", "k10"},
+            {"isHeadshotOnly", "k11"}, {"isAlwaysHit", "k12"},
+            {"isSuperMultiHit", "k13"}, {"superMultiHitCount", "k14"},
+            {"isBypassDebugMode", "k15"}, {"isUnlimitedCarry", "k16"},
+            {"isUnlimitedEndurance", "k18"},
+            {"isUnlimitedAmmo", "k19"}, {"ammoFarmCount", "k20"},
+            {"isCritMax", "k21"}, {"combatSpeedMultiplier", "k22"},
+            {"attackRangeBonus", "k23"}, {"isAutoRepairItems", "k24"},
+            {"isRepairClothing", "k25"}, {"isPadClothing", "k26"},
+            {"isBlockCompileLuaWithBadWords", "k27"},
+            {"isBlockCompileLuaAboutmodcore", "k28"},
+            {"isBlockCompileDefaultLua", "k29"},
+            {"isDisableFatigue", "k30"}, {"isDisableHunger", "k31"},
+            {"isDisableThirst", "k32"}, {"isDisableDrunkenness", "k33"},
+            {"isDisableAnger", "k34"}, {"isDisableFear", "k35"},
+            {"isDisablePain", "k36"}, {"isDisablePanic", "k37"},
+            {"isDisableMorale", "k38"}, {"isDisableStress", "k39"},
+            {"isDisableSickness", "k40"},
+            {"isDisableStressFromCigarettes", "k41"},
+            {"isDisableSanity", "k42"}, {"isDisableBoredomLevel", "k43"},
+            {"isDisableUnhappynessLevel", "k44"}, {"isDisableWetness", "k45"},
+            {"isDisableInfectionLevel", "k46"},
+            {"isDisableFakeInfectionLevel", "k47"},
+            {"isOptimalCalories", "k48"}, {"isOptimalWeight", "k49"},
+            {"isVisualsEnable", "k50"}, {"isVisualsVehiclesEnable", "k51"},
+            {"isVisualsZombiesEnable", "k52"},
+            {"isVisualDrawLineToZombies", "k53"},
+            {"isVisualDrawPlayerNickname", "k54"},
+            {"isVisualDrawPlayerInfo", "k55"},
+            {"isVisualDrawLineToVehicle", "k56"},
+            {"isVisualDrawLineToPlayers", "k57"},
+            {"isVisualEnable360Vision", "k58"},
+            {"isMapDrawLocalPlayer", "k59"}, {"isMapDrawAllPlayers", "k60"},
+            {"isMapDrawVehicles", "k61"}, {"isMapDrawZombies", "k62"},
+            {"isMapDrawItems", "k63"},
+            {"isNoJam", "k64"}, {"isNoMuscleStrain", "k65"},
+            {"isFullBodyRestore", "k66"},
+            {"isCharCreateAllTraits", "k67"}, {"isCharCreateMaxSkills", "k68"},
+            {"isCharCreateAllClothes", "k69"},
+            {"charCreateCustomTraits", "k70"},
+            {"charCreateCustomSkillLevels", "k71"},
+            {"isVehicleInstantStart", "k72"}, {"isFullbright", "k73"},
+        };
+        for (String[] e : m) {
+            CONFIG_KEY_CODES.put(e[0], e[1]);
+            CONFIG_CODE_TO_KEY.put(e[1], e[0]);
+        }
+    }
+
+    /** 键名双向重映射: toCode=true 存盘前 (语义→中性码), false 读盘后 (中性码→语义)。 */
+    private static Properties mapConfigKeys(Properties in, boolean toCode) {
+        java.util.Map<String, String> map = toCode ? CONFIG_KEY_CODES : CONFIG_CODE_TO_KEY;
+        Properties out = new Properties();
+        for (String name : in.stringPropertyNames()) {
+            String mapped = map.get(name);
+            out.setProperty(mapped != null ? mapped : name, in.getProperty(name));
+        }
+        return out;
+    }
+
     public void saveConfig(String var1) {
         String var2 = new File(configDir(), var1 + ".properties").getPath();
         Properties var3 = new Properties();
@@ -217,8 +299,6 @@ public class CoreAPI {
         var3.setProperty("vehiclesUIColor", ColorUtils.colorToString(this.vehiclesUIColor));
         var3.setProperty("zombiesUIColor", ColorUtils.colorToString(this.zombiesUIColor));
         var3.setProperty("playersUIColor", ColorUtils.colorToString(this.playersUIColor));
-        var3.setProperty("isPlayerInSafeTeleported", Boolean.toString(this.isPlayerInSafeTeleported));
-        var3.setProperty("isMultiHitZombies", Boolean.toString(this.isMultiHitZombies));
         var3.setProperty("isPlayerInSafeTeleported", Boolean.toString(this.isPlayerInSafeTeleported));
         var3.setProperty("isMultiHitZombies", Boolean.toString(this.isMultiHitZombies));
         var3.setProperty("isExtraDamage", Boolean.toString(this.isExtraDamage));
@@ -235,7 +315,6 @@ public class CoreAPI {
         var3.setProperty("superMultiHitCount", Integer.toString(this.superMultiHitCount));
         var3.setProperty("isBypassDebugMode", Boolean.toString(this.isBypassDebugMode));
         var3.setProperty("isUnlimitedCarry", Boolean.toString(this.isUnlimitedCarry));
-        var3.setProperty("isUnlimitedCondition", Boolean.toString(this.isUnlimitedCondition));
         var3.setProperty("isUnlimitedEndurance", Boolean.toString(this.isUnlimitedEndurance));
         var3.setProperty("isUnlimitedAmmo", Boolean.toString(this.isUnlimitedAmmo));
         var3.setProperty("ammoFarmCount", Integer.toString(this.ammoFarmCount));
@@ -307,7 +386,8 @@ public class CoreAPI {
             var3.setProperty("keyBind." + e.getKey(), Integer.toString(e.getValue()));
         }
         try (FileOutputStream var4 = new FileOutputStream(var2);){
-            var3.store(var4, (String)null);
+            // A3: 存盘前把语义键名映射为中性码 (旧键名不再出现在任何落盘文件里)
+            mapConfigKeys(var3, true).store(var4, (String)null);
         }
         catch (IOException var9) {
             Logger.printLog("Error while saving config: " + String.valueOf(var9));
@@ -324,7 +404,7 @@ public class CoreAPI {
             Logger.printLog("The config file was not found. Loading canceled.");
             return;
         }
-        this.applyConfig(var3);
+        this.applyConfig(mapConfigKeys(var3, false));
     }
 
     /** 恢复出厂默认: 空 Properties → 所有键走缺省分支 (四色/全部开关/编译选项/建号名单) */
@@ -353,7 +433,6 @@ public class CoreAPI {
         this.superMultiHitCount = ConfigUtils.getIntFromConfig(var3, "superMultiHitCount", 10);
         this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var3, "isBypassDebugMode", false);
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCarry", false);
-        this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCondition", false);
         this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedEndurance", false);
         this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedAmmo", false);
         this.ammoFarmCount = ConfigUtils.getIntFromConfig(var3, "ammoFarmCount", 30);
@@ -451,105 +530,9 @@ public class CoreAPI {
         catch (IOException var7) {
             Logger.printLog("Startup file not found. Loading default settings.");
         }
-        this.mainUIAccentColor = ConfigUtils.getColorFromConfig(var1, "mainUIAccentColor", new Color(72, 216, 168));
-        this.vehiclesUIColor = ConfigUtils.getColorFromConfig(var1, "vehiclesUIColor", new Color(150, 150, 200));
-        this.zombiesUIColor = ConfigUtils.getColorFromConfig(var1, "zombiesUIColor", new Color(255, 150, 100));
-        this.playersUIColor = ConfigUtils.getColorFromConfig(var1, "playersUIColor", new Color(255, 50, 100));
-        this.isPlayerInSafeTeleported = ConfigUtils.getBooleanFromConfig(var1, "isPlayerInSafeTeleported", false);
-        this.isMultiHitZombies = ConfigUtils.getBooleanFromConfig(var1, "isMultiHitZombies", true);
-        this.isExtraDamage = ConfigUtils.getBooleanFromConfig(var1, "isExtraDamage", false);
-        this.isTimedActionCheat = ConfigUtils.getBooleanFromConfig(var1, "isTimedActionCheat", false);
-        this.isEnableGodMode = ConfigUtils.getBooleanFromConfig(var1, "isEnableGodMode", false);
-        this.isEnableNoclip = ConfigUtils.getBooleanFromConfig(var1, "isEnableNoclip", false);
-        this.isEnableInvisible = ConfigUtils.getBooleanFromConfig(var1, "isEnableInvisible", false);
-        this.isEnableNightVision = ConfigUtils.getBooleanFromConfig(var1, "isEnableNightVision", false);
-        this.isZombieDontAttack = ConfigUtils.getBooleanFromConfig(var1, "isZombieDontAttack", false);
-        this.isNoRecoil = ConfigUtils.getBooleanFromConfig(var1, "isNoRecoil", false);
-        this.isHeadshotOnly = ConfigUtils.getBooleanFromConfig(var1, "isHeadshotOnly", false);
-        this.isAlwaysHit = ConfigUtils.getBooleanFromConfig(var1, "isAlwaysHit", false);
-        this.isSuperMultiHit = ConfigUtils.getBooleanFromConfig(var1, "isSuperMultiHit", false);
-        this.superMultiHitCount = ConfigUtils.getIntFromConfig(var1, "superMultiHitCount", 10);
-        this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var1, "isBypassDebugMode", false);
-        this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCarry", false);
-        this.isUnlimitedCondition = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedCondition", false);
-        this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedEndurance", false);
-        this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var1, "isUnlimitedAmmo", false);
-        this.isCritMax = ConfigUtils.getBooleanFromConfig(var1, "isCritMax", false);
-        this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var1, "combatSpeedMultiplier", 1.0f);
-        this.attackRangeBonus = ConfigUtils.getFloatFromConfig(var1, "attackRangeBonus", 0.0f);
-        this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var1, "isAutoRepairItems", false);
-        this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var1, "isRepairClothing", false);
-        this.isPadClothing = ConfigUtils.getBooleanFromConfig(var1, "isPadClothing", false);
-        LuaCompiler.getInstance().isBlockCompileLuaWithBadWords = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileLuaWithBadWords", false);
-        LuaCompiler.getInstance().isBlockCompileLuaAboutmodcore = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileLuaAboutmodcore", true);
-        LuaCompiler.getInstance().isBlockCompileDefaultLua = ConfigUtils.getBooleanFromConfig(var1, "isBlockCompileDefaultLua", true);
-        this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var1, "isDisableFatigue", false);
-        this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var1, "isDisableHunger", false);
-        this.isDisableThirst = ConfigUtils.getBooleanFromConfig(var1, "isDisableThirst", false);
-        this.isDisableDrunkenness = ConfigUtils.getBooleanFromConfig(var1, "isDisableDrunkenness", false);
-        this.isDisableAnger = ConfigUtils.getBooleanFromConfig(var1, "isDisableAnger", false);
-        this.isDisableFear = ConfigUtils.getBooleanFromConfig(var1, "isDisableFear", false);
-        this.isDisablePain = ConfigUtils.getBooleanFromConfig(var1, "isDisablePain", false);
-        this.isDisablePanic = ConfigUtils.getBooleanFromConfig(var1, "isDisablePanic", false);
-        this.isDisableMorale = ConfigUtils.getBooleanFromConfig(var1, "isDisableMorale", false);
-        this.isDisableStress = ConfigUtils.getBooleanFromConfig(var1, "isDisableStress", false);
-        this.isDisableSickness = ConfigUtils.getBooleanFromConfig(var1, "isDisableSickness", false);
-        this.isDisableStressFromCigarettes = ConfigUtils.getBooleanFromConfig(var1, "isDisableStressFromCigarettes", false);
-        this.isDisableSanity = ConfigUtils.getBooleanFromConfig(var1, "isDisableSanity", false);
-        this.isDisableBoredomLevel = ConfigUtils.getBooleanFromConfig(var1, "isDisableBoredomLevel", false);
-        this.isDisableUnhappynessLevel = ConfigUtils.getBooleanFromConfig(var1, "isDisableUnhappynessLevel", false);
-        this.isDisableWetness = ConfigUtils.getBooleanFromConfig(var1, "isDisableWetness", false);
-        this.isDisableInfectionLevel = ConfigUtils.getBooleanFromConfig(var1, "isDisableInfectionLevel", false);
-        this.isDisableFakeInfectionLevel = ConfigUtils.getBooleanFromConfig(var1, "isDisableFakeInfectionLevel", false);
-        this.isOptimalCalories = ConfigUtils.getBooleanFromConfig(var1, "isOptimalCalories", false);
-        this.isOptimalWeight = ConfigUtils.getBooleanFromConfig(var1, "isOptimalWeight", false);
-        this.isVisualsEnable = ConfigUtils.getBooleanFromConfig(var1, "isVisualsEnable", true);
-        this.isVisualsVehiclesEnable = ConfigUtils.getBooleanFromConfig(var1, "isVisualsVehiclesEnable", false);
-        this.isVisualsZombiesEnable = ConfigUtils.getBooleanFromConfig(var1, "isVisualsZombiesEnable", false);
-        this.isVisualDrawLineToZombies = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawLineToZombies", false);
-        this.isVisualDrawPlayerNickname = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawPlayerNickname", false);
-        this.isVisualDrawPlayerInfo = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawPlayerInfo", false);
-        this.isVisualDrawLineToVehicle = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawLineToVehicle", false);
-        this.isVisualDrawLineToPlayers = ConfigUtils.getBooleanFromConfig(var1, "isVisualDrawLineToPlayers", false);
-        this.isVisualEnable360Vision = ConfigUtils.getBooleanFromConfig(var1, "isVisualEnable360Vision", true);
-        this.isMapDrawLocalPlayer = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawLocalPlayer", true);
-        this.isMapDrawAllPlayers = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawAllPlayers", false);
-        this.isMapDrawVehicles = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawVehicles", false);
-        this.isMapDrawZombies = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawZombies", false);
-        this.isMapDrawItems = ConfigUtils.getBooleanFromConfig(var1, "isMapDrawItems", false);
-        this.isMinimapOpen = ConfigUtils.getBooleanFromConfig(var1, "isMinimapOpen", false);
-        this.isNoJam = ConfigUtils.getBooleanFromConfig(var1, "isNoJam", false);
-        this.isNoMuscleStrain = ConfigUtils.getBooleanFromConfig(var1, "isNoMuscleStrain", false);
-        this.isFullBodyRestore = ConfigUtils.getBooleanFromConfig(var1, "isFullBodyRestore", false);
-        this.isCharCreateAllTraits = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateAllTraits", false);
-        this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateMaxSkills", false);
-        this.isCharCreateAllClothes = ConfigUtils.getBooleanFromConfig(var1, "isCharCreateAllClothes", false);
-        this.charCreateCustomTraits.clear();
-        String ctStr = ConfigUtils.getStringFromConfig(var1, "charCreateCustomTraits", "");
-        if (ctStr != null && !ctStr.isEmpty()) {
-            for (String t : ctStr.split(",")) {
-                if (!t.isEmpty() && !this.charCreateCustomTraits.contains(t)) this.charCreateCustomTraits.add(t);
-            }
-        }
-        this.charCreateCustomSkillLevels.clear();
-        String csStr = ConfigUtils.getStringFromConfig(var1, "charCreateCustomSkillLevels", "");
-        if (csStr != null && !csStr.isEmpty()) {
-            for (String pair : csStr.split(",")) {
-                int eq = pair.indexOf('=');
-                if (eq > 0) {
-                    try {
-                        this.charCreateCustomSkillLevels.put(pair.substring(0, eq),
-                            Integer.valueOf(pair.substring(eq + 1)));
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            }
-        }
-        this.isVehicleInstantStart = ConfigUtils.getBooleanFromConfig(var1, "isVehicleInstantStart", false);
-        this.isFullbright = ConfigUtils.getBooleanFromConfig(var1, "isFullbright", false);
-        for (java.util.Map.Entry<String, Integer> d : DEFAULT_KEY_BINDS.entrySet()) {
-            this.keyBindings.put(d.getKey(), ConfigUtils.getIntFromConfig(var1, "keyBind." + d.getKey(), d.getValue()));
-        }
+        // A3 (2026-09-13): 启动读取统一走 applyConfig + 键名逆映射 (原先此处是 applyConfig 的
+        // 100 行手抄副本, 已与主复制体产生过键重复漂移, 一并消除)
+        this.applyConfig(mapConfigKeys(var1, false));
     }
 
     public CoreAPI() {
@@ -571,6 +554,16 @@ public class CoreAPI {
             this.exposer.exposeFishingSpawn();
             this.exposer.exposeTrapSpawn();
             this.exposer.exposeRadioXp();
+            this.exposer.exposeRateLimiter();
+            this.exposer.exposeWorldRef();
+            this.exposer.exposeVehicleSeat();
+                this.exposer.exposeOnlinePlayers();
+            // E2 (2026-09-14 八十八): 渲染层拾取 (pickObjectAt/pickObjectInfoAt)
+            this.exposer.exposeMousePick();
+            // A2 (2026-09-14 八十九): 原版计时动作精确回执 (timedActionState)
+            this.exposer.exposeTimedActionReceipt();
+            // C3 探针 (2026-09-14 九十一): 载具原生体读数/跳步 (vehicleNativeProbeRead/vehicleNativeHop)
+            this.exposer.exposeVehicleTeleport();
         this.exposer.exposeChat();
         this.exposer.exposeRecipes();
         this.exposer.exposeRenderingAPI();
@@ -1417,8 +1410,104 @@ public class CoreAPI {
             }
         }
 
-        public void exposeRenderingAPI() {
-            for (Method method : RenderingAPI.class.getMethods()) {
+        public void exposeRateLimiter() {
+            for (Method method : PacketRateLimiter.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, PacketRateLimiter.class, method, name);
+                Logger.printLog("Exposed PacketRateLimiter method: " + name);
+            }
+        }
+
+        public void exposeWorldRef() {
+            for (Method method : WorldRef.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, WorldRef.class, method, name);
+                Logger.printLog("Exposed WorldRef method: " + name);
+            }
+        }
+
+        public void exposeVehicleSeat() {
+            for (Method method : VehicleSeatAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, VehicleSeatAPI.class, method, name);
+                Logger.printLog("Exposed VehicleSeatAPI method: " + name);
+            }
+        }
+
+        public void exposeOnlinePlayers() {
+            for (Method method : OnlinePlayersAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, OnlinePlayersAPI.class, method, name);
+                Logger.printLog("Exposed OnlinePlayersAPI method: " + name);
+            }
+        }
+
+        /** A2 (八十九): TimedActionReceipt 的 @LuaMethod(global=true) 全量暴露 */
+        public void exposeTimedActionReceipt() {
+            for (Method method : TimedActionReceipt.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, TimedActionReceipt.class, method, name);
+                Logger.printLog("Exposed TimedActionReceipt method: " + name);
+            }
+        }
+
+        /** C3 探针 (九十一): VehicleTeleportAPI 的 @LuaMethod(global=true) 全量暴露 */
+        public void exposeVehicleTeleport() {
+            for (Method method : VehicleTeleportAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, VehicleTeleportAPI.class, method, name);
+                Logger.printLog("Exposed VehicleTeleportAPI method: " + name);
+            }
+        }
+
+        /**
+         * E2 (2026-09-14 八十八): MousePickAPI 的 @LuaMethod(global=true) 全量暴露
+         * (与 exposeOnlinePlayers 同款反射循环; 必须在 loadAPI 的 PrivateGlobals 捕获窗内调用)。
+         */
+        public void exposeMousePick() {
+            for (Method method : MousePickAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, MousePickAPI.class, method, name);
+                Logger.printLog("Exposed MousePickAPI method: " + name);
+            }
+        }
+
+        public void exposeRenderingAPI() {            for (Method method : RenderingAPI.class.getMethods()) {
                 if (!method.isAnnotationPresent(LuaMethod.class)) continue;
                 LuaMethod annotation = method.getAnnotation(LuaMethod.class);
                 String name = annotation.name();

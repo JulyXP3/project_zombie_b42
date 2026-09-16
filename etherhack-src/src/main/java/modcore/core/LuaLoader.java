@@ -45,6 +45,15 @@ public final class LuaLoader {
     /** 符号映射: 源码标识符 → 运行时标识符。LinkedHashMap 保持替换顺序稳定。 */
     private static final Map<String, String> SYMBOL_MAP = new LinkedHashMap<>();
 
+    /**
+     * 符号表来源 (L2 自检口, 2026-09-14 部署断链修正): 构建期扫描 = 正常;
+     * 运行时扫描 = symbols.txt 没落地但游戏目录有 Lua 树 (功能保住, 部署有洞);
+     * 手写兜底 = 已降级 (滞后于 Lua 树, 新增符号会裸奔)。
+     * 注意: 必须在 static 块之前声明 — 否则声明处的初始化会在 static 块之后执行,
+     * 把 static 块算好的值覆盖回初始值。
+     */
+    private static String symbolSource = "unknown";
+
     /** 已加载模块 (防重复加载, 对应 RunLua 的 loaded 集合语义)。 */
     private static final List<String> LOADED = new ArrayList<>();
 
@@ -107,14 +116,21 @@ public final class LuaLoader {
             }
         } catch (Exception ignored) {
         }
+        // 2026-09-14 部署断链修正: 资源没随载荷落地时旧实现静默退化 —— 现明确告警,
+        // 否则「每构建随机前缀」在生产上一直是固定字符串而无人察觉。
+        Logger.warn("L2 lua-prefix.properties missing (classpath & deploy jar) - deploy gap: "
+                + "falling back to fixed prefix \"q0\", per-build random prefix lost");
         return "q0"; // 资源缺失兜底 (仍非常识特征)
     }
 
     static {
-        // 符号表双来源: 构建期机械扫描 (modcore/symbols.txt, 主) + 手写清单 (兜底)。
+        // 符号表三来源 (2026-09-14 部署断链修正): 构建期机械扫描 (modcore/symbols.txt,
+        // 主) → 运行时扫描 (游戏目录 modcore/lua/**, 兜底; 与构建期规则逐字相同) →
+        // 手写清单 (最后手段, 天然滞后于 Lua 树)。
         // 2026-09-10 封禁事件教训: 手写清单漏 EtherMain/EtherDriveModule_addTo/
         // EtherDriveCombatModule_addTo → 全局裸奔被 KWRR "if EtherMain" 探测抓到。
         // 机械扫描规则: ^\s*(Ether|UI)\w+\s*[=.] 与 ^\s*function\s+(Ether|UI)\w+。
+        boolean buildTime = false;
         try (InputStream in = openResource("modcore/symbols.txt")) {
             if (in != null) {
                 try (BufferedReader r = new BufferedReader(new InputStreamReader(in, StandardCharsets.UTF_8))) {
@@ -127,41 +143,113 @@ public final class LuaLoader {
                         mapSymbol(line);
                     }
                 }
-                Logger.printLog("L2 symbols loaded: " + SYMBOL_MAP.size() + " (build-time scan)");
+                buildTime = true;
             }
         } catch (Exception ignored) {
         }
-        // 兜底清单 (symbols.txt 缺失时仍覆盖 KWRR 点名的核心面板符号)
-        // 取值来源: 全 Lua 树 ^Ether\w*\s*= / ^function Ether\w*[:.] 扫描 (54 文件);
-        // 含 2026-09-10 补齐的 EtherMain / EtherDriveModule_addTo 变体。
-        String[] etherSymbols = {
-            "EtherMain", "CoreMain", "EtherAdminMenu", "EtherDebugMenu", "EtherEditWorldObjects",
-            "EtherEditInventoryItem", "EtherCharacterPanel", "EtherCombatPanel",
-            "EtherExploitPanel", "EtherInfoPanel", "EtherItemCreator",
-            "EtherMapPanel", "EtherPlayerEditor", "EtherSettingsPanel",
-            "EtherVisualsPanel", "EtherVehiclePanel", "EtherFunPanel",
-            "EtherExchangePanel", "EtherFarmingPanel", "EtherLootRollPanel",
-            "EtherRadarPanel", "EtherTrapSpawn", "EtherCharacterBoostPanel",
-            "EtherKeyBindsPanel", "EtherKeyBinds", "EtherFormPanel", "EtherTheme",
-            "EtherI18n", "EtherItemSearch", "EtherTrapPOC", "EtherFishSpawn",
-            "EtherRadioXp", "EtherExchange", "EtherAmmoFarm",
-            "EtherTempWeapon", "EtherContainerPOC", "EtherDriveModule",
-            "EtherDriveModule_addTo", "EtherDriveCombatModule",
-            "EtherDriveCombatModule_addTo", "EtherCharacterCreation", "EtherCharacterPane"
-        };
-        for (String s : etherSymbols) {
-            mapSymbol(s); // EtherMain → XMain
+
+        if (buildTime) {
+            symbolSource = "build-time scan (" + SYMBOL_MAP.size() + ")";
+            Logger.printLog("L2 symbols loaded: " + SYMBOL_MAP.size() + " (" + symbolSource + ")");
+        } else {
+            // symbols.txt 没随载荷落地 (旧白名单漏发) 或读取失败: 先告警, 再就地扫
+            // 游戏目录的 Lua 树把机械结果补回来 —— 手写清单只在两条机械来源都拿不
+            // 到时才兜底, 免得上线后新增的符号静默裸奔 (EtherPick 就是这么漏的)。
+            Logger.warn("L2 symbols.txt missing (classpath & deploy jar) - deploy gap: "
+                    + "falling back to runtime scan of modcore/lua");
+            int scanned = scanRuntimeSymbols();
+            if (!SYMBOL_MAP.isEmpty()) {
+                symbolSource = "runtime scan (" + SYMBOL_MAP.size() + ")";
+                Logger.printLog("L2 symbols loaded: " + SYMBOL_MAP.size()
+                        + " (runtime scan over " + scanned + " lua files)");
+            } else {
+                Logger.warn("L2 runtime scan found nothing under modcore/lua - "
+                        + "using handwritten fallback (symbols added later may leak)");
+                // 兜底清单 (两条机械来源都拿不到时仍覆盖 KWRR 点名的核心面板符号)
+                // 取值来源: 全 Lua 树 ^Ether\w*\s*= / ^function Ether\w*[:.] 扫描 (54 文件);
+                // 含 2026-09-10 补齐的 EtherMain / EtherDriveModule_addTo 变体。
+                String[] etherSymbols = {
+                    "EtherMain", "CoreMain", "EtherAdminMenu", "EtherDebugMenu", "EtherEditWorldObjects",
+                    "EtherEditInventoryItem", "EtherCharacterPanel", "EtherCombatPanel",
+                    "EtherExploitPanel", "EtherInfoPanel", "EtherItemCreator",
+                    "EtherMapPanel", "EtherPlayerEditor", "EtherSettingsPanel",
+                    "EtherVisualsPanel", "EtherVehiclePanel", "EtherFunPanel",
+                    "EtherExchangePanel", "EtherFarmingPanel", "EtherLootRollPanel",
+                    "EtherRadarPanel", "EtherTrapSpawn", "EtherCharacterBoostPanel",
+                    "EtherKeyBindsPanel", "EtherKeyBinds", "EtherFormPanel", "EtherTheme",
+                    "EtherI18n", "EtherItemSearch", "EtherTrapPOC", "EtherFishSpawn",
+                    "EtherRadioXp", "EtherExchange", "EtherAmmoFarm",
+                    "EtherTempWeapon", "EtherContainerPOC", "EtherDriveModule",
+                    "EtherDriveModule_addTo", "EtherDriveCombatModule",
+                    "EtherDriveCombatModule_addTo", "EtherCharacterCreation", "EtherCharacterPane"
+                };
+                for (String s : etherSymbols) {
+                    mapSymbol(s); // EtherMain → XMain
+                }
+                // UI* 自定义全局 (luaGlobals 白名单面上同属我方特征)
+                String[] uiSymbols = {
+                    "UIButtonsPanel", "UICheckbox", "UIButton", "UISlider", "UIMechanics",
+                    "UIModalAddXP", "UIMovableMiniMap", "UIModalAddTrait", "UIHealth",
+                    "UIItemTables", "UIMap", "UISkillTable", "UITraitsTable",
+                    "UIRowBox", "UISectionHeader", "UIStatsEditor"
+                };
+                for (String s : uiSymbols) {
+                    mapSymbol(s); // UIButton → XButton
+                }
+                symbolSource = "handwritten fallback (" + SYMBOL_MAP.size() + ")";
+                Logger.printLog("L2 symbols loaded: " + SYMBOL_MAP.size() + " (" + symbolSource + ")");
+            }
         }
-        // UI* 自定义全局 (luaGlobals 白名单面上同属我方特征)
-        String[] uiSymbols = {
-            "UIButtonsPanel", "UICheckbox", "UIButton", "UISlider", "UIMechanics",
-            "UIModalAddXP", "UIMovableMiniMap", "UIModalAddTrait", "UIHealth",
-            "UIItemTables", "UIMap", "UISkillTable", "UITraitsTable",
-            "UIRowBox", "UISectionHeader", "UIStatsEditor"
-        };
-        for (String s : uiSymbols) {
-            mapSymbol(s); // UIButton → XButton
+    }
+
+    /** 符号表来源描述 (L2 自检口): 供 ServerSyncBlocker#luaSymbolSource 与 SelfProbe 读取。 */
+    public static String getSymbolSource() {
+        return symbolSource;
+    }
+
+    /**
+     * 运行时符号扫描兜底 (2026-09-14 L2 部署断链修正): symbols.txt 没能随载荷
+     * 落地时, 就地读游戏目录 (进程工作目录) 下 modcore/lua 树里的 .lua, 用与构建期
+     * build.gradle.kts#generateLuaSymbols 逐字相同的两条规则提取符号。
+     * 纯只读: 目录不存在 / 读取失败都只返回 0, 不抛异常 (不得影响游戏启动)。
+     *
+     * @return 实际读到的 .lua 文件数 (0 = 目录缺失或扫描失败)
+     */
+    private static int scanRuntimeSymbols() {
+        int files = 0;
+        try {
+            java.nio.file.Path root = java.nio.file.Paths.get(
+                    System.getProperty("user.dir"), "modcore", "lua");
+            if (!java.nio.file.Files.isDirectory(root)) {
+                return 0;
+            }
+            java.util.regex.Pattern reAssign = java.util.regex.Pattern.compile(
+                    "(?m)^\\s*(Ether\\w+|UI\\w+)\\s*[=.]");
+            java.util.regex.Pattern reFunc = java.util.regex.Pattern.compile(
+                    "(?m)^\\s*function\\s+(Ether\\w+|UI\\w+)[\\s(.:]");
+            java.util.List<java.nio.file.Path> luaFiles = new java.util.ArrayList<>();
+            try (java.util.stream.Stream<java.nio.file.Path> walk = java.nio.file.Files.walk(root)) {
+                walk.filter(java.nio.file.Files::isRegularFile)
+                        .filter(p -> p.getFileName().toString().endsWith(".lua"))
+                        .forEach(luaFiles::add);
+            }
+            for (java.nio.file.Path p : luaFiles) {
+                String text = new String(java.nio.file.Files.readAllBytes(p), StandardCharsets.UTF_8);
+                java.util.regex.Matcher ma = reAssign.matcher(text);
+                while (ma.find()) {
+                    mapSymbol(ma.group(1));
+                }
+                java.util.regex.Matcher mf = reFunc.matcher(text);
+                while (mf.find()) {
+                    mapSymbol(mf.group(1));
+                }
+                ++files;
+            }
+        } catch (Throwable t) {
+            // 扫描失败无碍: 交由手写清单兜底
+            Logger.warn("L2 runtime symbol scan failed: " + t.getMessage());
         }
+        return files;
     }
 
     /** 符号 → 随机前缀变体 (去掉 Ether/UI 特征头, 统一走词法合法前缀)。 */

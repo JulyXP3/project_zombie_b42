@@ -864,6 +864,42 @@ public class GamePatcher {
         }
     }
 
+    // E1 (2026-09-14): 隐身玩家本地剪枝豁免 — GameClient.timeoutRemotePlayers 对
+    // 5 秒未收到更新的远端玩家执行 receivePlayerTimeout (从世界/名单移除); 隐身管理员的
+    // 移动同步被服务端停止 → 5 秒后必被剪枝 → 大地图 [隐身] 标记与在线名单中的隐身者消失。
+    // 整方法替换为 ServerAntiCheatBypass.hookTimeoutRemotePlayers (逻辑同原版但跳过隐身者;
+    // 真实断线走服务端 PlayerTimeout 包 → receivePlayerTimeout 原路径, 不受影响)。
+    // H1 纪律: full-replacement + verify; 钩子返回恒 true。
+    private void patchInvisibleKeep() {
+        Logger.print("Patching GameClient.timeoutRemotePlayers for invisible-player keep...");
+        try {
+            Patch.injectIntoClass("zombie/network/GameClient", "timeoutRemotePlayers", false,
+                    // H1 形状校验: 原版 timeoutRemotePlayers 必须是无参 void; 形状变了就抛错不盲注
+                    method -> {
+                        if (!method.desc.equals("()V")) {
+                            throw new IllegalStateException("unexpected descriptor " + method.desc);
+                        }
+                    },
+                    method -> {
+                        // A 修复 (2026-09-14 八十二): 整方法替换必须用 Patch.clearBody ——
+                        // 只清 instructions 会留下持有旧 LabelNode 的调试表 (局部变量表/注解),
+                        // 落盘往返校验读回这些表时 label 索引越界 → 整个 GameClient 类被丢弃
+                        // (该类的三个补丁一起失效, 安装器仍报成功)。
+                        Patch.clearBody(method);
+                        method.instructions.add(new VarInsnNode(25, 0));      // ALOAD 0 (this)
+                        method.instructions.add(new MethodInsnNode(184,
+                                "modcore/core/ServerAntiCheatBypass", "hookTimeoutRemotePlayers",
+                                "(Lzombie/network/GameClient;)Z", false));
+                        method.instructions.add(new InsnNode(87));            // POP: 丢弃钩子返回值
+                        method.instructions.add(new InsnNode(177));           // RETURN (void 方法)
+                        Logger.print("  [OK] Replaced GameClient.timeoutRemotePlayers() with invisible-keep hook");
+                    });
+        }
+        catch (Exception e) {
+            Logger.error("Failed to patch timeoutRemotePlayers", e);
+        }
+    }
+
     private void patchVehicleNoKey() {
         Logger.print("Patching BaseVehicle for unconditional hotwire & keyless start...");
         try {
@@ -1300,19 +1336,37 @@ public class GamePatcher {
         });
     }
 
+    /**
+     * D 修复 (2026-09-14 八十二): **B42 目标漂移修正**。
+     * 旧补丁打的是 B41 的 GameServer.kickPlayer(String,String) —— B42 里这个签名**不存在**
+     * (javap 取证: 该类只有 static kick(IConnection, String description, String reason),
+     * 源码对照 analysis/pz_sync_analysis/zombie/network/GameServer.java:3019), 所以补丁
+     * 一直 matched=false 静默空转, 而报错被 Logger 的 null-Throwable NPE 掩盖 (见 Patch.java:105)。
+     * 反作弊踢人链路现在走 GameServer.kick(connection, "UI_Policy_Kick"|"UI_Policy_Ban",
+     * "UI_ValidationFailed") (AntiCheat.java:175/193), 拦截点同步迁到这里:
+     * 用户名不在参数里, 由连接取 (IConnection.getUserName), 见钩子 3 参重载。
+     */
     private void patchKickBanMethods() {
-        Patch.injectIntoClass("zombie/network/GameServer", "kickPlayer", false, method -> {
-            InsnList hookInstructions = new InsnList();
-            LabelNode continueLabel = new LabelNode();
-            hookInstructions.add((AbstractInsnNode)new VarInsnNode(25, 1));
-            hookInstructions.add((AbstractInsnNode)new LdcInsnNode((Object)"Anti-cheat"));
-            hookInstructions.add((AbstractInsnNode)new MethodInsnNode(184, "modcore/core/ServerAntiCheatBypass", "hookKickAction", "(Ljava/lang/String;Ljava/lang/String;)Z", false));
-            hookInstructions.add((AbstractInsnNode)new JumpInsnNode(153, continueLabel));
-            hookInstructions.add((AbstractInsnNode)new InsnNode(177));
-            hookInstructions.add((AbstractInsnNode)continueLabel);
-            method.instructions.insert(hookInstructions);
-            Logger.print("  [OK] Injected kick hook into GameServer.kickPlayer()");
-        });
+        Patch.injectIntoClass("zombie/network/GameServer", "kick", true,
+                // H1 形状校验: 必须是 B42 的 (IConnection,String,String)V; 形状变了抛错不盲注
+                method -> {
+                    if (!method.desc.equals("(Lzombie/network/IConnection;Ljava/lang/String;Ljava/lang/String;)V")) {
+                        throw new IllegalStateException("unexpected descriptor " + method.desc);
+                    }
+                },
+                method -> {
+                    InsnList hookInstructions = new InsnList();
+                    LabelNode continueLabel = new LabelNode();
+                    hookInstructions.add((AbstractInsnNode)new VarInsnNode(25, 0));   // IConnection
+                    hookInstructions.add((AbstractInsnNode)new VarInsnNode(25, 1));   // description
+                    hookInstructions.add((AbstractInsnNode)new VarInsnNode(25, 2));   // reason (可 null)
+                    hookInstructions.add((AbstractInsnNode)new MethodInsnNode(184, "modcore/core/ServerAntiCheatBypass", "hookKickAction", "(Lzombie/network/IConnection;Ljava/lang/String;Ljava/lang/String;)Z", false));
+                    hookInstructions.add((AbstractInsnNode)new JumpInsnNode(153, continueLabel));
+                    hookInstructions.add((AbstractInsnNode)new InsnNode(177));        // 拦截: 直接 return
+                    hookInstructions.add((AbstractInsnNode)continueLabel);
+                    method.instructions.insert(hookInstructions);
+                    Logger.print("  [OK] Injected kick hook into GameServer.kick() (B42 target)");
+                });
     }
 
     public boolean checkInjectedAnnotations() {
@@ -1348,12 +1402,17 @@ public class GamePatcher {
         return false;
     }
 
-    public void patchGame() {
+    /**
+     * @return true = 全部补丁写入成功; false = 有类没能写入 (C 修复 2026-09-14 八十二,
+     *         由 Main 转成非 0 退出码, 让 install.bat 如实报错而不是谎报成功)
+     */
+    public boolean patchGame() {
+        Patch.resetPatchReport();   // C: 清空上一轮记录, 总结只反映本次安装
         Logger.printCredits();
         Logger.print("Preparing to install the modcore...");
         if (!this.isGameFolder()) {
             Logger.print("No game files were found in this directory. Place the cheat in the root folder of the game");
-            return;
+            return false;
         }
         Path jarPath = Paths.get("ProjectZomboid.jar", new String[0]);
         if (Files.exists(jarPath, new LinkOption[0])) {
@@ -1395,6 +1454,7 @@ public class GamePatcher {
         this.patchGameClientSyncBlocker();
         this.patchRoleCapabilityForSP();
         this.patchVehicleNoKey();
+        this.patchInvisibleKeep();
         this.patchZombieSetTarget();
         this.patchZombieSpotted();
         this.patchZombieShouldAttack();
@@ -1408,8 +1468,23 @@ public class GamePatcher {
         Patch.saveModifiedClasses();
         // L4 收口: 删除 .bkup 磁盘残留 (还原已不依赖备份, 见 cleanupBackups)
         this.cleanupBackups();
+        // C (2026-09-14 八十二): 安装结果如实汇报。旧版不管有没有类写盘失败都打印
+        // "installation is complete" —— 实测 GameClient 整类丢失 (三个补丁一起失效)
+        // 仍报成功, 用户毫无察觉。硬失败 (类没写盘) 返回 false → install.bat 报错。
+        if (!Patch.getFailedClasses().isEmpty()) {
+            Logger.error("Installation completed WITH ERRORS - " + Patch.getFailedClasses().size()
+                    + " class(es) were NOT patched: " + Patch.getFailedClasses());
+            Logger.error("Features provided by those classes are MISSING this run - see the errors above / the log file.");
+            return false;
+        }
+        if (!Patch.getMissingTargets().isEmpty()) {
+            Logger.print("WARNING: " + Patch.getMissingTargets().size()
+                    + " patch target(s) not found / shape-changed in this game version: " + Patch.getMissingTargets());
+            Logger.print("WARNING: features provided by those patches are MISSING (game version drift).");
+        }
         Logger.print("The injections were completed!");
         Logger.print("The cheat installation is complete, you can enter the game!");
+        return true;
     }
 
     public void restoreFiles() {

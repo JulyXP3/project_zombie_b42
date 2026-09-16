@@ -3,7 +3,8 @@
  * (multiplayer).
  *
  * Chain (verified against the running game jar, see
- * analysis/电台效果注入与尸体物品伪造(已实施完成).md §一/§七):
+ * analysis/VHS获取经验与尸体物品伪造(已实施完成).md 情报1 与 §7.1 —
+ * 原名"电台效果注入与尸体物品伪造", df5c8810 改名, 内容未变):
  *   1. WaveSignalPacket is a client->server packet with the `codes` string
  *      fully client-controlled (no anti-cheat, only LoginOnServer).
  *   2. Server processServer -> ZomboidRadio.SendTransmission ->

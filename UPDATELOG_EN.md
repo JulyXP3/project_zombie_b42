@@ -2,6 +2,21 @@
 
 ## [3.2.4] - Current
 
+- Fixed: "Vehicle teleport" could get you kicked on some servers (the pace now adapts to the server's settings and it waits for the vehicle to stop before starting; long trips take slightly longer but are stable).
+- Improved: long-distance "Vehicle teleport" is faster and steadier - each step now covers much more ground (far fewer steps) and landings are watched frame by frame, so only a genuine fall aborts and rolls back (normal terrain height changes are no longer treated as failures).
+- Improved: repair and similar actions now read the game's own completion receipts - if the server rejects a step it stops immediately with a message instead of waiting on a fixed timer.
+- Fixed: "Repair vehicle" could not be cancelled once started (clicking the button again during the repair now stops it immediately, giving you back control at any time).
+- Changed: "Repair vehicle" now takes about 2 seconds per part (vanilla takes about 4-5) and walks to each part's position before working on it, the same way the vanilla game does.
+- Added: while sitting in a vehicle the map right-click menu gains a "Vehicle teleport" entry - one click moves **you and the vehicle together** to the target in short automatic steps (it waits or stops safely when the destination is not ready instead of dropping the car into unloaded terrain; only the driver can move the vehicle, passengers get a message explaining why).
+- Fixed: the "Vehicle teleport" entry could be missing from some map right-click menus (the big map now behaves the same as the map panel).
+- Added: a one-line feature self-check is printed to the console on entering the game (OK-FEAT / FAIL-FEAT) so you can see at a glance whether the install is complete.
+- Fixed: "Repair vehicle" did not actually work before (it now repairs part by part the same way the vanilla game does, after getting out of the car, and the result is synced to the server and other players).
+- Changed: "Repair vehicle" now takes its item only from **this vehicle** (trunk first, then glovebox and seats) and consumes nothing; each repaired part shows a message above your head saying what was used and that it was not consumed; if the vehicle holds no usable item it stops with a message (your inventory is never touched).
+- Fixed: an invisible player's map marker now disappears 5 seconds after their coordinates stop updating instead of being pinned on the map.
+- Improved: per-frame cost of the online player list and the map markers (the player list and vehicle list are no longer rebuilt every frame), so the map holds a steadier frame rate.
+- Fixed: the installer could report success while some features were silently left out (it now reports the failure clearly and keeps the installer package instead of claiming success).
+- Fixed: a meaningless message in the install log used to hide the real reason a patch failed (the log now names the patch that did not apply).
+- Fixed: one kick-interception patch that had silently stopped working after a game update (its target was renamed; now corrected).
 - Fixed: autodrive no longer gets wrongly boxed in by a wreck that sits off to the **side** of the road (it used to keep braking even after steering past it).
 - Fixed: junctions that were wrongly treated as unreachable (neighbourhoods reached via Patton St etc.) - destinations inside road-connected neighbourhoods now get a proper all-on-road route instead of a bogus detour across open country.
 - Fixed: navigation still dropped to 10 km/h for no apparent reason while passing obstacles (it now holds a steady 20 km/h throughout the pass and only brakes when right behind an obstacle).

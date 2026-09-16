@@ -14,6 +14,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import zombie.characters.IsoPlayer;
+import zombie.network.GameClient;
+import zombie.network.IConnection;
 
 public class ServerAntiCheatBypass {
     private static ServerAntiCheatBypass instance;
@@ -124,6 +126,47 @@ public class ServerAntiCheatBypass {
             Logger.logException(e);
             return false;
         }
+    }
+
+    /**
+     * D 修复 (2026-09-14 八十二): **B42 版踢人钩子** (注入点 GameServer.kick)。
+     *
+     * B42 用 static GameServer.kick(IConnection, String description, String reason) 取代了
+     * B41 的 kickPlayer(String username, String reason) —— 参数里**没有用户名**, 由连接反查
+     * (IConnection.getUserName, 接口方法已 javap 核对)。description = 策略串
+     * (UI_Policy_Kick / UI_Policy_Ban), reason = 具体原因 (可 null)。
+     *
+     * 原 2 参判定只看 reason 关键词, 而 B42 反作弊踢人给的是 description="UI_Policy_Kick",
+     * reason="UI_ValidationFailed" (AntiCheat.java:175/193) —— 关键词表补了 policy/validation,
+     * 因此这里把两串拼成判定串传入, 保持"经此路径的踢人按反作弊相关处理"的原始语义
+     * (B41 注入点当年塞的字面量就是 "Anti-cheat")。
+     *
+     * @return true = 拦截本次踢人 (注入点据此直接 return)
+     */
+    public static boolean hookKickAction(IConnection connection, String description, String reason) {
+        String username = null;
+        try {
+            if (connection != null) {
+                username = connection.getUserName();
+            }
+        }
+        catch (Throwable t) {
+            // 连接信息不可得 (未完成登录/正在拆连接): 退化为只按原因串判定, 不影响主流程
+        }
+        StringBuilder tag = new StringBuilder();
+        if (description != null) {
+            tag.append(description);
+        }
+        if (reason != null) {
+            if (tag.length() > 0) {
+                tag.append(' ');
+            }
+            tag.append(reason);
+        }
+        if (tag.length() == 0) {
+            tag.append("Anti-cheat");   // 与 B41 注入点同款兜底
+        }
+        return ServerAntiCheatBypass.hookKickAction(username, tag.toString());
     }
 
     public void enableGlobalBypass() {
@@ -268,7 +311,46 @@ public class ServerAntiCheatBypass {
             return false;
         }
         String lowerReason = reason.toLowerCase();
-        return lowerReason.contains("cheat") || lowerReason.contains("exploit") || lowerReason.contains("hack") || lowerReason.contains("suspicious") || lowerReason.contains("invalid") || lowerReason.contains("violation") || lowerReason.contains("unauthorized");
+        // D (2026-09-14 八十二): 补 policy/validation —— B42 反作弊踢人的串是
+        // "UI_Policy_Kick"/"UI_Policy_Ban" + "UI_ValidationFailed", 旧关键词表一个都不命中,
+        // 会导致类型化旁路开关开了也拦不住 (B41 靠注入点自塞的 "Anti-cheat" 字面量才命中)。
+        return lowerReason.contains("cheat") || lowerReason.contains("exploit") || lowerReason.contains("hack") || lowerReason.contains("suspicious") || lowerReason.contains("invalid") || lowerReason.contains("violation") || lowerReason.contains("unauthorized") || lowerReason.contains("policy") || lowerReason.contains("validation");
+    }
+
+    /**
+     * E1 修订 (2026-09-14, analysis/DLL分析/E-信息层-设计方案.md): 隐身玩家本地剪枝豁免。
+     *
+     * 原版 GameClient.timeoutRemotePlayers() 对"超过 5 秒未收到更新"的远端玩家执行
+     * receivePlayerTimeout (从世界/名单/远端表彻底移除)。隐身管理员的移动同步被服务端
+     * 停止 (隐身本意) → 5 秒后必被剪枝 → 大地图标记与在线名单中的隐身者消失 (实测)。
+     *
+     * 本钩子**整方法替换** timeoutRemotePlayers: 逻辑与原版一致 (5 秒未更新 → 剪枝),
+     * 唯一差异 = **跳过 isInvisible 玩家** —— 隐身者保留在名单与世界中 (标记为最后已知位置,
+     * 服务端不再同步其坐标)。真实断线的玩家由服务端 PlayerTimeout 包走
+     * receivePlayerTimeout 原路径移除, 不受影响。
+     *
+     * @return 恒 true = 已处理, ASM 注入点据此直接返回 (不执行原方法体)
+     */
+    public static boolean hookTimeoutRemotePlayers(GameClient client) {
+        try {
+            long now = System.currentTimeMillis();
+            for (IsoPlayer player : client.getPlayers()) {
+                if (player == null || player.isLocalPlayer()) {
+                    continue;
+                }
+                if (player.isInvisible()) {
+                    continue;   // E1: 隐身玩家豁免剪枝 (保留在名单与世界中)
+                }
+                if (now - player.getLastRemoteUpdate() <= 5000L) {
+                    continue;
+                }
+                GameClient.receivePlayerTimeout(player.getOnlineID());
+            }
+        }
+        catch (Exception e) {
+            Logger.error("hookTimeoutRemotePlayers failed: " + e, e);
+        }
+        return true;
     }
 
     public String getStatusString() {
