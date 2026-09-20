@@ -1,6 +1,21 @@
 # Changelog
 
-## [3.2.4] - Current
+## [3.2.5] - Current
+
+- Fixed: with "Unlimited endurance" on, the endurance icon flickered on and off (now it stays hidden and endurance is always treated as full).
+- Improved: with "Unlimited carry" on, the heavy-load indicator and its side effects (slowdown, health drain) no longer appear.
+- Added: a standalone `uninstall.bat` so the mod can be fully removed at any time without preparing the installer package.
+- Fixed: "Autopilot" could get stuck crawling at very low speed (5 km/h) with repeated back-and-forth on some stretches and take a long time to break free (the avoidance tier could stay locked at the lowest setting and slow creeping was misread as being stuck, causing repeated reversing).
+- Fixed: the "Unlimited endurance" toggle had no effect (it now works).
+- Changed: "Unlimited carry" is back on the stable release's implementation (the health-drain report is still under investigation).
+- Fixed: autopilot no longer wanders off when the route data is broken (it stops with a message and hands control back to you).
+- Improved: when far from the route, the return leg is no longer repeatedly dragged down to low speed by obstacle avoidance.
+- Added: the "Corpse spawn" mode now shows a red trace warning (same as "Fishing-rod spawn") - be aware it leaves a log entry on the server.
+- Changed: the Loot page's "Fishing-rod spawn (any item)" section is now "Item Spawn (MP)".
+- Changed: the "Timed spawn" description was trimmed to cover only the "Accelerate" toggle.
+- Build: version bumped to 3.2.5.
+
+## [3.2.4]
 
 - Fixed: "Vehicle teleport" could get you kicked on some servers (the pace now adapts to the server's settings and it waits for the vehicle to stop before starting; long trips take slightly longer but are stable).
 - Improved: long-distance "Vehicle teleport" is faster and steadier - each step now covers much more ground (far fewer steps) and landings are watched frame by frame, so only a genuine fall aborts and rolls back (normal terrain height changes are no longer treated as failures).
@@ -111,7 +126,26 @@
 - Changed: "Pseudo-Autopilot" is renamed to "Navigation Mode" (all languages) — the map context menu now reads "Navigate here".
 - Fixed: occasional spinning in place before departing; cornering no longer overshoots off the road into woods as easily; the pass-through obstacle speed limit is raised from 12 to 30 km/h.
 - Changed: the Navigation Mode panel is streamlined — the stop button is removed (any driving key takes over instantly, which stops it) along with the duplicated status text while driving; also fixes vanilla error spam when browsing seat containers of a vehicle you have driven far away from.
+- Removed: the "Online players" list on the info page (no longer needed; map player markers are unaffected).
+- Fixed: navigation occasionally looping back and forth on the same stretch of road forever (routes no longer fold back on themselves; if it ever circles again, it stops automatically after about 20 seconds with a message).
+- Fixed: the vehicle driving erratically while the big map (M) is open (navigation keeps driving properly while you read the map; the map's "toggle symbols" hotkey no longer triggers a false takeover stop).
+- Improved: the fallback speed limit when navigation drifts off its route line is raised from 10 to 20 km/h.
+- Improved: after finishing an avoidance detour, navigation resumes its normal speed as soon as it nears the route line, instead of crawling at 20 km/h all the way back onto it.
+- Fixed: navigation could creep in place forever when roadside parked cars/wrecks left no comfortable gap (it now backs up briefly to re-scan; if still unsolvable it keeps manoeuvring in place instead of deadlocking).
+- Improved: navigation gained a "slow thread" tier - extremely narrow gaps (cars parked on both sides) are now threaded through at a crawl instead of being declared blocked.
+- Fixed: navigation drove straight past turns it should take when threading past roadside cars (the avoidance path now follows the route around corners; previously it could be dragged tens of cells past the junction and have to come back).
+- Improved: after avoiding an obstacle, speed now ramps back up progressively as the car rejoins the route, instead of staying at 20 km/h for the whole merge.
+- Changed: obstacle squeeze-through speed raised from 8 to 10 km/h.
+- Fixed: opening the vehicle mechanics window and similar screens could cause cheat flags to be recorded by the server (the reported data no longer includes this software's feature flags).
+- Improved: the "Unlimited carry weight" implementation (dragging items is no longer weight-limited, with far less network traffic; behaviour unchanged).
+- Fixed: "Zombies don't attack" could be reported under some anti-cheat frameworks.
+- Fixed: "No muscle strain" and "Full limb recovery" occasionally rolling back in multiplayer.
+- Fixed: navigation reversing repeatedly in front of extremely narrow gaps without getting through (it now retries with a tighter line).
+- Improved: navigation recovery speed when rejoining the route from a large deviation (no longer capped at 20 km/h the whole way).
+- Fixed: "Unlimited carry weight" slowly draining health in multiplayer (carrying heavy loads no longer triggers health loss).
+- Fixed: "Unlimited endurance" could be reported under some anti-cheat frameworks.
 - Build: version bumped to 3.2.4.
+
 
 ## [3.2.3]
 
@@ -119,6 +153,8 @@
 - Changed: "Instant kill" no longer extends weapon range; engagement range is back to the weapon's original values. One-hit-kill capability unchanged.
 - Reworked: the "Players" tab — player info and recipes merged into one module, a new "VHS lessons" module added, traits and skills shown as separate sections.
 - Added: "VHS lessons" (Players tab) — search and boost any skill in one click; requires a playing radio/TV nearby (vehicle radios work), and an inventory radio is placed out automatically when none is around; the server's media XP cap setting may limit the effect.
+- Added: "Corpse spawn" (Loot tab, multiplayer only) — a corpse carrying the chosen items instantly appears at your feet; loot it after the kill.
+- Added: "Timed spawn" (Loot tab, multiplayer only) — uses the game's own take-bricks action so the item is real and persistent (and visible to others), with an "Accelerate" toggle.
 - Fixed: hint text overlap on the "Loot" tab.
 - Build: version bumped to 3.2.3.
 

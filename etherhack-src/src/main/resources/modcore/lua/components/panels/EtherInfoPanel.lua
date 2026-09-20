@@ -116,35 +116,6 @@ function EtherInfoPanel:buildLines()
     end
     addBlock("UI_InformationPanel_AntiCheatStatus_Title", statusLines);
 
-    -- E3 在线玩家 (2026-09-14): 名单**常显且含自己** (用户要求; Java 侧第一条 = 本机玩家),
-    -- 其他玩家来自世界地图远端表; 空名单显示"无"。隐身玩家带 [隐身] 标记,
-    -- 权限值 (角色能力数) >0 显示 [power N] —— 在线管理员列表的底座
-    -- 修订: Java 返回的 ArrayList 在 Kahlua 里 type() ~= "table" (旧判定恒失败 → 恒"无"),
-    -- 改为 size/get Java 式迭代, 兼容两种返回
-    local okList, players = pcall(onlinePlayersInfo);
-    local isJava = okList and players ~= nil and players.size ~= nil;
-    local onlineLines = {};
-    local count = 0;
-    if isJava then
-        count = players:size();
-    elseif okList and type(players) == "table" then
-        count = #players;
-    end
-    for i = 1, count do
-        local entry = isJava and players:get(i - 1) or players[i];
-        local name, oid, inv, power = string.match(entry or "", "^([^|]*)|([^|]*)|([^|]*)|(.*)$");
-        if name ~= nil then
-            local tag = "";
-            if inv == "1" then tag = tag .. " " .. getTranslate("UI_Map_InvisibleTag"); end
-            if power ~= nil and tonumber(power) > 0 then tag = tag .. " [power " .. power .. "]"; end
-            table.insert(onlineLines, { text = name .. " #" .. oid .. tag, col = th.text });
-        end
-    end
-    if #onlineLines == 0 then
-        table.insert(onlineLines, { text = getTranslate("UI_Common_None"), col = th.textDim });
-    end
-    addBlock("UI_InformationPanel_Online_Title", onlineLines);
-
     -- 联系方式: 平台名是专有名词(不翻译), 但"无"必须可翻译; 链接纯文本显示
     local none = getTranslate("UI_Common_None");
     local channels = {
@@ -168,7 +139,6 @@ function EtherInfoPanel:buildLines()
     self.cacheW = self.width;
     self.cacheLang = getLanguage();
     self.cacheFlags = self:statusFlags();
-    -- E3/P1: 名单变化的脏标记由 render 的 onlinePlayersChangedSafe() 消费, 这里不再存串
 
     -- 内容总高 (供滚动范围用)
     local total = 12;
@@ -206,32 +176,14 @@ function EtherInfoPanel:statusFlagsChanged()
 end
 
 --*********************************************************
---* P1 性能修订 (2026-09-14 八十五, 用户提问"在线玩家会不会很吃性能"):
---* 旧实现被 render() **每帧**调用: 进 Java 重建 ArrayList+每人一条字符串, 再回 Kahlua
---* 逐条 tostring + table.concat 出一整条名单串做比较 —— 名单一秒内几乎不变, 全是白做功。
---* 现改为读 Java 侧"**是否变化**"布尔 (onlinePlayersChanged, 内部 250ms 节流 + 零分配),
---* 版本变化后 buildLines() 才取一次真实数据 (onlinePlayersInfo 返回缓存行)。
---* 注: 该脏标记读后即清, 只允许本面板一个消费者。
---*********************************************************
-local onlineChangedFn = nil;
-local function onlinePlayersChangedSafe()
-    if onlineChangedFn == nil then
-        onlineChangedFn = onlinePlayersChanged or false;   -- 缺失(版本不匹配)则退化为"从不变化"
-    end
-    if onlineChangedFn == false then return false; end
-    return onlineChangedFn();
-end
-
---*********************************************************
 --* Отрисовка текста (折行 + 竖向滚动, 保证长文本不越界)
 --*********************************************************
 function EtherInfoPanel:render()
     local th = EtherTheme;
 
-    -- 缓存失效则重建折行 (宽度/语言/状态/在线名单变化)
+    -- 缓存失效则重建折行 (宽度/语言/状态变化)
     if self.lines == nil or self.cacheW ~= self.width
-        or self.cacheLang ~= getLanguage() or self:statusFlagsChanged()
-        or onlinePlayersChangedSafe() then
+        or self.cacheLang ~= getLanguage() or self:statusFlagsChanged() then
         self:buildLines();
     end
 

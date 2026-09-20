@@ -290,7 +290,7 @@ local function repairTick()
         end
         return;
     end
-    -- A2 (八十九, 见 analysis/DLL分析/A-隐蔽性工程件-设计方案.md §A2 的修订): 先问**原版回执** ——
+    -- A2 (八十九, 见 analysis/DLL分析/A-隐蔽性加固-设计方案(A1-A6已实施).md §A2 的修订): 先问**原版回执** ——
     -- 原版引擎本来就在等 ActionManager.isDone/isRejected (LuaTimedActionNew.java:88-103), 我们把状态读出来:
     -- 服务端"拒绝"就立刻中止 (九十一: 不再退化用背包件), 不必再等容差; 已完成则清零待办。
     -- 回执不可用 (返回 3, 例如桥初始化失败或动作已移出队列) 时完全退回下面的原有判定。

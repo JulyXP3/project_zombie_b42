@@ -6,7 +6,7 @@ import zombie.iso.IsoObject;
 import zombie.iso.IsoObjectPicker;
 
 /**
- * E2 (2026-09-14 八十八, 见 analysis/DLL分析/E-信息层-设计方案.md §E2): 渲染层拾取。
+ * E2 (2026-09-14 八十八, 见 analysis/DLL分析/E-信息层-设计方案(E1-E3已实施-E4不做).md §E2): 渲染层拾取。
  *
  * 取证结论 (全部落在原版代码上, **不需要任何渲染补丁**):
  * ① 原版每帧已经算好"鼠标下的物件" —— zombie/ui/UIManager.java:567-571 调

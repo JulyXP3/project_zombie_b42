@@ -9,7 +9,7 @@ import zombie.vehicles.BaseVehicle;
 import zombie.vehicles.VehiclePart;
 
 /**
- * C1/C2 (2026-09-14, 见 analysis/DLL分析/C-传送与载具-设计方案.md):
+ * C1/C2 (2026-09-14, 见 analysis/DLL分析/C-传送与载具-设计方案(C1-C3已实施).md):
  * 载具座位包通道 —— 客户端直接发原版 VehicleEnterPacket, 服务端权威执行
  * `vehicle.enter(seat, 包内玩家)` 并广播 (requiredCapability=LoginOnServer,
  * 目标不绑定连接)。C1 = 自己远程上车; C2 = 把指定在线玩家塞进指定座位。

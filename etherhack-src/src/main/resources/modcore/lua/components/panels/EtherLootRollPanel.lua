@@ -72,6 +72,15 @@ function EtherLootRollPanel:prerender()
             self:drawText(t.text, t.x, t.y, t.col.r, t.col.g, t.col.b, t.col.a or 1, t.font);
         end
     end
+    -- 底部说明 (提示/警告) 按当前生成模式二选一绘制
+    if self.modeTexts ~= nil then
+        for i = 1, #self.modeTexts do
+            local t = self.modeTexts[i];
+            if t.mode == self.spawnMode then
+                EtherTheme.drawHintText(self, t.text, t.x, t.y, t.col);
+            end
+        end
+    end
 end
 
 --*********************************************************
@@ -86,9 +95,11 @@ function EtherLootRollPanel:render()
         return
     end
 
-    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 长消息按可用宽度折行,
-    -- 且结果缓存 (render 每帧调用, 不能每帧测量)
+    -- 生成状态 (生成中/已生成/失败; 空闲时无消息) —— 按模式取对应状态源,
+    -- 长消息按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
     local src = EtherFishSpawn;
+    if self.spawnMode == "corpse" then src = EtherCorpseSpawn;
+    elseif self.spawnMode == "take" then src = EtherTakeSpawn; end
     local fishStatus = tostring((src and src.message) or "")
     if fishStatus ~= "" and self.statusX ~= nil then
         if self.statusCacheText ~= fishStatus or self.statusCacheW ~= self.statusW then
@@ -106,6 +117,37 @@ function EtherLootRollPanel:render()
                 y0 + (i - 1) * fhH, td, 0.9);
         end
     end
+end
+
+--*********************************************************
+--* 生成模式切换 UI 状态: 当前模式按钮禁用 (视觉区分 + 防重复点击)
+--*********************************************************
+function EtherLootRollPanel:updateSpawnModeUI()
+    if self.modeFishBtn ~= nil then
+        self.modeFishBtn:setEnable(self.spawnMode ~= "fish");
+    end
+    if self.modeCorpseBtn ~= nil then
+        self.modeCorpseBtn:setEnable(self.spawnMode ~= "corpse");
+    end
+    if self.modeTakeBtn ~= nil then
+        self.modeTakeBtn:setEnable(self.spawnMode ~= "take");
+    end
+    if self.accelBtn ~= nil then
+        self.accelBtn:setVisible(self.spawnMode == "take");
+        if self.spawnMode == "take" then
+            self:updateAccelBtnText();
+        end
+    end
+end
+
+--*********************************************************
+--* 加速开关按钮文字 (一百三十一)
+--*********************************************************
+function EtherLootRollPanel:updateAccelBtnText()
+    if self.accelBtn == nil then return end
+    local on = EtherTakeSpawn ~= nil and EtherTakeSpawn.accelerate;
+    self.accelBtn.title = getTranslate("UI_TakeSpawn_Accel") .. ": "
+        .. getTranslate(on and "UI_TakeSpawn_On" or "UI_TakeSpawn_Off");
 end
 
 --*********************************************************
@@ -341,7 +383,8 @@ function EtherLootRollPanel:createChildren()
     cy = cy + EtherTheme.entryH;
     self:_group(PAD, g2y, boxW, (cy - g2y) + IP);
 
-    -- ================= 分组3: 钓竿生成 (占据剩余高度) =================
+    -- ================= 分组3: 钓竿/尸体生成 (占据剩余高度) =================
+    -- 双模式共用物品列表与搜索: 钓竿生成 (FishingSpawn) / 尸体生成 (CorpseSpawn)
     local g3y = cy + IP + GGAP;
     -- 矮屏(窗口被钳制)时必须压缩本组而不是兜底撑高: 强制最小高度会把
     -- 盒底推出面板, 组内列表与搜索行全部越界 (实机多轮 "search food 重叠" 根因)。
@@ -352,6 +395,57 @@ function EtherLootRollPanel:createChildren()
     cy = g3y + IP;
     self:_header(innerX, cy, getTranslate("UI_FishSpawn_Title"), innerW);
     cy = cy + EtherTheme.fontHgtSmall + GAP;
+
+    -- 模式切换行: [钓竿生成] [尸体生成] [计时生成] [数量输入框]
+    local modeFishT = getTranslate("UI_SpawnMode_Fish");
+    local modeCorpseT = getTranslate("UI_SpawnMode_Corpse");
+    local modeTakeT = getTranslate("UI_SpawnMode_Take");
+    local mw = math.max(UIButton.measureWidth(modeFishT), UIButton.measureWidth(modeCorpseT),
+        UIButton.measureWidth(modeTakeT));
+    local cntW = 56;
+    local cntX = innerX + innerW - cntW;
+    if mw * 3 + GAP * 4 + cntW > innerW then
+        mw = math.floor((innerW - GAP * 4 - cntW) / 3);
+        if mw < 50 then mw = 50; end
+    end
+    self.spawnMode = "fish";
+    self.modeFishBtn = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, mw, ctrlH, modeFishT,
+    function()
+        self.spawnMode = "fish";
+        self:updateSpawnModeUI();
+    end, mw)
+    self.modeFishBtn:initialise();
+    self.modeFishBtn:instantiate();
+    self.modeFishBtn.isOnlyInGame = true;
+    self:addChild(self.modeFishBtn);
+    self.modeCorpseBtn = UIButton:new(innerX + mw + GAP, cy + EtherTheme.entryBtnDY, mw, ctrlH, modeCorpseT,
+    function()
+        self.spawnMode = "corpse";
+        self:updateSpawnModeUI();
+    end, mw)
+    self.modeCorpseBtn:initialise();
+    self.modeCorpseBtn:instantiate();
+    self.modeCorpseBtn.isOnlyInGame = true;
+    self:addChild(self.modeCorpseBtn);
+    self.modeTakeBtn = UIButton:new(innerX + (mw + GAP) * 2, cy + EtherTheme.entryBtnDY, mw, ctrlH, modeTakeT,
+    function()
+        self.spawnMode = "take";
+        self:updateSpawnModeUI();
+    end, mw)
+    self.modeTakeBtn:initialise();
+    self.modeTakeBtn:instantiate();
+    self.modeTakeBtn.isOnlyInGame = true;
+    self:addChild(self.modeTakeBtn);
+    self:_text(cntX - tm:MeasureStringX(UIFont.Small, getTranslate("UI_TrapSpawn_Count")) - math.floor(GAP / 2),
+        cy + EtherTheme.entryLabelDY, getTranslate("UI_TrapSpawn_Count"), EtherTheme.text, UIFont.Small);
+    self.countBox = ISTextEntryBox:new("1", cntX, cy, cntW, EtherTheme.entryH);
+    EtherTheme.styleEntry(self.countBox);
+    self.countBox:initialise();
+    self.countBox:instantiate();
+    self.countBox:setClearButton(false);
+    self:addChild(self.countBox);
+    self:updateSpawnModeUI();
+    cy = cy + EtherTheme.entryH + GAP;
 
     -- 过滤行: 名称 + ID (宽度不足时自动拆成两行, 避免标签压住输入框)
     local nameT = getTranslate("UI_ItemCreator_Title_FilterByName");
@@ -398,10 +492,19 @@ function EtherLootRollPanel:createChildren()
     cy = cy + EtherTheme.entryH + GAP;
 
     -- 底部区: 生成按钮行 + 使用提示 + 留痕警告 (自下而上: 警告 -> 提示 -> 按钮),
-    -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩
+    -- 说明两段静态注册于按钮行之下, 列表高度随之自动收缩;
+    -- 双模式取两者提示行数的较大值 (说明文字按 spawnMode 二选一绘制)
     local hintLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_Hint"), innerW);
     local warnLinesF = EtherTheme.wrapHint(getTranslate("UI_FishSpawn_TraceWarn"), innerW);
-    local notesH = (#hintLinesF + #warnLinesF) * EtherTheme.fontHgtHint + GAP * 2;
+    local hintLinesC = EtherTheme.wrapHint(getTranslate("UI_CorpseSpawn_Hint"), innerW);
+    -- 尸体生成无红字警告 (2026-09-05 用户决策): corpse +1 行与正常拾取/搬运尸体物品
+    -- 同形同频, 单行/频次均不可区分, 配对分析属理论取证手段, 不值得 UI 级警示
+    local hintLinesD = EtherTheme.wrapHint(getTranslate("UI_TakeSpawn_Hint"), innerW);
+    -- 尸体生成也加红字留痕警告 (一百四十五 用户: 与钓竿生成同规格)
+    local warnLinesC = EtherTheme.wrapHint(getTranslate("UI_CorpseSpawn_TraceWarn"), innerW);
+    local notesH = math.max(#hintLinesF + #warnLinesF,
+        math.max(#hintLinesC + #warnLinesC, #hintLinesD))
+        * EtherTheme.fontHgtHint + GAP * 2;
     local bottomY = g3y + g3h - IP - ctrlH - notesH;
     local spawnTitle = getTranslate("UI_FishSpawn_Button");
     local spawnW = UIButton.measureWidth(spawnTitle);
@@ -441,30 +544,69 @@ function EtherLootRollPanel:createChildren()
         end
         local item = self.datas.items[sel].item;
         if item == nil then return end
-        if not isMultiplayer() then
-            print("[FishSpawn] multiplayer only (use your own dedicated server)")
-            return
+        if self.spawnMode == "corpse" then
+            -- 尸体生成: 预填最近僵尸背包, 击杀后搜尸取物
+            local count = tonumber(self.countBox:getInternalText()) or 1;
+            EtherCorpseSpawn.trigger(item:getFullName(), count);
+        elseif self.spawnMode == "take" then
+            -- 计时生成: 原版 ISTakeBricks 动作 (服务端校验 → 完成时 AddItems + 上行 = 真物品)
+            local count = tonumber(self.countBox:getInternalText()) or 1;
+            EtherTakeSpawn.trigger(item:getFullName(), count, EtherTakeSpawn.accelerate);
+        else
+            if not isMultiplayer() then
+                print("[FishSpawn] multiplayer only (use your own dedicated server)")
+                return
+            end
+            EtherFishSpawn.trigger(item:getFullName());
         end
-        EtherFishSpawn.trigger(item:getFullName());
     end, spawnW)
     self.spawnBtn:initialise();
     self.spawnBtn:instantiate();
     self.spawnBtn.isOnlyInGame = true;
     self:addChild(self.spawnBtn);
 
-    -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册)
-    local y0 = bottomY + ctrlH + GAP;
-    for i = 1, #hintLinesF do
-        self:_text(innerX, y0 + (i - 1) * EtherTheme.fontHgtHint, hintLinesF[i], EtherTheme.textDim, nil, true);
+    -- 加速开关 (一百三十一): 位置固定, 仅"计时生成"模式可见 (其余模式 setVisible(false),
+    -- 不参与布局)。开着 = 减短客户端动作时长 + 服务端侧加速件 (Hand_L pain NaN 上行);
+    -- 关着 = 原版时长 (数量 1 也要约 10 秒)。
+    local accelW = math.floor((innerX + innerW - (innerX + spawnW + GAP * 2)) * 0.45);
+    if accelW < 90 then accelW = 90; end
+    self.accelBtn = UIButton:new(innerX + spawnW + GAP * 2, bottomY, accelW, ctrlH,
+        getTranslate("UI_TakeSpawn_Accel"),
+    function()
+        EtherTakeSpawn.accelerate = not EtherTakeSpawn.accelerate;
+        self:updateAccelBtnText();
+    end, accelW)
+    self.accelBtn:initialise();
+    self.accelBtn:instantiate();
+    self.accelBtn.isOnlyInGame = true;
+    self.accelBtn:setVisible(false);
+    self:addChild(self.accelBtn);
+
+    -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册; 双模式各注册一份,
+    -- 绘制时按 spawnMode 二选一 —— modeTexts 条目带 mode 字段, prerender 过滤)
+    self.modeTexts = {};
+    local function regModeText(lines, col, mode)
+        -- 每组从该模式说明区的当前累加行开始 (hint 完接着画 warn, 不重叠)
+        local y0 = bottomY + ctrlH + GAP;
+        for _, t in ipairs(self.modeTexts) do
+            if t.mode == mode then
+                y0 = math.max(y0, t.y + EtherTheme.fontHgtHint);
+            end
+        end
+        for i = 1, #lines do
+            table.insert(self.modeTexts, { x = innerX, y = y0 + (i - 1) * EtherTheme.fontHgtHint,
+                text = lines[i], col = col, mode = mode });
+        end
     end
-    y0 = y0 + #hintLinesF * EtherTheme.fontHgtHint;
-    for i = 1, #warnLinesF do
-        self:_text(innerX, y0 + (i - 1) * EtherTheme.fontHgtHint, warnLinesF[i], EtherTheme.statusRed, nil, true);
-    end
+    regModeText(hintLinesF, EtherTheme.textDim, "fish");
+    regModeText(warnLinesF, EtherTheme.statusRed, "fish");
+    regModeText(hintLinesC, EtherTheme.textDim, "corpse");
+    regModeText(warnLinesC, EtherTheme.statusRed, "corpse");
+    regModeText(hintLinesD, EtherTheme.textDim, "take");
 
     -- 状态文字区域 (生成按钮右侧): 只显示动态状态消息 (生成中/已生成/失败),
     -- 空闲时留空 —— 使用提示已改为底部静态注册, 不再在此兜底
-    self.statusX = innerX + spawnW + GAP * 2;
+    self.statusX = innerX + spawnW + GAP * 2 + accelW + GAP * 2;
     self.statusY = bottomY + labelDY;
     self.statusW = (innerX + innerW) - self.statusX;
     if self.statusW < 60 then self.statusW = 60; end

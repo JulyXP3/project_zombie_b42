@@ -3,7 +3,7 @@ package modcore.utils;
 import se.krka.kahlua.integration.annotations.LuaMethod;
 
 /**
- * A1 (2026-09-13, 见 analysis/DLL分析/A-隐蔽性工程件-设计方案(待实施).md):
+ * A1 (2026-09-13, 见 analysis/DLL分析/A-隐蔽性加固-设计方案(待实施).md):
  * 统一发包限速器 —— 滑动窗口, 3 条独立通道, 语义照 ContainerJobs(sent[3][300], 1.001s 窗口)。
  *
  * 目的: 批量功能(陷阱生成 / 弹药农场 / 重掷 / 未来的整理)在短时间内的发包量可能远超

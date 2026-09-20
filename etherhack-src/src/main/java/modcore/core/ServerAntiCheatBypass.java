@@ -318,7 +318,7 @@ public class ServerAntiCheatBypass {
     }
 
     /**
-     * E1 修订 (2026-09-14, analysis/DLL分析/E-信息层-设计方案.md): 隐身玩家本地剪枝豁免。
+     * E1 修订 (2026-09-14, analysis/DLL分析/E-信息层-设计方案(E1-E3已实施-E4不做).md): 隐身玩家本地剪枝豁免。
      *
      * 原版 GameClient.timeoutRemotePlayers() 对"超过 5 秒未收到更新"的远端玩家执行
      * receivePlayerTimeout (从世界/名单/远端表彻底移除)。隐身管理员的移动同步被服务端

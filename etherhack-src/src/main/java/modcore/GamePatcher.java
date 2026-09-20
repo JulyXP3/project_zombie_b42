@@ -1461,8 +1461,28 @@ public class GamePatcher {
         this.patchCharacterCreationBoost();
          this.patchApplyTraitsSP();
         this.patchFullbright();
-        // 自动驾驶: 唯一补丁点 CarController.updateControls 门控 (drive/CarControllerPatch)
-        modcore.drive.CarControllerPatch.install();
+        // 无限负重: 根背包容量重写 (core/RootCapacityPatch; 一百一十七 参考 PienZ
+        // RootInventoryCapacity 的零包方案, 替代原 20Hz PlayerDamagePacket 重发)
+        modcore.core.RootCapacityPatch.install();
+        // 一百三十三 (借鉴 PienZ RootInventoryCapacity 的 UI 遮蔽, 做成读取点版):
+        // HEAVY_LOAD 档位读取点归零 —— 图标不出现 + 背负过重扣血分支永不成立 (与
+        // 分子清零构成双保险), 详见 CarryMoodlePatch 文件头
+        modcore.core.CarryMoodlePatch.install();
+        // 一百三十九 (用户实测「图标闪一下」驱动): 无限耐力的读取点归零 —— 与负重同一套解法,
+        // 让 moodle/冲刺判定一律看到满耐力, 不再与游戏每帧扣减赛跑 (见该类文件头)
+        modcore.core.EnduranceStatPatch.install();
+        // 注 (一百二十三): 一百二十二 在此加的 CarryWeightPatch 已删除 —— 它要做的
+        // "重量读取点清零" 早就存在于 patchItemContainer() 里 (getCapacityWeight /
+        // getContentsWeight 头部注入, 见本文件前半段), 属重复安装 (实测安装日志出现
+        // "Skip injection (already marked @Injected)")。用户裁定: 无限负重回到 e74ac21b
+        // (一百一十七) 的形态 = 本地踩值 + RootCapacityPatch + 既有清零注入 + 低频重发。
+        // 注 (一百二十七): 一百一十八 移植的"早发 Login"(core/EarlyLoginHook, 配置 k74) 已删除 ——
+        // 一百二十六 实测实锤它对 Steam 层 banid 封禁无效 (拒绝发生在 Steam 认证阶段, RakNet 连接
+        // 从未建立 → 注入的 UdpEngine.connected() 头部钩子按构造不可能执行), 用户裁定删除。
+        // 结论与证据链留档: analysis/服务器类目/早发Login-绕过SteamID封禁-试验移植(已证否-功能已删除).md
+        // 自动驾驶: 唯一补丁点 BaseVehicle.updateControls 门控 (drive/VehicleControlsPatch;
+        // 一百一十二上移 — 旧 CarController 头部在原版 isBlockMovement 门下游, 大地图开着时钩子不被调用)
+        modcore.drive.VehicleControlsPatch.install();
         // 伪·自动驾驶: 世界碰撞豁免 IsoChunk.calcPhysics 过滤 (drive/BulletNoClipPatch)
         modcore.drive.BulletNoClipPatch.install();
         Patch.saveModifiedClasses();

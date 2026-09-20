@@ -42,6 +42,9 @@ public class LuaBridge {
         // L3: fileless 加载, 不走 RunLua/虚拟 FS — getLoadedLua 枚举不到
         LuaLoader.load("modcore/lua/fixes/ISChatFix.lua");
         LuaLoader.load("modcore/lua/fixes/ServerSyncBlocker.lua");
+        // 一百一十六: ExtraInfo 捎带屏蔽 (包原版 Lua 全局 sendPlayerExtraInfo, 发送前
+        // 暂摘我方作弊位 — 依赖 cheatMaskSuspend/Restore 两个 Java 全局, 缺失自动跳过)
+        LuaLoader.load("modcore/lua/fixes/ExtraInfoMask.lua");
         // 主入口: 内部 etherModules 列表经 loadModuleScript 全走 LuaLoader
         LuaLoader.load("modcore/lua/modcoreMenu.lua");
         env.rawset(ENV_MARKER, Boolean.TRUE);

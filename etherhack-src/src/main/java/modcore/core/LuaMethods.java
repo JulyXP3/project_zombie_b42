@@ -124,6 +124,102 @@ public class LuaMethods {
         }
     }
 
+    /** ExtraInfo 捎带屏蔽的作弊位清单 (一百一十六 "全家"): 顺序即快照位序。 */
+    private static final String[] EXTRA_INFO_MASK_CHEATS = {
+            "ZOMBIES_DONT_ATTACK", "INVISIBLE", "NO_CLIP", "GOD_MODE",
+            "TIMED_ACTION_INSTANT", "UNLIMITED_ENDURANCE",
+    };
+
+    /**
+     * 一百一十六 "全家" 屏蔽 (用户裁定): 原版载具机械界面作弊开关 / 建造控件 / 管理面板
+     * 会调 Lua 全局 sendPlayerExtraInfo 把**全部**作弊位打包上报; 服务端
+     * ExtraInfoPacket.processServer 逐位查能力位, 无能力位且位为真 → AntiCheat.Capability
+     * 记录 (userlog + 计数踢/禁)。我方 6 个本地作弊位会随包暴露 —— Lua 包装器在调原版前
+     * 先摘除, 发送后按快照回写。
+     * 返回快照位掩码 (bit i = 第 i 位摘除前是否在集合中); 摘除失败返回 0。
+     */
+    @LuaMethod(name = "cheatMaskSuspend", global = true)
+    public static int cheatMaskSuspend() {
+        int mask = 0;
+        try {
+            Set enumSet = cheatEnumSetOf(IsoPlayer.getInstance());
+            if (enumSet == null) {
+                return 0;
+            }
+            Method valueOfMethod = cheatTypeValueOf();
+            for (int i = 0; i < EXTRA_INFO_MASK_CHEATS.length; ++i) {
+                Object cheatType = valueOfMethod.invoke(null, EXTRA_INFO_MASK_CHEATS[i]);
+                if (cheatType != null && enumSet.contains(cheatType)) {
+                    mask |= 1 << i;
+                    enumSet.remove(cheatType);
+                }
+            }
+        }
+        catch (Exception e) {
+            Logger.printLog("cheatMaskSuspend failed: " + e.getMessage());
+        }
+        return mask;
+    }
+
+    /** 回写 cheatMaskSuspend 的快照 (只写自己动过的位; 工程纪律 4 回滚纪律)。 */
+    @LuaMethod(name = "cheatMaskRestore", global = true)
+    public static void cheatMaskRestore(int mask) {
+        try {
+            Set enumSet = cheatEnumSetOf(IsoPlayer.getInstance());
+            if (enumSet == null) {
+                return;
+            }
+            Method valueOfMethod = cheatTypeValueOf();
+            for (int i = 0; i < EXTRA_INFO_MASK_CHEATS.length; ++i) {
+                Object cheatType = valueOfMethod.invoke(null, EXTRA_INFO_MASK_CHEATS[i]);
+                if (cheatType == null) {
+                    continue;
+                }
+                if ((mask & (1 << i)) != 0) {
+                    enumSet.add(cheatType);
+                } else {
+                    enumSet.remove(cheatType);
+                }
+            }
+        }
+        catch (Exception e) {
+            Logger.printLog("cheatMaskRestore failed: " + e.getMessage());
+        }
+    }
+
+    /** 取玩家 cheats EnumSet (反射, 与 setPlayerCheat 同路径); 失败返回 null。 */
+    private static Set cheatEnumSetOf(IsoPlayer player) {
+        try {
+            if (player == null) {
+                return null;
+            }
+            Field cheatsField = FieldCache.getField(player.getClass(), "cheats");
+            if (cheatsField == null) {
+                return null;
+            }
+            Object playerCheats = FieldCache.getFieldValue(player, cheatsField);
+            if (playerCheats == null) {
+                return null;
+            }
+            Class<?> playerCheatsClass = Class.forName("zombie.characters.PlayerCheats");
+            Field enumSetField = FieldCache.getField(playerCheatsClass, "cheats");
+            if (enumSetField == null) {
+                return null;
+            }
+            Object enumSetObj = FieldCache.getFieldValue(playerCheats, enumSetField);
+            return enumSetObj instanceof Set ? (Set) enumSetObj : null;
+        }
+        catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** CheatType.valueOf 方法 (每调用现取, 开销可忽略)。 */
+    private static Method cheatTypeValueOf() throws Exception {
+        Class<?> cheatTypeClass = Class.forName("zombie.characters.CheatType");
+        return cheatTypeClass.getMethod("valueOf", String.class);
+    }
+
     @LuaMethod(name="getZombieUIColor", global=true)
     public static Color getZombieUIColor() {
         return CoreMain.getInstance().CoreAPI.zombiesUIColor;
@@ -478,10 +574,14 @@ public class LuaMethods {
     public static void toggleZombieDontAttack(boolean var0) {
         CoreMain.getInstance().CoreAPI.isZombieDontAttack = var0;
         saveConfig("startup");
-        IsoPlayer player = IsoPlayer.getInstance();
-        if (player != null) {
-            LuaMethods.setPlayerCheat(player, "ZOMBIES_DONT_ATTACK", var0);
-        }
+        // 一百二十: **不再写玩家作弊位** (无标志实现) — 本地反作弊框架 (如 KWRR_Security)
+        // 是读本地玩家对象自查 (player:isZombiesDontAttack()) 并上报的, 包级屏蔽对它无效;
+        // 本功能的效果已由三处 IsoZombie 注入 (setTarget/spotted/getShouldAttack, 见
+        // GamePatcher.patchZombieSetTarget 等) 独立承载, 作弊位纯冗余 → 删除后本地读取恒 false。
+        // 此即 PienZ 僵尸不攻击"零日志"的真正原因 (他用 SystemDisabler 静态字段, 从不碰玩家标志)。
+        // 其它 5 个标志 (隐身/穿墙/无敌/秒动作/无限体力) 的游戏效果依赖标志本身, 无法同法去除,
+        // 在 KWRR 框架下仍可被本地上报 (留档见 analysis/服务器类目/KWRR安全mod-分析与无标志对抗(已实施-本地自查篇并入).md)。
+        Logger.printLog("[ZDA] toggled " + var0 + " (flag-free; injections carry the effect)");
     }
 
     @LuaMethod(name="isEnableNoclip", global=true)
@@ -845,10 +945,10 @@ public class LuaMethods {
     public static void toggleUnlimitedCondition(boolean var0) {
         CoreMain.getInstance().CoreAPI.isUnlimitedCondition = var0;
         saveConfig("startup");
-        IsoPlayer player = IsoPlayer.getInstance();
-        if (player != null) {
-            LuaMethods.setPlayerCheat(player, "UNLIMITED_ENDURANCE", var0);
-        }
+        // 一百二十一 无标志化: 不再写 UNLIMITED_ENDURANCE 作弊位 (KWRR_Security 本地自查项,
+        // 见 analysis/服务器类目/KWRR安全mod-分析与无标志对抗(已实施-本地自查篇并入).md); 效果由 CoreAPI 每帧
+        // 本地踩满耐力承载 (与拉伤/回血同族 stomp 模式)。
+        Logger.printLog("[Condition] toggled " + var0 + " (flag-free; local endurance stomp)");
     }
 
     @LuaMethod(name="isVisualEnable360Vision", global=true)

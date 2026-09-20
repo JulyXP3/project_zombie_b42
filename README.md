@@ -106,11 +106,11 @@ Requirements: **JDK 25** and **Gradle 9.1.0**. The build runs through the includ
 
 1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, renamed to `zombie.jar` (it is only read at compile time and never modified).
 2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-3. Take `modcore-3.2.4-B42.jar` from the `build` directory.
-4. Copy the jar together with `etherhack-src/install.bat` into the **game root directory**.
+3. Take `modcore-3.2.5-B42.jar` from the `build` directory.
+4. Copy the jar together with `etherhack-src/install.bat` (and optionally `etherhack-src/uninstall.bat`) into the **game root directory**.
 5. Run `install.bat` to install the mod.
 
-The installer deletes the jar automatically after a successful install. Keep `install.bat`: run it again later (with **no** `modcore-*.jar` in the folder) to uninstall completely. Never delete `projectzomboid.jar` — that is the game itself.
+The installer deletes the jar automatically after a successful install. To uninstall: either run `install.bat` again later (with **no** `modcore-*.jar` in the folder - the merged script switches to uninstall mode), or run the standalone `uninstall.bat` (works at any time, whether or not the jar is present). Both remove the injected `zombie\` folder, the unpacked `modcore\` folder and `%USERPROFILE%\Zomboid\modcore.bin`, and never touch the game itself. Never delete `projectzomboid.jar` - that is the game itself.
 
 In-game: press **Insert** to open the EtherHack panel.
 
@@ -123,7 +123,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/modcore-3.2.4-B42.jar`. The build embeds the Lua sources from `src/main/resources/modcore/lua/`.
+The output jar is at `etherhack-src/build/modcore-3.2.5-B42.jar`. The build embeds the Lua sources from `src/main/resources/modcore/lua/`.
 
 ## Testing
 
@@ -141,8 +141,8 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/modcore-3.2.4-B42.jar` | Ready-to-use build (current release) |
-| `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat`) |
+| `etherhack-src/build/modcore-3.2.5-B42.jar` | Ready-to-use build (current release) |
+| `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `analysis/` | Reverse-engineering evidence and design docs (`analysis/**/*.md` is tracked; decompiled sources stay local only) |
 

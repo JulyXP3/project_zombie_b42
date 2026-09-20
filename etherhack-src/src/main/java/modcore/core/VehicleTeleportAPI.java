@@ -13,7 +13,7 @@ import zombie.vehicles.BaseVehicle;
 import zombie.vehicles.VehicleManager;
 
 /**
- * C3 传送原语 (2026-09-14 九十一 探针, 九十四 v3 加固; 见 analysis/DLL分析/C-传送与载具-设计方案.md §C3):
+ * C3 传送原语 (2026-09-14 九十一 探针, 九十四 v3 加固; 见 analysis/DLL分析/C-传送与载具-设计方案(C1-C3已实施).md §C3):
  * 载具原生体随动 —— 探针读数 / 目的地判定 / 跳步 / 落位校验 / 回滚。
  *
  * 依据 (取证):

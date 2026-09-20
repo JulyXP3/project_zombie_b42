@@ -28,6 +28,7 @@
 package modcore.core;
 
 import modcore.core.ChatAPI;
+import modcore.core.CorpseSpawnAPI;
 import modcore.core.LuaMethods;
 import modcore.core.CoreMain;
 import modcore.core.RadioXpAPI;
@@ -48,7 +49,6 @@ import modcore.utils.WorldRef;
 import modcore.core.VehicleSeatAPI;
 import modcore.core.MousePickAPI;
 import modcore.core.TimedActionReceipt;
-import modcore.core.OnlinePlayersAPI;
 import modcore.utils.Rendering;
 import modcore.utils.VehicleUtils;
 import modcore.utils.ZombieUtils;
@@ -193,6 +193,7 @@ public class CoreAPI {
     }
     public boolean isVehicleInstantStart;
     public boolean isFullbright;
+    /** 试验性 (一百一十八): 早发 Login (移植 PienZ FastLogin 思路; 默认关, 用配置文件开启)。 */
     private boolean fullbrightApplied;
     private int fullbrightSavedViewConeOpacity = 3;
 
@@ -217,7 +218,7 @@ public class CoreAPI {
     }
 
     /*
-     * A3 (2026-09-13, analysis/DLL分析/A-隐蔽性工程件-设计方案(待实施).md):
+     * A3 (2026-09-13, analysis/DLL分析/A-隐蔽性加固-设计方案(待实施).md):
      * 配置键名中性化 —— 落盘的 .properties 里不再出现任何"自证词"键名
      * (旧键名如 GodMode/Noclip/AlwaysHit 直接可读)。语义键 → 中性码,
      * 存盘前正映射、读盘后逆映射, 旧配置文件无需手工迁移: 旧键在首次读入后
@@ -553,11 +554,13 @@ public class CoreAPI {
         this.exposer.exposeServerSyncBlocker();
             this.exposer.exposeFishingSpawn();
             this.exposer.exposeTrapSpawn();
+            this.exposer.exposeCorpseSpawn();
+            // 一百三十一 计时动作真实生成 (ISTakeBricks 真物品路线, 移植 PienZ item_spawner)
+            this.exposer.exposeTakeSpawn();
             this.exposer.exposeRadioXp();
             this.exposer.exposeRateLimiter();
             this.exposer.exposeWorldRef();
             this.exposer.exposeVehicleSeat();
-                this.exposer.exposeOnlinePlayers();
             // E2 (2026-09-14 八十八): 渲染层拾取 (pickObjectAt/pickObjectInfoAt)
             this.exposer.exposeMousePick();
             // A2 (2026-09-14 八十九): 原版计时动作精确回执 (timedActionState)
@@ -831,15 +834,28 @@ public class CoreAPI {
         }
         // 一包三用 (负重/拉伤/回血): PlayerDamagePacket 服务端 parse 零校验直采
         // 客户端自报的 maxWeight/BodyDamage, 但服务端每帧 UpdateStrength 会重算
-        // 覆盖 —— 本地踩值 + 每 50ms 重发一次 (20/s 压制 last-writer-wins; 该包
-        // anticheats=None, 限流默认 300/s 且超限仅告警)。
+        // 覆盖 —— 本地踩值 + **低频重发**压制 last-writer-wins。
+        // 一百一十七 (参考 PienZ 的 carry_weight 设计): 重发从 50ms (20/s) 降到
+        // 1000ms (1/s) —— 无限负重的本地效果 100% 由 RootCapacityPatch (根背包容量
+        // 重写, 零包) + 下方本地踩值承担; 重发只作低频兜底同步, 消除 20Hz 网络噪声
+        // (限流告警/日志面)。该包 anticheats=None, 限流默认 300/s 且超限仅告警。
         // 注: 原「无尸病」已移除 —— corpseSicknessRate 仅驱动 NOXIOUS_SMELL moodle
         // 档位 (Moodle:458), UpdateIllness 每帧按尸体数重算 rate 并直加
         // CharacterStat.FOOD_SICKNESS, 从不读该字段, 清零只遮指示器不挡病情。
-        if (this.isUnlimitedCarry || this.isNoMuscleStrain || this.isFullBodyRestore) {
+        // 一百三十一 计时生成加速件收尾 (未武装时立即返回, 零开销; 常驻以防中途断线残留 NaN)
+        TakeSpawnAPI.tick();
+        if (this.isUnlimitedCarry || this.isNoMuscleStrain || this.isFullBodyRestore
+                || this.isUnlimitedCondition || this.isUnlimitedEndurance) {
+            // 一百二十二 (掉血根治, 用户实测驱动): 机制 = 稳定版 (git 仓库, 用户实测不掉血的
+            // 那版) 原样 —— **分子侧清零** (GamePatcher 的 getCapacityWeight/getContentsWeight
+            // 头部注入在开关开时直接 return 0.0f) **+ 下方本地踩值 (maxWeight)**。
+            // 教训: 一百一十七 的"根背包容量重写"与 一百二十一 的"getMaxWeight 读取点重写"
+            // 都是分母侧改写, 而分子清零本来一直在 → 掉血与这两者无关 (当时误判, 已回退);
+            // 掉血的真实来源仍待定案, 见 analysis/服务器类目 的留档。
             if (this.isUnlimitedCarry && var1.getMaxWeight() < 10000) {
                 var1.setMaxWeight(10000);
             }
+            // 无限耐力 stomp 已统一到 onTickUpdate (一百三十五 去重: 本处原为重复实现)
             if (this.isNoMuscleStrain || this.isFullBodyRestore) {
                 ArrayList<BodyPart> bodyParts = var1.getBodyDamage().getBodyParts();
                 for (int bodyIndex = 0; bodyIndex < bodyParts.size(); ++bodyIndex) {
@@ -853,7 +869,12 @@ public class CoreAPI {
                 }
             }
             long nowMs = System.currentTimeMillis();
-            if (GameClient.client && nowMs - this.lastPlayerDamageSendMs >= 50L) {
+            // 一百二十 (用户实测反馈): 拉伤/回血依赖高频压制服务端重算 —— 服务端会把自己的
+            // 玩家副本 (UpdateStrength/体伤) 推回客户端, 1s 节流期间会被回滚 (实测可见)。
+            // 语义拆分: 拉伤/回血在开 → 恢复 50ms (20/s); 仅负重 → 1000ms 低频兜底
+            // (负重效果已由 RootCapacityPatch 零包承载, 低频只为服务端副本一致性)。
+            long interval = (this.isNoMuscleStrain || this.isFullBodyRestore) ? 50L : 1000L;
+            if (GameClient.client && nowMs - this.lastPlayerDamageSendMs >= interval) {
                 this.lastPlayerDamageSendMs = nowMs;
                 GameClient.sendPlayerDamage(var1);
             }
@@ -1262,7 +1283,9 @@ public class CoreAPI {
             if (player == null || player.isDead()) {
                 return;
             }
-            if (this.isUnlimitedEndurance) {
+            // 一百三十五 去重: 无限耐力原只有这一处 stomp (旧实现), 一百二十一 又加了一处 →
+            // 现合并为本处唯一实现, 门控含 isUnlimitedCondition (旧配置兼容)
+            if (this.isUnlimitedEndurance || this.isUnlimitedCondition) {
                 player.getStats().set(CharacterStat.ENDURANCE, 1.0f);
             }
             if (this.isDisableFatigue) {
@@ -1397,6 +1420,32 @@ public class CoreAPI {
             }
         }
 
+        public void exposeCorpseSpawn() {
+            for (Method method : CorpseSpawnAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, CorpseSpawnAPI.class, method, name);
+                Logger.printLog("Exposed CorpseSpawnAPI method: " + name);
+            }
+        }
+
+        public void exposeTakeSpawn() {
+            for (Method method : TakeSpawnAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, TakeSpawnAPI.class, method, name);
+                Logger.printLog("Exposed TakeSpawnAPI method: " + name);
+            }
+        }
+
         public void exposeRadioXp() {
             for (Method method : RadioXpAPI.class.getMethods()) {
                 if (!method.isAnnotationPresent(LuaMethod.class)) continue;
@@ -1449,19 +1498,6 @@ public class CoreAPI {
             }
         }
 
-        public void exposeOnlinePlayers() {
-            for (Method method : OnlinePlayersAPI.class.getMethods()) {
-                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
-                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
-                String name = annotation.name();
-                if (name == null || name.isEmpty()) {
-                    name = method.getName();
-                }
-                this.exposeGlobalClassFunction(LuaManager.env, OnlinePlayersAPI.class, method, name);
-                Logger.printLog("Exposed OnlinePlayersAPI method: " + name);
-            }
-        }
-
         /** A2 (八十九): TimedActionReceipt 的 @LuaMethod(global=true) 全量暴露 */
         public void exposeTimedActionReceipt() {
             for (Method method : TimedActionReceipt.class.getMethods()) {
@@ -1492,7 +1528,7 @@ public class CoreAPI {
 
         /**
          * E2 (2026-09-14 八十八): MousePickAPI 的 @LuaMethod(global=true) 全量暴露
-         * (与 exposeOnlinePlayers 同款反射循环; 必须在 loadAPI 的 PrivateGlobals 捕获窗内调用)。
+         * (反射循环与 exposeTimedActionReceipt 同款; 必须在 loadAPI 的 PrivateGlobals 捕获窗内调用)。
          */
         public void exposeMousePick() {
             for (Method method : MousePickAPI.class.getMethods()) {

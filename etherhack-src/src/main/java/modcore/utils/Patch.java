@@ -124,6 +124,25 @@ public class Patch {
      */
     public static void injectIntoClass(String className, String methodName, boolean isStatic,
                                        ShapeGuard guard, Consumer<MethodNode> injector) {
+        injectIntoClass(className, methodName, isStatic, guard, injector, null, null);
+    }
+
+    /**
+     * 一百三十三 加固 (借鉴 PienZ 的 ReadBack 校验 + 半装检测; 见
+     * analysis/DLL分析/I-PienZ源码可借鉴项-清单与排期(部分已实施).md 二.4/二.5):
+     *
+     * ④ **ReadBack (注入后回读)**: 传 {@code hookOwner/hookName} 时, 注入完必须能在方法里
+     *    找到那条 INVOKESTATIC, 找不到即抛错 —— 光靠"注入器跑过了"不足以证明钩子真的进了
+     *    字节码 (旧的失败模式: 注入器内部早退/条件写岔, 日志照样打印成功)。
+     * ⑤ **半装检测**: 方法已带 @Injected 标记但**钩子调用不在** = 上一轮只装了一半
+     *    (旧实现在这种情况下静默 skip, 功能静默缺失)。此时抛 IllegalStateException,
+     *    让安装器把该类计入硬失败, 而不是装作成功。
+     *
+     * {@code hookOwner/hookName} 为 null 时行为与旧版一致 (向后兼容既有 30+ 处调用)。
+     */
+    public static void injectIntoClass(String className, String methodName, boolean isStatic,
+                                       ShapeGuard guard, Consumer<MethodNode> injector,
+                                       String hookOwner, String hookName) {
         Logger.print("Injection into a game file '" + className + "' in method: '" + methodName + "'");
         ClassNode classNode = classNodeMap.computeIfAbsent(className, Patch::loadClassNode);
         if (classNode == null) {
@@ -135,6 +154,14 @@ public class Patch {
             matched = true;
             // 幂等 (H1): 同一会话对同一方法重复注入时跳过, 避免钩子叠加
             if (Patch.hasInjectedAnnotation(methodNode)) {
+                // 半装检测 (一百三十三): 标记在 = 上一轮声称装过, 但钩子调用不在 →
+                // 那类补丁是坏的, 必须报硬失败而不是静默跳过 (旧实现就是静默跳过)
+                if (hookOwner != null && !Patch.hasHookCall(methodNode, hookOwner, hookName)) {
+                    Patch.failedClasses.add(className);
+                    throw new IllegalStateException("Half-installed patch detected: " + className + "#"
+                            + methodName + " is marked @Injected but the hook call "
+                            + hookOwner + "." + hookName + " is missing (stale/partial transformation)");
+                }
                 Logger.printLog("Skip injection (already marked @Injected): " + className + "#" + methodName);
                 continue;
             }
@@ -149,6 +176,12 @@ public class Patch {
                 }
             }
             injector.accept(methodNode);
+            // ReadBack (一百三十三): 注入器跑过 ≠ 钩子进了字节码, 回读确认
+            if (hookOwner != null && !Patch.hasHookCall(methodNode, hookOwner, hookName)) {
+                Patch.failedClasses.add(className);
+                throw new IllegalStateException("Post-injection read-back failed: " + className + "#" + methodName
+                        + " does not contain the expected hook call " + hookOwner + "." + hookName);
+            }
             Patch.addInjectAnnotation(classNode, methodName);
         }
         if (!matched) {
@@ -340,6 +373,25 @@ public class Patch {
         }
         return method.visibleAnnotations.stream().anyMatch(anno -> anno.desc.equals("Lmodcore/annotations/Injected;"));
     }
+
+    /**
+     * ReadBack 辅助 (一百三十三): 方法字节码里是否存在 owner.name 的 INVOKESTATIC 调用。
+     * 用于"注入后回读"与"半装检测"—— 光看注入器有没有跑过不算数。
+     */
+    private static boolean hasHookCall(MethodNode method, String owner, String name) {
+        if (method.instructions == null) {
+            return false;
+        }
+        for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+            if (!(insn instanceof org.objectweb.asm.tree.MethodInsnNode)) continue;
+            org.objectweb.asm.tree.MethodInsnNode call = (org.objectweb.asm.tree.MethodInsnNode) insn;
+            if (call.getOpcode() == 184 && call.owner.equals(owner) && call.name.equals(name)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
 
     public static void saveModifiedClasses() {
         // C (2026-09-14 八十二): 遍历副本 —— 失败项会在循环里从 classNodeMap 剔除

@@ -106,11 +106,11 @@
 
 1. 准备编译依赖: 将游戏根目录下的 `projectzomboid.jar` 复制到 `etherhack-src/lib/` 目录下, 并改名为 `zombie.jar`(该文件仅用于编译, 不会被修改)。
 2. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
-3. 从 `build` 目录中拿到 `modcore-3.2.4-B42.jar`。
-4. 将 jar 和 `etherhack-src/install.bat` 一起复制到游戏根目录。
+3. 从 `build` 目录中拿到 `modcore-3.2.5-B42.jar`。
+4. 将 jar 和 `etherhack-src/install.bat`(以及可选的 `etherhack-src/uninstall.bat`)一起复制到游戏根目录。
 5. 运行 `install.bat` 完成安装。
 
-安装成功后会**自动删除 jar**。保留 `install.bat`：以后目录里**没有** `modcore-*.jar` 时再运行它，即为完整卸载。切勿删除 `projectzomboid.jar`——那是游戏本体。
+安装成功后会**自动删除 jar**。卸载有两种方式：① 目录里**没有** `modcore-*.jar` 时再运行 `install.bat`(合并脚本会自动进入卸载模式)；② 直接运行 `uninstall.bat`(独立卸载脚本, 随时可用, 与 jar 是否在目录里无关)。两者都会删掉注入的 `zombie\`、`modcore\` 与 `%USERPROFILE%\Zomboid\modcore.bin`, 不会碰游戏本体。切勿删除 `projectzomboid.jar`——那是游戏本体。
 
 游戏中按 **Insert** 打开 EtherHack 面板。
 
@@ -123,7 +123,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-产物在 `etherhack-src/build/modcore-3.2.4-B42.jar`。Lua 源码嵌入在 `src/main/resources/modcore/lua/` 中, 构建时自动打包。
+产物在 `etherhack-src/build/modcore-3.2.5-B42.jar`。Lua 源码嵌入在 `src/main/resources/modcore/lua/` 中, 构建时自动打包。
 
 ## 测试
 
@@ -141,8 +141,8 @@ temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main
 
 | 路径 | 说明 |
 |---|---|
-| `etherhack-src/build/modcore-3.2.4-B42.jar` | 可直接使用的构建产物(当前版本) |
-| `etherhack-src/` | 完整源码 (Gradle 工程, 含 `build.bat` / `install.bat`) |
+| `etherhack-src/build/modcore-3.2.5-B42.jar` | 可直接使用的构建产物(当前版本) |
+| `etherhack-src/` | 完整源码 (Gradle 工程, 含 `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua 冒烟测试 + Kahlua 兼容性检查脚本 |
 | `analysis/` | 反编译取证与设计文档 (`analysis/**/*.md` 入库, 反编译产物仅存本地) |
 

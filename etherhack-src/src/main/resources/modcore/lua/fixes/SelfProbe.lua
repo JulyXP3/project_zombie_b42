@@ -130,7 +130,6 @@ end
 --*********************************************************
 local OUR_APIS = {
     { "E2-pick",    function() return type(pickObjectAt) == "function" and type(pickObjectInfoAt) == "function" and EtherPick ~= nil end },
-    { "E3-online",  function() return type(onlinePlayersInfo) == "function" and type(onlinePlayersChanged) == "function" end },
     { "A1-rate",    function() return type(rateLimited) == "function" and type(rateLimiterRemaining) == "function" end },
     { "D4-ref",     function() return type(refIsValidContainer) == "function" and type(refIsValidObject) == "function" end },
     { "C1-seat",    function() return type(vehicleSeatInfo) == "function" and type(vehicleEnterSeat) == "function" end },

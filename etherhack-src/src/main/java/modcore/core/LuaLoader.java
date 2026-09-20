@@ -178,7 +178,7 @@ public final class LuaLoader {
                     "EtherRadarPanel", "EtherTrapSpawn", "EtherCharacterBoostPanel",
                     "EtherKeyBindsPanel", "EtherKeyBinds", "EtherFormPanel", "EtherTheme",
                     "EtherI18n", "EtherItemSearch", "EtherTrapPOC", "EtherFishSpawn",
-                    "EtherRadioXp", "EtherExchange", "EtherAmmoFarm",
+                    "EtherCorpseSpawn", "EtherRadioXp", "EtherExchange", "EtherAmmoFarm",
                     "EtherTempWeapon", "EtherContainerPOC", "EtherDriveModule",
                     "EtherDriveModule_addTo", "EtherDriveCombatModule",
                     "EtherDriveCombatModule_addTo", "EtherCharacterCreation", "EtherCharacterPane"
