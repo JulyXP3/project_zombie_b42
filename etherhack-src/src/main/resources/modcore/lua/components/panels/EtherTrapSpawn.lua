@@ -217,9 +217,9 @@ function EtherTrapSpawn:createChildren()
     local slW = math.max(tm:MeasureStringX(UIFont.Small, searchFoodText), tm:MeasureStringX(UIFont.Small, searchWeaponText));
     local idLabelT = getTranslate("UI_Exchange_SearchId");
     local ilW = tm:MeasureStringX(UIFont.Small, idLabelT);
-    local maxLabelW = math.floor(innerW * 0.4);
-    if slW > maxLabelW then slW = maxLabelW; end
-    if ilW > maxLabelW then ilW = maxLabelW; end
+    -- 标签宽用**实测值** (与战利品页同款修正): 旧的 40% 限宽会把预留宽截短,
+    -- 而标签是按完整文案绘制的 —— 长标签 (RU) 下, 切到武器模式时标签会压住搜索框。
+    -- 放不下就走下面的两行兜底, 由输入框让位。
     local entW = math.floor((innerW - slW - ilW - GAP * 3) / 2);
     local searchTwoRows = entW < 90;
     if searchTwoRows then

@@ -15,8 +15,12 @@ import zombie.core.Transaction;
  * 取证结论 (推翻"需要 TimeSync 预言机"的旧设计): **原版引擎本来就在等精确回执** ——
  * `zombie/characters/CharacterTimedActions/LuaTimedActionNew.java:88-103` 在 MP 下自己轮询
  * `ActionManager.isDone/isRejected`, 服务端 `NetTimedActionPacket:63-89` + `ActionManager:88-103`
- * 会回 Accept/Reject/Done。我方 8 个修车/刷物动作 (ISRepairLightbar / ISTakeBricks / ...) 都定义了
- * `complete` → 全是服务端权威动作 → **全部自带这条回执**, 我们只是没把它读出来。
+ * 会回 Accept/Reject/Done。我方经原版计时动作上行的动作全部定义了 `complete` (建点见括号):
+ * ISTakeBricks (core/TakeSpawnAPI) / ISPickupFishAction (core/FishingSpawnAPI) /
+ * ISRepairLightbar (panels/EtherVehiclePanel) / ISEjectMagazine + ISUnloadBulletsFromFirearm
+ * (ui/EtherAmmoFarm) / ISClothingExtraAction (ui/EtherExchange) / ISTakeTrap + ISCheckTrapAction
+ * (ui/EtherTrapPOC) / ISHotwireVehicle (fixes/ServerSyncBlocker) —— 全是服务端权威动作
+ * → **全部自带这条回执**, 我们只是没把它读出来。
  *
  * 因此本类只做一件事: 给定 Lua 动作表, 返回它在服务端事务里的**状态**。
  * 匹配键用 `NetTimedAction.action` (**public** 字段, NetTimedAction.java:36) 做同一性比较;

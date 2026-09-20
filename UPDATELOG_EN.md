@@ -13,6 +13,10 @@
 - Added: the "Corpse spawn" mode now shows a red trace warning (same as "Fishing-rod spawn") - be aware it leaves a log entry on the server.
 - Changed: the Loot page's "Fishing-rod spawn (any item)" section is now "Item Spawn (MP)".
 - Changed: the "Timed spawn" description was trimmed to cover only the "Accelerate" toggle.
+- Fixed: the "Multi-Hit Pro" description is updated (it no longer says damage is split among the targets).
+- Fixed: "Timed spawn" now tells you it is multiplayer-only when used in single player (previously the button did nothing).
+- Fixed: in the English/Russian UI the Loot page's "Count" label could overlap the mode buttons (space is now reserved per language).
+- Fixed: in the Russian UI the Traps page's search label could overlap the search box when switching to weapon mode.
 - Build: version bumped to 3.2.5.
 
 ## [3.2.4]

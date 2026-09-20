@@ -18,18 +18,18 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 - **Items & carry**: auto-repair inventory items / unlimited carry weight
 - **Moodles & needs**: infinite stamina / fast health regen (not godmode) / disable muscle strain / disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / keep optimal calories / keep optimal weight / repair worn clothing / pad worn clothing with leather strips
-- **Debug privileges (SP only)**: God mode / NoClip / Invisible / instant progress bars — requires "Unlock debug privileges (SP)" on the Other page first
-- **Special modes**: Creative mode / Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / Zombies don't attack the player (MP-ready)
+- **Debug privileges (SP only)**: God mode / NoClip / Invisible / Creative mode / instant progress bars — requires "Unlock debug privileges (SP)" on the Other page first
+- **Special modes**: Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / Zombies don't attack the player (MP-ready)
 
 ### Combat
 
-- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (auto-refill, ammo count configurable) / No jamming
-- **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; damage is split among targets, so per-zombie damage is lower — combine with CritMax / One-Shot Kill)
+- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (auto-refill; the refill count is set on the Loot page) / No jamming
+- **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; the vanilla damage falloff across targets is removed, so every zombie takes full damage — combine with CritMax / One-Shot Kill)
 - **Temp Weapon**: locally spawn a firearm and swap it into your hands (searchable full firearm list + swap/restore)
 
 ### Items (SP)
 
-- **Item creator**: filter by name/category/ID, grant ×1/×2/×5/×10
+- **Item creator**: filter by name/ID, grant ×1/×2/×5/×10
 
 ### Item Radar
 
@@ -41,17 +41,17 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Swap
 
-- Trade a **clothing/bag** item from your inventory for a chosen target item (both lists searchable by name/ID; one item per swap)
+- Trade a **clothing/bag** item from your inventory for a chosen target item (the target list is searchable by name/ID, the sacrifice list has a refresh button; one item per swap)
 
 ### Player
 
 - **Player info & recipes**: edit survival time / edit zombie kills / learn all available crafting recipes
-- **VHS teaching**: trainable skill list (searchable) + level up the selected skill / level up all skills (requires a powered-on radio/TV/car radio within 10 tiles at volume 5+; if none, your own device is placed for you; 30s cooldown per skill, XP capped at level 3 by default depending on server config)
+- **VHS teaching (multiplayer only)**: trainable skill list (searchable) + level up the selected skill / level up all skills (requires a powered-on radio/TV/car radio within 10 tiles at volume 5+; if you have none of them, your radio is placed for you; 30s cooldown per skill, XP capped at level 3 by default depending on server config)
 - **Traits**: add/remove traits; **Skills**: skill level ± / add XP / max all skills
 
 ### ESP
 
-- Master switch + four modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed), zombie info (overhead HP bar, zombie radar), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision)
+- Master switch + four modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed), zombie info (overhead HP readout, zombie radar), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision — every zombie/vehicle/player forced visible)
 
 ### Map
 
@@ -92,11 +92,11 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Other
 
-- Unlock debug privileges (SP) / Server sync protection (stops the server from rolling back stats & skills) / admin menu (8 types) and attempt privilege escalation (12 types) / debug menu (main) · game debug menu · vehicle mechanics menu · medical menu / grant all materials of the selected recipe / block the default logger / block files mentioning cheats / block files with suspicious words
+- Unlock debug privileges (SP) / Server sync protection (stops the server from rolling back stats & skills) / admin menu and admin-privilege attempt / debug menu (main) · game debug menu · vehicle mechanics menu · medical menu / grant all materials of the selected recipe / block the default logger / block files mentioning cheats / block files with suspicious words
 
 ### Settings
 
-- UI language (CN/EN/RU) / key bindings (separate sub-panel) / accent colour / player · vehicle · zombie UI element colours / profile list (save/load/delete/reload) / reload all Lua elements / reset to defaults
+- UI language (CN/EN/RU) / key bindings (separate sub-panel) / accent colour / player · vehicle · zombie UI element colours / profile list (save/load/delete/reset to defaults) / reload all Lua elements / reset to defaults
 
 ### Other changes / fixes
 

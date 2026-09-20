@@ -396,17 +396,32 @@ function EtherLootRollPanel:createChildren()
     self:_header(innerX, cy, getTranslate("UI_FishSpawn_Title"), innerW);
     cy = cy + EtherTheme.fontHgtSmall + GAP;
 
-    -- 模式切换行: [钓竿生成] [尸体生成] [计时生成] [数量输入框]
+    -- 模式切换行: [钓竿生成] [尸体生成] [计时生成] [数量 输入框]
     local modeFishT = getTranslate("UI_SpawnMode_Fish");
     local modeCorpseT = getTranslate("UI_SpawnMode_Corpse");
     local modeTakeT = getTranslate("UI_SpawnMode_Take");
+    local countLabelT = getTranslate("UI_TrapSpawn_Count");
     local mw = math.max(UIButton.measureWidth(modeFishT), UIButton.measureWidth(modeCorpseT),
         UIButton.measureWidth(modeTakeT));
     local cntW = 56;
     local cntX = innerX + innerW - cntW;
-    if mw * 3 + GAP * 4 + cntW > innerW then
-        mw = math.floor((innerW - GAP * 4 - cntW) / 3);
-        if mw < 50 then mw = 50; end
+    -- 按钮预算里**必须计入"数量"标签宽度**: 各语言差一个数量级 (CN "数量" ≈ 14px,
+    -- EN "Count" ≈ 35px, RU "Количество" ≈ 70px), 只扣间距与输入框宽的话, 钳宽后的
+    -- 第三颗按钮会紧贴输入框、标签直接画在按钮文字上 (2026-09-21 用户实测 EN/RU)。
+    -- 与陷阱页同款兜底: 实在放不下就不画标签 (输入框默认值 1 已自明), 按钮让它吃满。
+    local MODE_MIN_W = 62;
+    local labelW = tm:MeasureStringX(UIFont.Small, countLabelT);
+    local btnZone = cntX - innerX - GAP;                     -- 按钮区上限(含按钮间 2 个间距)
+    local showCountLabel = true;
+    if mw * 3 > btnZone - (labelW + math.floor(GAP / 2)) then
+        local fit = math.floor((btnZone - labelW - math.floor(GAP / 2) - GAP * 2) / 3);
+        if fit >= MODE_MIN_W then
+            mw = fit;
+        else
+            showCountLabel = false;
+            mw = math.floor((btnZone - GAP * 2) / 3);
+            if mw < MODE_MIN_W then mw = MODE_MIN_W; end
+        end
     end
     self.spawnMode = "fish";
     self.modeFishBtn = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, mw, ctrlH, modeFishT,
@@ -436,8 +451,10 @@ function EtherLootRollPanel:createChildren()
     self.modeTakeBtn:instantiate();
     self.modeTakeBtn.isOnlyInGame = true;
     self:addChild(self.modeTakeBtn);
-    self:_text(cntX - tm:MeasureStringX(UIFont.Small, getTranslate("UI_TrapSpawn_Count")) - math.floor(GAP / 2),
-        cy + EtherTheme.entryLabelDY, getTranslate("UI_TrapSpawn_Count"), EtherTheme.text, UIFont.Small);
+    if showCountLabel then
+        self:_text(cntX - labelW - math.floor(GAP / 2),
+            cy + EtherTheme.entryLabelDY, countLabelT, EtherTheme.text, UIFont.Small);
+    end
     self.countBox = ISTextEntryBox:new("1", cntX, cy, cntW, EtherTheme.entryH);
     EtherTheme.styleEntry(self.countBox);
     self.countBox:initialise();
@@ -452,10 +469,9 @@ function EtherLootRollPanel:createChildren()
     local idT   = getTranslate("UI_ItemCreator_Title_FilterById");
     local nlW = tm:MeasureStringX(UIFont.Small, nameT);
     local ilW = tm:MeasureStringX(UIFont.Small, idT);
-    -- 标签限宽: 过长(俄语)时截到 40%, 保证输入框至少 60px 且不越分组盒
-    local maxLabelW = math.floor(innerW * 0.4);
-    if nlW > maxLabelW then nlW = maxLabelW; end
-    if ilW > maxLabelW then ilW = maxLabelW; end
+    -- 标签宽一律用**实测值**: 文案是按完整字符串绘制的, 把预算截短 (旧的 40% 限宽)
+    -- 只会让长标签 (RU "ID предмета" ≈ 19 字符) 画到输入框上面 —— 放不下就拆两行,
+    -- 每行的输入框按该行标签重算宽 (2026-09-21 布局审计, 578 宽实测)。
     local entW = math.floor((innerW - nlW - ilW - GAP * 3) / 2);
     local twoRows = entW < 90;
     if twoRows then
@@ -502,9 +518,17 @@ function EtherLootRollPanel:createChildren()
     local hintLinesD = EtherTheme.wrapHint(getTranslate("UI_TakeSpawn_Hint"), innerW);
     -- 尸体生成也加红字留痕警告 (一百四十五 用户: 与钓竿生成同规格)
     local warnLinesC = EtherTheme.wrapHint(getTranslate("UI_CorpseSpawn_TraceWarn"), innerW);
-    local notesH = math.max(#hintLinesF + #warnLinesF,
-        math.max(#hintLinesC + #warnLinesC, #hintLinesD))
-        * EtherTheme.fontHgtHint + GAP * 2;
+    local notesMax = math.max(#hintLinesF + #warnLinesF,
+        math.max(#hintLinesC + #warnLinesC, #hintLinesD));
+    -- 说明/警告是附注: 空间不够时**先砍它们的行** (红字警告优先于灰字提示),
+    -- 保证列表至少 30px 且不压到生成按钮行 —— 窄窗口/长翻译实测 (620x620 fh19:
+    -- 固定行数会把列表挤到 30px 下限, 直接盖在按钮上)。
+    local listMinH = 30;
+    local notesAvail = (g3y + g3h - IP - ctrlH - GAP * 2 - 16 - listMinH)
+        - (cy + EtherTheme.listHeaderH);
+    local notesLines = math.min(notesMax,
+        math.max(0, math.floor(notesAvail / EtherTheme.fontHgtHint)));
+    local notesH = notesLines * EtherTheme.fontHgtHint + GAP * 2;
     local bottomY = g3y + g3h - IP - ctrlH - notesH;
     local spawnTitle = getTranslate("UI_FishSpawn_Button");
     local spawnW = UIButton.measureWidth(spawnTitle);
@@ -517,7 +541,10 @@ function EtherLootRollPanel:createChildren()
     local listY = cy + hdrH;
     -- 列表压缩适配 + 16px 分离带; 空间不足时收缩列表, 绝不顶穿搜索行
     local listH = bottomY - 16 - listY;
-    if listH < 30 then listH = 30; end
+    -- 不设"最小 30px": 空间不足时让列表自己变矮 —— 强行撑高会盖住下方生成按钮行,
+    -- 越出分组盒 (800x600 级页面实测)。正常尺寸下 notesLines 的预算已保证 listH ≥ 30,
+    -- 这里只兜住页面整体装不下的退化情形 (内容仍然齐全, 只是列表变矮)。
+    if listH < 1 then listH = 1; end
 
     self.datas = ISScrollingListBox:new(innerX, listY, innerW, listH);
     self.datas:initialise();
@@ -585,24 +612,25 @@ function EtherLootRollPanel:createChildren()
     -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册; 双模式各注册一份,
     -- 绘制时按 spawnMode 二选一 —— modeTexts 条目带 mode 字段, prerender 过滤)
     self.modeTexts = {};
-    local function regModeText(lines, col, mode)
-        -- 每组从该模式说明区的当前累加行开始 (hint 完接着画 warn, 不重叠)
+    -- 每个模式一段: 行预算 notesLines 内**先保红字警告再保灰字提示**, 自段顶往下排
+    local function regModeBlock(hintLines, warnLines, mode)
+        local nWarn = math.min(#warnLines, notesLines);
+        local nHint = math.min(#hintLines, notesLines - nWarn);
         local y0 = bottomY + ctrlH + GAP;
-        for _, t in ipairs(self.modeTexts) do
-            if t.mode == mode then
-                y0 = math.max(y0, t.y + EtherTheme.fontHgtHint);
-            end
+        for i = 1, nHint do
+            table.insert(self.modeTexts, { x = innerX, y = y0, text = hintLines[i],
+                col = EtherTheme.textDim, mode = mode });
+            y0 = y0 + EtherTheme.fontHgtHint;
         end
-        for i = 1, #lines do
-            table.insert(self.modeTexts, { x = innerX, y = y0 + (i - 1) * EtherTheme.fontHgtHint,
-                text = lines[i], col = col, mode = mode });
+        for i = 1, nWarn do
+            table.insert(self.modeTexts, { x = innerX, y = y0, text = warnLines[i],
+                col = EtherTheme.statusRed, mode = mode });
+            y0 = y0 + EtherTheme.fontHgtHint;
         end
     end
-    regModeText(hintLinesF, EtherTheme.textDim, "fish");
-    regModeText(warnLinesF, EtherTheme.statusRed, "fish");
-    regModeText(hintLinesC, EtherTheme.textDim, "corpse");
-    regModeText(warnLinesC, EtherTheme.statusRed, "corpse");
-    regModeText(hintLinesD, EtherTheme.textDim, "take");
+    regModeBlock(hintLinesF, warnLinesF, "fish");
+    regModeBlock(hintLinesC, warnLinesC, "corpse");
+    regModeBlock(hintLinesD, {}, "take");
 
     -- 状态文字区域 (生成按钮右侧): 只显示动态状态消息 (生成中/已生成/失败),
     -- 空闲时留空 —— 使用提示已改为底部静态注册, 不再在此兜底

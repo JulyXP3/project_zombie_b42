@@ -29,6 +29,10 @@ require "ISUI/ISPanel"
 --*   "除以 zoom" (修缩放视角时 ESP 整体漂移/跟不上实体)。
 --*
 --* 契约: 沿用既有 toggleX/isX 全局, 名称与签名不变。
+--*
+--* 现况 (2026-09-21 审计核对): 僵尸信息实际只画**一行文字** `HP: <0-100>`
+--*   (`core/CoreAPI.java` updateZombiesVisuals), 上面提到的血条/drawHpBar 已不存在
+--*   (`Rendering` 无任何血条函数, 全库零命中) —— 标签/README 一律按"显示僵尸 HP"表述。
 --*********************************************************
 
 EtherVisualsPanel = EtherFormPanel:derive("EtherVisualsPanel");

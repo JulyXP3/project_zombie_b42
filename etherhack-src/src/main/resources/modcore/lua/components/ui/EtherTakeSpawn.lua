@@ -46,6 +46,12 @@ end
 --* 入口: 面板"生成"按钮 (target = 物品全名)
 --*********************************************************
 function EtherTakeSpawn.trigger(target, count, accelerate)
+    if not isMultiplayer() then
+        -- 原版 NetTimedActionPacket 需服务端受理才建物, 单机无此通道
+        print("[TakeSpawn] multiplayer only (use your own dedicated server)")
+        EtherTakeSpawn.message = getTranslate("UI_FishSpawn_MultiplayerOnly")
+        return
+    end
     if EtherTakeSpawn.busy then
         return
     end
