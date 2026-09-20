@@ -2,7 +2,7 @@
 
 A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) for Project Zomboid Build 42.
 
-The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Loot reroll / ESP / Item Radar + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
+The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Loot reroll + item spawning (Item Spawn / Corpse spawn / Timed spawn) / ESP / Item Radar + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
 
 > **Important:** **Any form of commercial use is prohibited** (including selling and paywalled downloads), and forks/modifications **must credit the original authors**. See the License section at the end for details.
 
@@ -12,11 +12,11 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Info
 
-- Anticheat status (privilege / movement anticheat / custom log system / BikiniTools availability), online player list (with invisible markers), warnings, authors & contact
+- Anticheat status (privilege / movement anticheat / custom log system / BikiniTools availability), warnings, authors & contact
 
 ### Survival
 
-- **Items & carry**: infinite durability for held items / auto-repair inventory items / unlimited carry weight
+- **Items & carry**: auto-repair inventory items / unlimited carry weight
 - **Moodles & needs**: infinite stamina / fast health regen (not godmode) / disable muscle strain / disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / keep optimal calories / keep optimal weight / repair worn clothing / pad worn clothing with leather strips
 - **Debug privileges (SP only)**: God mode / NoClip / Invisible / instant progress bars — requires "Unlock debug privileges (SP)" on the Other page first
 - **Special modes**: Creative mode / Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / Zombies don't attack the player (MP-ready)
@@ -63,7 +63,9 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 - **Reset loot (F9)**: adjustable radius (default 10); reopened containers get re-rolled (gun cabinets/ammo boxes can yield weapons and ammo; multiplayer only)
 - **Ammo farming**: spawn ammo per magazine/weapon type
-- **Fishing-rod spawn**: with a fishing rod equipped, spawn any listed item into your inventory (~5–8s; multiplayer only)
+- **Item Spawn (MP)**: with a fishing rod equipped, spawn any listed item into your inventory (~5-8s; a failed spawn leaves a log entry on the server; multiplayer only)
+- **Corpse spawn**: spawn a corpse at your feet carrying the chosen items and loot it (multiplayer only; **it leaves a log entry on the server - use with caution**)
+- **Timed spawn**: uses the game's own action so the item is real and persistent (visible to others), with an "Accelerate" toggle for its speed (multiplayer only)
 
 ### Vehicles
 
