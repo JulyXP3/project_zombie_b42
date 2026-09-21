@@ -594,6 +594,21 @@ function EtherTheme.styleList(list)
 end
 
 --*********************************************************
+--* 下拉框样式统一 (ISComboBox 实例, 与输入框同槽同边)
+--*********************************************************
+function EtherTheme.styleCombo(combo)
+    if combo == nil then return combo; end
+    local b = EtherTheme.blood;
+    local t = EtherTheme.text;
+    combo.backgroundColor         = { r = 0.03, g = 0.06, b = 0.065, a = 0.95 };  -- 深槽底
+    combo.backgroundColorMouseOver = { r = 0.06, g = 0.14, b = 0.13,  a = 0.95 };  -- 悬停微亮
+    combo.borderColor             = { r = b.r,  g = b.g,  b = b.b,  a = 0.55 };  -- 薄荷细边
+    combo.textColor               = { r = t.r,  g = t.g,  b = t.b,  a = 1 };     -- 近白字
+    combo.font                    = UIFont.Small;
+    return combo;
+end
+
+--*********************************************************
 --* 表格行底: 选中(accent 加深) / 隔行玻璃染色
 --*********************************************************
 function EtherTheme.drawRowUnderlay(self, y, selected, alt, height)

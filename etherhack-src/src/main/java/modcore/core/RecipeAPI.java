@@ -27,9 +27,12 @@ package modcore.core;
 
 import se.krka.kahlua.integration.annotations.LuaMethod;
 import zombie.characters.IsoPlayer;
+import zombie.core.network.ByteBufferWriter;
+import zombie.inventory.InventoryItem;
 import zombie.network.GameClient;
 import zombie.network.PacketTypes;
 import zombie.network.packets.INetworkPacket;
+import zombie.network.packets.SyncItemFieldsPacket;
 import zombie.scripting.ScriptManager;
 import zombie.scripting.entity.components.crafting.CraftRecipe;
 import zombie.scripting.objects.Recipe;
@@ -80,6 +83,48 @@ public class RecipeAPI {
         } catch (Throwable t) {
             Logger.printLog("[RecipeAPI] learnAllRecipesSynced error: " + t.getMessage());
             return false;
+        }
+    }
+
+    /*
+     * Red-team POC writer: push one own-inventory item's full field snapshot
+     * (including its LOCAL modData table) to the server (multiplayer only).
+     *
+     * Chain (verified against the B42 decompile): SyncItemFieldsPacket
+     * (handlingType=3, LoginOnServer :44) processServer :486-523 applies the
+     * fields and calls processModData :525-540 = wipe + arbitrary-key rawset,
+     * no whitelist; isConsistent only checks container+item exist (:573-576).
+     * Lua edits the item's modData first (poison keys), this call ships it.
+     * Used by the recipe-OnCreate family (OpenBoxOfJars / Unstack logs):
+     * the server re-runs the vanilla craft and CreateItem()s whatever type
+     * strings it finds in the consumed item's modData.
+     */
+    @LuaMethod(name = "syncItemFieldsNow", global = true)
+    public static String syncItemFieldsNow(int itemId) {
+        try {
+            if (!GameClient.client || GameClient.connection == null) {
+                return "offline: multiplayer only";
+            }
+            IsoPlayer player = IsoPlayer.getInstance();
+            if (player == null) {
+                return "no player";
+            }
+            InventoryItem item = player.getInventory().getItemWithID(itemId);
+            if (item == null) {
+                return "no item id " + itemId;
+            }
+            SyncItemFieldsPacket pkt = new SyncItemFieldsPacket();
+            pkt.setData(player, item);
+            ByteBufferWriter bb = GameClient.connection.startPacket();
+            PacketTypes.PacketType.SyncItemFields.doPacket(bb);
+            pkt.write(bb);
+            PacketTypes.PacketType.SyncItemFields.send(GameClient.connection);
+            Logger.printLog("[RecipeAPI] sent fields: " + item.getFullType() + " (#" + itemId + ")");
+            return "sent fields: " + item.getFullType() + " (#" + itemId + ")";
+        }
+        catch (Throwable t) {
+            Logger.printLog("[RecipeAPI] syncItemFieldsNow error: " + t.getMessage());
+            return "error: " + String.valueOf(t.getMessage());
         }
     }
 }

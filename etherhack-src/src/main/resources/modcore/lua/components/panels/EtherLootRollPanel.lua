@@ -7,8 +7,9 @@ require "ISUI/ISPanel"
 --* 之后打开容器由服务端按容器类型表重新 roll 战利品
 --* (枪柜/军用包等表含武器弹药)。
 --* 复用 EtherContainerPOC (UIItemTables.lua 定义, F10 同入口)。
---* 下半: 钓竿生成任意物品 POC (FishingSpawn, 仅自建服务器):
---*   全物品列表 + 名称/ID 搜索 + 单次生成 (风格对齐物品生成)
+--* 下半: 生成模式 (FishingSpawn / CorpseSpawn / TakeSpawn / BoxPoison,
+--*   仅自建服务器): 全物品列表 + 名称/ID 搜索 + 单次生成 (风格对齐物品生成)
+--*   (穿戴注入已下架: 实测证伪进包, 产物为穿戴幽灵, 见物品生成-穿戴注入(不实现))
 --*********************************************************
 EtherLootRollPanel = ISPanel:derive("EtherLootRollPanel");
 
@@ -99,7 +100,8 @@ function EtherLootRollPanel:render()
     -- 长消息按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
     local src = EtherFishSpawn;
     if self.spawnMode == "corpse" then src = EtherCorpseSpawn;
-    elseif self.spawnMode == "take" then src = EtherTakeSpawn; end
+    elseif self.spawnMode == "take" then src = EtherTakeSpawn;
+    elseif self.spawnMode == "poison" then src = EtherBoxPoison; end
     local fishStatus = tostring((src and src.message) or "")
     if fishStatus ~= "" and self.statusX ~= nil then
         if self.statusCacheText ~= fishStatus or self.statusCacheW ~= self.statusW then
@@ -123,15 +125,8 @@ end
 --* 生成模式切换 UI 状态: 当前模式按钮禁用 (视觉区分 + 防重复点击)
 --*********************************************************
 function EtherLootRollPanel:updateSpawnModeUI()
-    if self.modeFishBtn ~= nil then
-        self.modeFishBtn:setEnable(self.spawnMode ~= "fish");
-    end
-    if self.modeCorpseBtn ~= nil then
-        self.modeCorpseBtn:setEnable(self.spawnMode ~= "corpse");
-    end
-    if self.modeTakeBtn ~= nil then
-        self.modeTakeBtn:setEnable(self.spawnMode ~= "take");
-    end
+    -- 模式选择已改为下拉框 (选中即状态, 无需禁用当前项); 这里只管条件控件显隐:
+    -- 加速开关仅计时模式可见。
     if self.accelBtn ~= nil then
         self.accelBtn:setVisible(self.spawnMode == "take");
         if self.spawnMode == "take" then
@@ -383,8 +378,9 @@ function EtherLootRollPanel:createChildren()
     cy = cy + EtherTheme.entryH;
     self:_group(PAD, g2y, boxW, (cy - g2y) + IP);
 
-    -- ================= 分组3: 钓竿/尸体生成 (占据剩余高度) =================
-    -- 双模式共用物品列表与搜索: 钓竿生成 (FishingSpawn) / 尸体生成 (CorpseSpawn)
+    -- ================= 分组3: 生成模式 (占据剩余高度) =================
+    -- 四模式共用物品列表与搜索: 钓竿 (FishingSpawn) / 尸体 (CorpseSpawn) /
+    -- 计时 (TakeSpawn) / 开箱投毒 (BoxPoison)
     local g3y = cy + IP + GGAP;
     -- 矮屏(窗口被钳制)时必须压缩本组而不是兜底撑高: 强制最小高度会把
     -- 盒底推出面板, 组内列表与搜索行全部越界 (实机多轮 "search food 重叠" 根因)。
@@ -396,61 +392,51 @@ function EtherLootRollPanel:createChildren()
     self:_header(innerX, cy, getTranslate("UI_FishSpawn_Title"), innerW);
     cy = cy + EtherTheme.fontHgtSmall + GAP;
 
-    -- 模式切换行: [钓竿生成] [尸体生成] [计时生成] [数量 输入框]
-    local modeFishT = getTranslate("UI_SpawnMode_Fish");
-    local modeCorpseT = getTranslate("UI_SpawnMode_Corpse");
-    local modeTakeT = getTranslate("UI_SpawnMode_Take");
+    -- 模式切换行: [生成方式 下拉框........] [数量 输入框]
+    -- 五模式挤不进一排按钮 (3 钮时代的等宽算法已到极限, 5 钮 EN/RU 必溢出),
+    -- 改原生 ISComboBox 下拉: 高度常量, 宽度按最长文案 + 箭头取, 数量区保留右侧。
+    local modeDefs = {
+        { mode = "fish",   key = "UI_SpawnMode_Fish" },
+        { mode = "corpse", key = "UI_SpawnMode_Corpse" },
+        { mode = "take",   key = "UI_SpawnMode_Take" },
+        { mode = "poison", key = "UI_SpawnMode_Poison" },
+    };
     local countLabelT = getTranslate("UI_TrapSpawn_Count");
-    local mw = math.max(UIButton.measureWidth(modeFishT), UIButton.measureWidth(modeCorpseT),
-        UIButton.measureWidth(modeTakeT));
     local cntW = 56;
     local cntX = innerX + innerW - cntW;
-    -- 按钮预算里**必须计入"数量"标签宽度**: 各语言差一个数量级 (CN "数量" ≈ 14px,
-    -- EN "Count" ≈ 35px, RU "Количество" ≈ 70px), 只扣间距与输入框宽的话, 钳宽后的
-    -- 第三颗按钮会紧贴输入框、标签直接画在按钮文字上 (2026-09-21 用户实测 EN/RU)。
-    -- 与陷阱页同款兜底: 实在放不下就不画标签 (输入框默认值 1 已自明), 按钮让它吃满。
-    local MODE_MIN_W = 62;
+    -- 数量标签宽度各语言差一个数量级 (CN "数量" / EN "Count" / RU "Количество"),
+    -- 下拉框吃满后放不下就不画标签 (输入框默认值 1 已自明, 沿用旧兜底)。
     local labelW = tm:MeasureStringX(UIFont.Small, countLabelT);
-    local btnZone = cntX - innerX - GAP;                     -- 按钮区上限(含按钮间 2 个间距)
-    local showCountLabel = true;
-    if mw * 3 > btnZone - (labelW + math.floor(GAP / 2)) then
-        local fit = math.floor((btnZone - labelW - math.floor(GAP / 2) - GAP * 2) / 3);
-        if fit >= MODE_MIN_W then
-            mw = fit;
-        else
-            showCountLabel = false;
-            mw = math.floor((btnZone - GAP * 2) / 3);
-            if mw < MODE_MIN_W then mw = MODE_MIN_W; end
-        end
+    local comboMaxW = cntX - GAP - innerX;                  -- 下拉框可用上限 (数量区之前)
+    local comboPad = 26;                                    -- 右侧箭头 + 内边距
+    local comboW = comboPad;
+    for i = 1, #modeDefs do
+        local w = UIButton.measureWidth(getTranslate(modeDefs[i].key)) + comboPad;
+        if w > comboW then comboW = w; end
     end
+    local showCountLabel = true;
+    if comboW + labelW + GAP > comboMaxW then
+        showCountLabel = false;
+    end
+    local cap = showCountLabel and (comboMaxW - labelW - GAP) or comboMaxW;
+    if comboW > cap then comboW = cap; end
+    if comboW < 80 then comboW = 80; end
     self.spawnMode = "fish";
-    self.modeFishBtn = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, mw, ctrlH, modeFishT,
-    function()
-        self.spawnMode = "fish";
-        self:updateSpawnModeUI();
-    end, mw)
-    self.modeFishBtn:initialise();
-    self.modeFishBtn:instantiate();
-    self.modeFishBtn.isOnlyInGame = true;
-    self:addChild(self.modeFishBtn);
-    self.modeCorpseBtn = UIButton:new(innerX + mw + GAP, cy + EtherTheme.entryBtnDY, mw, ctrlH, modeCorpseT,
-    function()
-        self.spawnMode = "corpse";
-        self:updateSpawnModeUI();
-    end, mw)
-    self.modeCorpseBtn:initialise();
-    self.modeCorpseBtn:instantiate();
-    self.modeCorpseBtn.isOnlyInGame = true;
-    self:addChild(self.modeCorpseBtn);
-    self.modeTakeBtn = UIButton:new(innerX + (mw + GAP) * 2, cy + EtherTheme.entryBtnDY, mw, ctrlH, modeTakeT,
-    function()
-        self.spawnMode = "take";
-        self:updateSpawnModeUI();
-    end, mw)
-    self.modeTakeBtn:initialise();
-    self.modeTakeBtn:instantiate();
-    self.modeTakeBtn.isOnlyInGame = true;
-    self:addChild(self.modeTakeBtn);
+    self.modeCombo = ISComboBox:new(innerX, cy, comboW, EtherTheme.entryH, self,
+    function(t, combo)
+        local data = combo:getSelectedData();
+        if data ~= nil then
+            t.spawnMode = data;
+            t:updateSpawnModeUI();
+        end
+    end);
+    self.modeCombo:initialise();
+    self.modeCombo:instantiate();
+    EtherTheme.styleCombo(self.modeCombo);
+    for i = 1, #modeDefs do
+        self.modeCombo:addOptionWithData(getTranslate(modeDefs[i].key), modeDefs[i].mode);
+    end
+    self:addChild(self.modeCombo);
     if showCountLabel then
         self:_text(cntX - labelW - math.floor(GAP / 2),
             cy + EtherTheme.entryLabelDY, countLabelT, EtherTheme.text, UIFont.Small);
@@ -518,8 +504,10 @@ function EtherLootRollPanel:createChildren()
     local hintLinesD = EtherTheme.wrapHint(getTranslate("UI_TakeSpawn_Hint"), innerW);
     -- 尸体生成也加红字留痕警告 (一百四十五 用户: 与钓竿生成同规格)
     local warnLinesC = EtherTheme.wrapHint(getTranslate("UI_CorpseSpawn_TraceWarn"), innerW);
+    local hintLinesP = EtherTheme.wrapHint(getTranslate("UI_BoxPoison_Hint"), innerW);
     local notesMax = math.max(#hintLinesF + #warnLinesF,
-        math.max(#hintLinesC + #warnLinesC, #hintLinesD));
+        math.max(#hintLinesC + #warnLinesC,
+        math.max(#hintLinesD, #hintLinesP)));
     -- 说明/警告是附注: 空间不够时**先砍它们的行** (红字警告优先于灰字提示),
     -- 保证列表至少 30px 且不压到生成按钮行 —— 窄窗口/长翻译实测 (620x620 fh19:
     -- 固定行数会把列表挤到 30px 下限, 直接盖在按钮上)。
@@ -579,6 +567,10 @@ function EtherLootRollPanel:createChildren()
             -- 计时生成: 原版 ISTakeBricks 动作 (服务端校验 → 完成时 AddItems + 上行 = 真物品)
             local count = tonumber(self.countBox:getInternalText()) or 1;
             EtherTakeSpawn.trigger(item:getFullName(), count, EtherTakeSpawn.accelerate);
+        elseif self.spawnMode == "poison" then
+            -- 开盒生成: 给背包载体 modData 写投毒键并上行, 再正常跑对应合成即出物
+            local count = tonumber(self.countBox:getInternalText()) or 1;
+            EtherBoxPoison.trigger(item:getFullName(), count);
         else
             if not isMultiplayer() then
                 print("[FishSpawn] multiplayer only (use your own dedicated server)")
@@ -607,6 +599,7 @@ function EtherLootRollPanel:createChildren()
     self.accelBtn:instantiate();
     self.accelBtn.isOnlyInGame = true;
     self.accelBtn:setVisible(false);
+    self.accelBtn.modeTag = "take";
     self:addChild(self.accelBtn);
 
     -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册; 双模式各注册一份,
@@ -631,6 +624,7 @@ function EtherLootRollPanel:createChildren()
     regModeBlock(hintLinesF, warnLinesF, "fish");
     regModeBlock(hintLinesC, warnLinesC, "corpse");
     regModeBlock(hintLinesD, {}, "take");
+    regModeBlock(hintLinesP, {}, "poison");
 
     -- 状态文字区域 (生成按钮右侧): 只显示动态状态消息 (生成中/已生成/失败),
     -- 空闲时留空 —— 使用提示已改为底部静态注册, 不再在此兜底

@@ -2,6 +2,13 @@
 
 ## [3.2.5] - Current
 
+- Added: a "Wear inject" mode on the loot page - pick an item to wear it instantly, then take it off into your backpack (multiplayer only).
+- Added: an "Unbox spawn" mode on the loot page - keep a jar box / log stack in your backpack, pick a target and count to poison it, then craft the matching recipe once to release the items (multiplayer only; all carriers are poisoned at once).
+- Added: a "Clear ghosts" button for the "Wear inject" mode; the spawn-mode switcher is now a dropdown (too many modes for buttons).
+- Removed: the "Wear inject" mode (disproven by testing: it only produces unwearable worn ghosts, never backpack items).
+- Fixed: "Unbox spawn" no longer eats the original ropes when unstacking log stacks (ropes are kept, targets are appended).
+- Renamed: "Box poison" is now called "Unbox spawn".
+
 - Fixed: with "Unlimited endurance" on, the endurance icon flickered on and off (now it stays hidden and endurance is always treated as full).
 - Improved: with "Unlimited carry" on, the heavy-load indicator and its side effects (slowdown, health drain) no longer appear.
 - Added: a standalone `uninstall.bat` so the mod can be fully removed at any time without preparing the installer package.

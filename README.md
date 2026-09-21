@@ -2,7 +2,7 @@
 
 A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) for Project Zomboid Build 42.
 
-The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Loot reroll + item spawning (Item Spawn / Corpse spawn / Timed spawn) / ESP / Item Radar + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
+The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Loot reroll + item spawning (Item Spawn / Corpse spawn / Timed spawn / Unbox spawn) / ESP / Item Radar + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
 
 > **Important:** **Any form of commercial use is prohibited** (including selling and paywalled downloads), and forks/modifications **must credit the original authors**. See the License section at the end for details.
 
@@ -66,6 +66,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 - **Item Spawn (MP)**: with a fishing rod equipped, spawn any listed item into your inventory (~5-8s; a failed spawn leaves a log entry on the server; multiplayer only)
 - **Corpse spawn**: spawn a corpse at your feet carrying the chosen items and loot it (multiplayer only; **it leaves a log entry on the server - use with caution**)
 - **Timed spawn**: uses the game's own action so the item is real and persistent (visible to others), with an "Accelerate" toggle for its speed (multiplayer only)
+- **Unbox spawn**: poison a jar box / log stack in your backpack, then craft the matching recipe once to release any listed items (multiplayer only)
 
 ### Vehicles
 
