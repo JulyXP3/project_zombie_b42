@@ -35,6 +35,8 @@ local etherModules = {
     "modcore/lua/components/ui/EtherCorpseSpawn.lua",
     "modcore/lua/components/ui/EtherTakeSpawn.lua",
     "modcore/lua/components/ui/EtherBoxPoison.lua",
+    "modcore/lua/components/ui/EtherBuildSpawn.lua",
+    "modcore/lua/components/ui/BuildCatalogCustom.lua",
     "modcore/lua/components/ui/EtherExchange.lua",
     "modcore/lua/components/ui/EtherAmmoFarm.lua",
     "modcore/lua/components/ui/UIMap.lua",
@@ -63,6 +65,7 @@ local etherModules = {
     "modcore/lua/components/override/EtherCharacterCreation.lua",
     "modcore/lua/components/panels/EtherCharacterBoostPanel.lua",
     "modcore/lua/components/panels/EtherFarmingPanel.lua",
+    "modcore/lua/components/panels/EtherBuildPanel.lua",
     "modcore/lua/components/panels/EtherSettingsPanel.lua",
     "modcore/lua/components/panels/EtherKeyBindsPanel.lua"
 }
@@ -133,6 +136,8 @@ function EtherMain:createChildren()
     self.buttonsPanel:addButton("modcore/media/ui/vehicle.png", "UI_Nav_Vehicle", EtherVehiclePanel);
     -- 「耕种」: 原角色页「作弊耕种模式」开关的面板化替代, 位于「载具」之后
     self.buttonsPanel:addButton("modcore/media/ui/farming.png", "UI_Nav_Farming", EtherFarmingPanel);
+    -- 「建造」: 免费建造 (红队链: 遗留分支零料直建), 位于「耕种」之后
+    self.buttonsPanel:addButton("modcore/media/ui/build.png", "UI_Nav_Build", EtherBuildPanel);
     -- 「趣味」: 整活功能集中页 (红队 PoC: 冒名发消息/僵尸皮肤), 位于「耕种」之后
     self.buttonsPanel:addButton("modcore/media/ui/fun.png", "UI_Nav_Fun", EtherFunPanel);
     -- 「创建角色」: 建号相关功能集中页 (自定义编辑/建号增强), 位于「耕种」与「其他」之间。
@@ -306,4 +311,10 @@ if type(EtherKeyBinds.register) == "function" then
     EtherKeyBinds.register("menu", "UI_KeyBind_Menu", function()
         EtherMain.toggleMenu();
     end, 210);
+end
+-- 蓝图确认键 (默认 "-", 设置页可改绑): 读当前蓝图格/朝向直发建墙
+if type(EtherKeyBinds.register) == "function" then
+    EtherKeyBinds.register("buildConfirm", "UI_KeyBind_BuildConfirm", function()
+        EtherBuildSpawn.confirmFromGhost();
+    end, Keyboard.KEY_GRAVE);
 end

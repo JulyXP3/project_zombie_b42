@@ -1,0 +1,28 @@
+--*********************************************************
+--* 用户自定义建造条目 (加东西不用改代码, 改这里就行)
+--* 生效: 改完去 设置页 → 重载所有 Lua 元素 (或重进游戏)。
+--* 格式 (一行一件):
+--*   { name = "显示名", type = "Lua类名",
+--*     sprite = "外观", northSprite = "北向外观",
+--*     args = {...}, nargs = N }
+--*   args = 传给 Type.new 的参数, 按顺序, N = 参数个数 (必须写对):
+--*     "$sprite"      → 上面的 sprite
+--*     "$northSprite" → 上面的 northSprite
+--*     "$player"      → 玩家对象, "$playernum" → 玩家号
+--*     "$null"        → 空 (nil)
+--*     其余按字面传 (字符串/数字/true/false)
+--* 三条铁律 (不满足的加了也建不出来):
+--*   1. type 的服务端 create() 必须是不验材料的遗留分支
+--*      (新配方/陷阱/营火特殊分支一律不行);
+--*   2. 服务端必须有这个类 —— mod 的东西服务端也要装同款 mod,
+--*      否则服务端 Type 为空直接拒绝;
+--*   3. name 不要写中文 (Kahlua 传中文给 Java 绘制会坏);
+--*      中文名走三语翻译键 (仿内置条目的 nameKey, 键加进 translations
+--*      三个文件, 条目里用 nameKey 代替 name)。
+--* 示例 (默认全注释, 照抄改):
+--*********************************************************
+BuildCatalogCustom = {
+    -- { name = "My Mod Wall", type = "ISWoodenWall",
+    --   sprite = "carpentry_02_80", northSprite = "carpentry_02_81",
+    --   args = {"$sprite", "$northSprite", false}, nargs = 3 },
+}

@@ -68,16 +68,19 @@ local function currentVehicle()
 end
 
 --*********************************************************
---* 修理: 两个按钮语义不同 (2026-09-14 八十五起) ——
---*   「修理车辆」= 原版计时动作状态机 (ISRepairLightbar, **服务端权威执行**,
---*     不进 cmd 日志); **默认免费** (过账件只取**本车**容器里的物品: 后备箱 → 手套箱 →
+--* 修理: 复选框 + 直发按钮语义不同 (2026-09-14 八十五起, 一百七十七改复选框) ——
+--*   「自动修理」复选框 = 原版计时动作状态机 (ISRepairLightbar, **服务端权威执行**,
+--*     不进 cmd 日志); 驾驶位勾选即开工 (自动下车逐件修), 取消勾选立刻停,
+--*     修完/超时/卡住自动取消勾选 (endRepairJob 单一出口)。
+--*     **默认免费** (过账件只取**本车**容器里的物品: 后备箱 → 手套箱 →
 --*     座椅; 服务端对不在玩家背包里的件做 Remove 是空操作); 每步成功/失败在人物头顶
---*     浮动提示 (消耗了什么/未消耗); 再点一次 = 取消。
+--*     浮动提示 (消耗了什么/未消耗)。
 --*   「直发修理」= 一次性发一轮 vehicle.fixPart (每损坏部件 1 条, 条件直设 100,
 --*     **不消耗物品**); 该命令在默认 ClientCommandFilter 白名单里 = 每件一行服务端
 --*     cmd 日志, 按钮文案已标注。
 --* 技能差 ≤ 0 时计时路线整体放弃 (原版公式会倒扣 condition), 提示改直发。
---* 注: 排队时那串 "ISRepairLightbar" LOG 是原版构造函数自带的调试打印, 每步一条, 无害。
+--* 注: 排队时那串 "ISRepairLightbar" LOG 是原版构造函数自带的调试打印, 每步一条,
+--*   客户端控制台可见, 服务端无影响, 无害。
 --*********************************************************
 local function repairVehicleDirectNow()
     local player, vehicle = currentVehicle();
@@ -124,27 +127,37 @@ end
 local ETHER_REPAIR_TICK_MS = 250;        -- 状态机节流 (每帧检查, 250ms 才动手)
 local ETHER_REPAIR_STEP_MAX_MS = 60000;  -- 单件动作卡住上限
 local ETHER_REPAIR_JOB_MAX_MS = 600000;  -- 整单上限 (整车重损约上百步)
---* 每件修理的动作时长 (单位 = 原版动作 tick, 20/s; 40 = 2.0 秒/件)。
+--* 每件修理的动作时长 (单位 = 原版动作 tick, 20/s; 200 = 4.0 秒/件)。
 --* 这个值是 ISRepairLightbar:new(character, part, item, maxTimeInit) 的第 4 参, 取证链:
 --*   原版把 maxTimeInit 同时存进 o.maxTimeInit / o.maxTime (ISRepairLightbar.lua:94-95)
 --*   → NetTimedAction.set 按 new 的**参数名**把它当动作参数一起发上行 (NetTimedAction.java:42-58)
 --*   → 服务端照原样重建动作 (NetTimedAction.parse:145-171) 并拿它当自己的时长
 --*     (Action.setTimeData:35-39 → NetTimedAction.getDuration:74-98)。**服务端不校验、不钳制**。
 --* 档位取舍 (2026-09-14 九十四, 用户: "放缓读条做安全冗余"):
---*   200 = 原版 (4.0 秒/件; mood/疼痛/体温系数只在 >1 时相乘, ISBaseTimedAction.lua:99-123);
---*   40  = 本档: 原版一半, 单步端到端 ~2.3 秒 ≈ 26 件/分 (原版上限 15 件/分), 工作动画能播完;
+--*   200 = 本档: 原版, 单步端到端 ~4.3 秒 ≈ 13 件/分, 工作动画完整;
+--*   40  = 快档: 原版一半, 单步端到端 ~2.3 秒 ≈ 26 件/分, 工作动画能播完 (不要在他人服使用);
 --*   1   = 九十二的"秒修": 单步 ~0.3 秒 = 200 件/分, 工作动画一帧即被打断 —— 不要在他人服使用。
 --* 依据 (为何回调): 官方反作弊 (zombie/network/anticheats 24 项) 无一读动作时长, 也不会被钳制;
 --*   但 maxTime 是 vanilla 类实例上的普通字段, 任何 Lua 侧钩子 (含原版
 --*   ISTimedActionQueue.getTimedActionQueue(p).queue 遍历) 一行就能读到, 1 这种
 --*   "原版不可能出现"的极端值 + 200 件/分的频率是唯一会自曝的形态, 故留冗余。
-local ETHER_REPAIR_ACTION_TIME = 40;
-local ETHER_REPAIR_STALL_MS = 12000;     -- 条件长时间不上升判停窗口: 服务端条件经载具周期更新回包,
+local ETHER_REPAIR_ACTION_TIME = 200;
+local ETHER_REPAIR_STALL_MS = 16000;     -- 条件长时间不上升判停窗口: 服务端条件经载具周期更新回包,
                                          -- 可能滞后数秒 (实测)。按**时间窗**判定而非步数 (九十一教训),
                                          -- 窗口 = 走位 (1~4s, 九十四 起每件先走到该部件区域) + 单件动作
-                                         -- (2s) + 数秒同步滞后余量; 秒修档可调回 6000
+                                         -- (4s) + 数秒同步滞后余量; 秒修档可调回 6000
 
-EtherRepairJob = nil;                    -- 当前修理单 (状态机数据; 再点一次按钮 = 取消)
+EtherRepairJob = nil;                    -- 当前修理单 (状态机数据)
+
+--* 收尾 (一百七十六): 单一出口清单 + 自动取消勾选。状态机所有终止点
+--* (完成/超时/卡住/无件/被踢/玩家车没了) 一律走这里, 复选框与任务状态
+--* 永远一致: 勾选 = 有单在跑, 未勾选 = 没单。
+local function endRepairJob()
+    EtherRepairJob = nil;
+    local cbs = EtherVehiclePanel.checkboxByKey;
+    local cb = cbs ~= nil and cbs["UI_VehiclePanel_RepairAuto"] or nil;
+    if cb ~= nil then pcall(function() cb:setCheked(false); end); end
+end
 --* 取"过账件" (即 PienZ 的"供给件"): 服务端 complete() 对该件只做 inventory:Remove(item) ——
 --* 若该件**不在玩家背包**里, Remove 是**空操作** (ItemContainer.Remove:1940 遍历不到即返回,
 --* 无任何副作用) → 条件照修、东西不消耗。
@@ -262,13 +275,13 @@ local function repairTick()
     local player, vehicle = job.player, job.vehicle;
     if player == nil or player:isDead() or vehicle == nil or vehicle:getScript() == nil then
         print("[VehiclePanel] repair job ended (player or vehicle gone)");
-        EtherRepairJob = nil;
+        endRepairJob();
         return;
     end
     if nowMs > job.deadline then
         repairFloat(player, "UI_VehiclePanel_RepairFloatAborted", nil, true);
         print("[VehiclePanel] repair job timeout - stopped after " .. tostring(job.steps) .. " step(s)");
-        EtherRepairJob = nil;
+        endRepairJob();
         return;
     end
     -- 先等下车完成 (vanilla 修车必须在车外)
@@ -276,7 +289,7 @@ local function repairTick()
         if nowMs > job.exitDeadline then
             repairFloat(player, "UI_VehiclePanel_RepairFloatAborted", nil, true);
             print("[VehiclePanel] repair aborted: could not exit the vehicle");
-            EtherRepairJob = nil;
+            endRepairJob();
         end
         return;
     end
@@ -286,7 +299,7 @@ local function repairTick()
         if nowMs > job.stepDeadline then
             repairFloat(player, "UI_VehiclePanel_RepairFloatAborted", nil, true);
             print("[VehiclePanel] repair step stalled - job aborted");
-            EtherRepairJob = nil;
+            endRepairJob();
         end
         return;
     end
@@ -301,7 +314,7 @@ local function repairTick()
             repairFloat(player, "UI_VehiclePanel_RepairFloatRejected",
                 { part = partDisplayName(job.pendingPart) }, true);
             print("[VehiclePanel] repair stopped: the server rejected the repair action");
-            EtherRepairJob = nil;
+            endRepairJob();
             return;
         elseif receipt == 1 then
             job.pendingAction = nil;
@@ -324,15 +337,15 @@ local function repairTick()
                 { part = partDisplayName(job.pendingPart) }, true);
             print("[VehiclePanel] repair stopped: steps are not taking effect"
                 .. " (the server may not resolve the token item)");
-            EtherRepairJob = nil;
+            endRepairJob();
             return;
         end
     end
-    -- 挑下一个要修的部件 (全 100 即收工)
+    -- 挑下一个要修的部件 (全 100 即收工, 自动取消勾选)
     local part = repairTargetPart(vehicle, player);
     if part == nil then
         print("[VehiclePanel] repair finished (" .. tostring(job.steps) .. " step(s) queued)");
-        EtherRepairJob = nil;
+        endRepairJob();
         return;
     end
     -- 取过账件 (只用本车: 后备箱 → 手套箱 → 座椅; 见 repairTokenFor)
@@ -342,7 +355,7 @@ local function repairTick()
         repairFloat(player, "UI_VehiclePanel_RepairFloatNoToken", nil, true);
         print("[VehiclePanel] repair stopped: no item in this vehicle (trunk / glovebox / seats); "
             .. tostring(job.steps) .. " step(s) done");
-        EtherRepairJob = nil;
+        endRepairJob();
         return;
     end
     job.steps = job.steps + 1;
@@ -370,32 +383,38 @@ local function repairTick()
 end
 Events.OnTick.Add(repairTick);
 
-local function repairVehicle()
-    -- 取消优先于一切 (2026-09-14 九十一 修): 状态机会强制下车, 再点按钮时人在车外,
-    -- 旧顺序 (先查 currentVehicle) 让取消分支永远走不到 —— 用户实测"开始后取消不了"。
-    -- 取消时连当前动作一起清 (与 D2「整理」取消同款), 立即拿回控制权。
+--* 修理启停 (一百七十六: 按钮改复选框) ——
+--*   勾选 = 必须坐在驾驶位才开工 (否则拒绝并回弹未勾选), 开工后自动下车逐件修;
+--*   取消勾选 = 立刻停 (清队列 + 收尾); 修完/超时/卡住/无件/被踢一律自动取消勾选。
+local function repairStop()
     if EtherRepairJob ~= nil then
         if type(ISTimedActionQueue) == "table" then
             ISTimedActionQueue.clear(EtherRepairJob.player);
         end
         print("[VehiclePanel] repair job cancelled");
-        EtherRepairJob = nil;
+    end
+    endRepairJob();
+end
+
+local function repairStart()
+    local player = getPlayer();
+    if player == nil then endRepairJob(); return; end
+    local vehicle = player:getVehicle();
+    if vehicle == nil or not vehicle:isDriver(player) then
+        print("[VehiclePanel] sit in the driver seat first");
+        endRepairJob();
         return;
     end
-    local player, vehicle = currentVehicle();
-    if not vehicle then
-        print("[VehiclePanel] sit inside the vehicle first");
-        return;
-    end
-    -- 乘客在行驶中的车: 原版 onExit 直接放弃 (不下车), 修理步会卡在车内 → 前置拦截
-    if not vehicle:isDriver(player) and not vehicle:isStopped() then
+    if not vehicle:isStopped() then
         print("[VehiclePanel] wait for the vehicle to stop before repairing");
+        endRepairJob();
         return;
     end
     local script = vehicle:getScript();
     local gain = 15 + (player:getPerkLevel(Perks.Mechanics) - (script and script:getEngineRepairLevel() or 0));
     if gain <= 0 then
         print("[VehiclePanel] mechanics skill too low for timed repair (use direct repair)");
+        endRepairJob();
         return;
     end
     local nowMs = getTimestampMs();
@@ -621,8 +640,16 @@ function EtherVehiclePanel:build()
         },
         {
             title = "UI_VehiclePanel_Group_Service",
+            checkboxes = {
+                -- 自动修理 (一百七十六): 驾驶位勾选即开工 (自动下车逐件修),
+                -- 取消勾选立刻停; 修完/超时/卡住自动取消勾选
+                { key = "UI_VehiclePanel_RepairAuto", onlyInGame = true,
+                  get = function() return EtherRepairJob ~= nil; end,
+                  on = function(c)
+                      if c then repairStart() else repairStop() end
+                  end },
+            },
             buttons = {
-                { key = "UI_VehiclePanel_Repair", fn = repairVehicle },
                 { key = "UI_VehiclePanel_RepairDirect", fn = repairVehicleDirectNow },
                 { key = "UI_VehiclePanel_Refuel", fn = refuelVehicle },
             },

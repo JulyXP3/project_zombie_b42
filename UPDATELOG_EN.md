@@ -2,6 +2,8 @@
 
 ## [3.2.5] - Current
 
+- Added: a "Build" tab - place walls without spending materials (keep planks/nails out of your pack and the nearby ground, or they will be consumed normally; multiplayer only).
+- Improved: the Build tab is now blueprint placement - aim the blueprint (auto-facing + R), press confirm (default `-`, rebindable) to build.
 - Added: an "Unbox spawn" mode on the loot page - keep a carrier (jar box / log stack x2-x4 / firewood bundle) in your backpack, pick a target and count, then spawn; craft the matching unpack recipe once to get the items (multiplayer only; all carriers are prepared at once).
 - Improved: the loot page mode switcher is now a dropdown (too many spawn modes for buttons).
 - Fixed: "Unbox spawn" no longer eats the original ropes when unstacking log stacks (ropes are kept, targets are appended).
@@ -22,7 +24,7 @@
 - Fixed: in the English/Russian UI the Loot page's "Count" label could overlap the mode buttons (space is now reserved per language).
 - Fixed: in the Russian UI the Traps page's search label could overlap the search box when switching to weapon mode.
 - Build: version bumped to 3.2.5.
-
+- Added: a standalone car-kill tool - works without the main mod, toggle with the backslash key in game, zombies hit by your driven vehicle die on contact
 ## [3.2.4]
 
 - Fixed: "Vehicle teleport" could get you kicked on some servers (the pace now adapts to the server's settings and it waits for the vehicle to stop before starting; long trips take slightly longer but are stable).

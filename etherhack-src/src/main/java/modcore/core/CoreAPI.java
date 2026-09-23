@@ -569,6 +569,7 @@ public class CoreAPI {
             this.exposer.exposeVehicleTeleport();
         this.exposer.exposeChat();
         this.exposer.exposeRecipes();
+        this.exposer.exposeModScan();
         this.exposer.exposeRenderingAPI();
         this.exposer.exposeAutoDrive();
         PrivateGlobals.endCapture();
@@ -1578,6 +1579,19 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, RecipeAPI.class, method, name);
                 Logger.printLog("Exposed RecipeAPI method: " + name);
+            }
+        }
+
+        public void exposeModScan() {
+            for (Method method : ModScanAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, ModScanAPI.class, method, name);
+                Logger.printLog("Exposed ModScanAPI method: " + name);
             }
         }
 
