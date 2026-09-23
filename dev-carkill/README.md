@@ -7,11 +7,15 @@
 
 ## 游戏-only 机器（推荐：直接安装）
 
-构建后把这三个文件放在同一个目录（`car_kill.jar` 由构建脚本自动复制到脚本旁边）：
+构建后把这 4 个文件放在同一个目录（`car_kill.jar` 由构建脚本自动复制到脚本旁边）：
 
 - `car_kill.jar`
 - `install.bat`
+- `install.ps1`
 - `uninstall.bat`
+- `uninstall.ps1`
+
+**注意**：`.bat` 只是启动器，实际逻辑在对应的 `.ps1` 文件里。四个文件必须在同一目录，缺一不可。
 
 运行 `install.bat`。jar 会被复制到 `%USERPROFILE%\Zomboid\car_kill.jar`，脚本查找 Steam 里的 Project Zomboid，先备份三个原始文件：
 

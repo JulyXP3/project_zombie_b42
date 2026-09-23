@@ -1,7 +1,8 @@
+if (-not $env:HERE) { $env:HERE = $PSScriptRoot }
 $ErrorActionPreference = 'Stop'
 
 $packageDir = Join-Path $env:USERPROFILE 'Zomboid'
-$sourceJar = Join-Path $PSScriptRoot 'car_kill.jar'
+$sourceJar = Join-Path $env:HERE 'car_kill.jar'
 $targetJar = Join-Path $packageDir 'car_kill.jar'
 
 function Find-GameDir {
@@ -59,7 +60,7 @@ function Add-Agent([string]$path, [string]$jar) {
 }
 
 if (-not (Test-Path -LiteralPath $sourceJar)) {
-    $sourceJar = Join-Path $PSScriptRoot 'dist\car_kill.jar'
+    $sourceJar = Join-Path $env:HERE 'dist\car_kill.jar'
 }
 if (-not (Test-Path -LiteralPath $sourceJar)) {
     throw 'car_kill.jar not found (run build.ps1 first)'

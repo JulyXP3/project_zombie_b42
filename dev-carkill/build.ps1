@@ -75,16 +75,10 @@ if ($LASTEXITCODE -ne 0) { throw "jar cfm failed: $LASTEXITCODE" }
 Copy-Item -Force $jar (Join-Path $PSScriptRoot 'car_kill.jar')
 Write-Host "[CarKill] built $jar"
 
-# Self-contained hybrid .bat launchers: base64 PS payload, no sidecar .ps1 to copy.
-# $PSScriptRoot does not exist under -EncodedCommand, so bind it to $env:HERE (set by the .bat stub).
-function New-HybridBat([string]$ps1Name, [string]$batName, [string]$failLabel) {
-    $code = Get-Content -LiteralPath (Join-Path $PSScriptRoot $ps1Name) -Raw
-    $code = ($code -replace "`r?`n", "`r`n").Replace('$PSScriptRoot', '$env:HERE')
-    $blob = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($code)) -replace '\s+', ''
-    Write-Host "[CarKill] $batName code=$($code.Length) blob=$($blob.Length)"
-    if ($blob.Length -lt 1000) { throw "blob too short for $batName ($($blob.Length))" }
-    # NOTE: do not inline '+' with a multi-KB string inside @(): it splits into two elements.
-    $cmdLine = '%PS% -NoProfile -ExecutionPolicy Bypass -EncodedCommand {0}' -f $blob
+# Generate thin .bat wrappers that call sidecar .ps1 files.
+function New-BatWrapper([string]$ps1Name, [string]$batName, [string]$failLabel) {
+    $ps1Arg = '%~dp0' + $ps1Name
+    $cmdLine = '%PS% -NoProfile -ExecutionPolicy Bypass -File "' + $ps1Arg + '"'
     $bat = @(
         '<# :',
         '@echo off',
@@ -102,9 +96,7 @@ function New-HybridBat([string]$ps1Name, [string]$batName, [string]$failLabel) {
     ) -join "`r`n"
     $outPath = Join-Path $PSScriptRoot $batName
     Set-Content -LiteralPath $outPath -Value ($bat + "`r`n") -Encoding Ascii -NoNewline:$false
-    $cmdLine = Get-Content -LiteralPath $outPath | Where-Object { $_ -like '*-EncodedCommand *' }
-    if ($cmdLine.Length -lt 1000) { throw "$batName payload line broken ($($cmdLine.Length) chars)" }
     Write-Host "[CarKill] wrote $batName"
 }
-New-HybridBat 'install.ps1' 'install.bat' 'Install'
-New-HybridBat 'uninstall.ps1' 'uninstall.bat' 'Uninstall'
+New-BatWrapper 'install.ps1' 'install.bat' 'Install'
+New-BatWrapper 'uninstall.ps1' 'uninstall.bat' 'Uninstall'
