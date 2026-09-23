@@ -79,7 +79,7 @@ Write-Host "[CarKill] built $jar"
 # $PSScriptRoot does not exist under -EncodedCommand, so bind it to $env:HERE (set by the .bat stub).
 function New-HybridBat([string]$ps1Name, [string]$batName, [string]$failLabel) {
     $code = Get-Content -LiteralPath (Join-Path $PSScriptRoot $ps1Name) -Raw
-    $code = $code.Replace('$PSScriptRoot', '$env:HERE')
+    $code = ($code -replace "`r?`n", "`r`n").Replace('$PSScriptRoot', '$env:HERE')
     $blob = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes($code)) -replace '\s+', ''
     Write-Host "[CarKill] $batName code=$($code.Length) blob=$($blob.Length)"
     if ($blob.Length -lt 1000) { throw "blob too short for $batName ($($blob.Length))" }

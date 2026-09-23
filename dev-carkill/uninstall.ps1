@@ -54,5 +54,12 @@ if (-not $gameDir) { throw 'Project Zomboid install directory not found' }
 foreach ($name in @('ProjectZomboid64.json', 'ProjectZomboid64.bat', 'ProjectZomboid64ShowConsole.bat')) {
     Restore-LaunchFile (Join-Path $gameDir $name) $targetJar
 }
+try {
+    if (Test-Path -LiteralPath $targetJar) {
+        Remove-Item -LiteralPath $targetJar -Force
+        Write-Host '[CarKill] Removed car_kill.jar.'
+    }
+} catch {
+    Write-Host '[CarKill] Could not remove car_kill.jar (quit the game first, then delete it manually).'
+}
 Write-Host '[CarKill] Uninstalled. Fully quit and relaunch the game.'
-Write-Host ("[CarKill] car_kill.jar was left in " + $env:USERPROFILE + "\Zomboid.")
