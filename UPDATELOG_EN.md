@@ -4,7 +4,9 @@
 
 - Removed: the "Fast health regen" option - its server-side sync channel stopped working after the game update; retired for now (a replacement approach is archived for a future comeback).
 - Fixed: "Attack range bonus" could not be reset once enabled, and the range adjustment had no effect (previously affected weapons are automatically restored to their vanilla range on adjust).
-- Improved: autopilot cruise speed raised from 85% to 95% of the server speed limit.
+- Improved: autopilot cruise speed raised from 85% to 95% of the server speed limit, and the extra fixed 55 km/h cap is gone - the default cruise now follows min(server speed limit x 95%, vehicle top speed), a clear speed-up on open straights (automatic slowing for curves, obstacles and map edges is unchanged).
+- Improved: autopilot detour speed raised from 20 to 30 (the low-speed squeeze/creep tiers are unchanged).
+- Fixed: autopilot could misjudge "no detour needed" for obstacles sitting at a specific distance near the lane edge and ram them at full speed (such cases now fall back to the low-speed squeeze tiers or a proper detour).
 - Fixed: build failure after the game update (internal adaptation).
 - Added: a "Build" tab - place walls without spending materials (keep planks/nails out of your pack and the nearby ground, or they will be consumed normally; multiplayer only).
 - Improved: the Build tab is now blueprint placement - aim the blueprint (auto-facing + R), press confirm (default `-`, rebindable) to build.

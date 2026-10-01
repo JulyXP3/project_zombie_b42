@@ -77,7 +77,6 @@ public final class AutoDriveController {
     private static final long SCAN_PERIOD_MS = 150;      // 感知间隔 (自适应 ≈10 tick)
     private static final float BRAKE_DECEL = 6.0f;       // 舒适制动减速度 m/s² (制动距离估算)
     private static final float ARRIVE_RADIUS = 4.0f;     // 到达半径 (格, §五)
-    private static final float CRUISE_ADAPTIVE = 55.0f;  // 自适应巡航档 (从容, 观感像人)
     private static final float SPEED_LIMIT_MARGIN = 0.95f; // 硬顶余量 (一百八十四 用户拍板 0.85→0.95; §四)
     /** Stanley 增益: 横向偏差项的收敛快慢 (e=1 格时低速 ~60°/高速 ~6°)。 */
     private static final float K_STANLEY = 1.5f;
@@ -192,8 +191,16 @@ public final class AutoDriveController {
     private static final float AVOID_CLEAR_DIST = 8.0f;   // 绕行序列尾部出口余量 (格)
     private static final float AVOID_WINDOW = 40.0f;      // 局部规划窗 (格): 窗内全部障碍参与决策
     private static final float AVOID_CLEAR = 3.5f;        // 侧向禁入半宽 (自车1.5 + 障碍2.0)
+    /** 宽档判据余量 (一百八十八, 用户拍板方案 A): wide 档可行性要求 |lat−obsLat| ≥
+     *  AVOID_CLEAR + 此余量。实证 drive_20261002_004741: 路边停放车带 oLat 2.8–3.5
+     *  恰在 3.5 判据边界上, 投影噪声把 oLat 摆到 ≥3.5 即判"当前车道可直行" → 20-30
+     *  km/h 直线撞上实车 (而纵向保命层对 |obsLat|∈[1.5,3.5] 走廊按设计豁免, 两层
+     *  责任互相落空)。0.3 格余量使边界情形落回挤缝/穿隙低速档 (10/5 km/h, 剐蹭
+     *  预算内) 或正常绕开, 不再以宽档速度直穿。挤缝/穿隙档不加余量 (它们本就是
+     *  低速剐蹭预算档, 加了会推高误判 BLOCKED 率)。 */
+    private static final float WIDE_CLEAR_MARGIN = 0.3f;
     private static final float AVOID_LANE_MAX = 10.0f;    // 横向偏移搜索范围 ± (格)
-    private static final float AVOID_SPEED_CAP = 20.0f;   // 绕行/并入恒速 km/h (2026-09-11 用户裁定 10→20)
+    private static final float AVOID_SPEED_CAP = 30.0f;   // 绕行/并入恒速 km/h (2026-09-11 用户裁定 10→20; 2026-10-02 用户拍板 20→30)
     /** 挤缝模式净空 (格, C 修复 2026-09-11): 硬净空 AVOID_CLEAR=3.5 = 自车半宽 1.5 +
      *  障碍**包围圆** 2.0 — 圆模型对平行/斜列停放车辆明显偏大 (车横向半宽只有 ~1.0),
      *  密集错位车流恒判无解 → 原地静止 (实测)。硬解无解时降到 2.5 格
@@ -226,7 +233,7 @@ public final class AutoDriveController {
      *  固定低速抵近到 BLOCKED_GAP, 交给"贴住蠕动"分支 (绝不完全停车)。 */
     private static final float BLOCKED_CREEP_KMH = 6.0f;
     private static final float BLOCKED_GAP = IDM_GAP_CLEAR + 1.5f;
-    /** 绕行/并入态贴住护栏 (F 修复 2026-09-12, 用户裁定"绕行恒速 20"): 时距跟车律
+    /** 绕行/并入态贴住护栏 (F 修复 2026-09-12, 用户裁定"绕行恒速 20", 常量现值 30): 时距跟车律
      *  (IDM_T = 1.2s) 在障碍于正前 10 格时给 (10 − 6.5)/1.2 × 3.6 = 10.5 km/h ——
      *  但绕行层本来就是"横向让开"的解法, 时距项与横向剖面互相打架 (实测避障期掉到
      *  10km/h 的根因: 障碍一进 ±1.5 正前走廊就压速, 横向让开后 obsLon=NaN 又回 20,
@@ -818,9 +825,13 @@ public final class AutoDriveController {
         // ===== 纵向目标: 巡航/弯道剖面 + 偏航安全网 + 绕行限速 =====
         // 静态物穿墙, 僵尸碾杀 (战损钩子), 车辆/残骸缺口序列绕行 (本层)。
         float vehicleMax = Math.max(vehicle.getMaxSpeed(), 20.0f);
+        // 一百八十七 (用户拍板): 自适应档不再压 55 从容档 — 旧双上限 min(0.95×限速, 55)
+        // 在 70 限速服永远被 55 卡死, 0.95 折形同虚设。现自适应目标 = min(0.95×服务端
+        // 限速, 车辆脚本极速); 弯道/障碍/边界安全网 (cornerRefSpeed 剖面 + gapSafeSpeed
+        // + boundaryDist) 均不依赖该常量, 放宽只抬直路空旷段目标速。
         float cruise = cruiseSpeed > 0 ? Math.min(cruiseSpeed, vehicleMax)
-                : Math.min(Math.min((float) ServerOptions.instance.speedLimit.getValue()
-                        * SPEED_LIMIT_MARGIN, vehicleMax), CRUISE_ADAPTIVE);
+                : Math.min((float) ServerOptions.instance.speedLimit.getValue()
+                        * SPEED_LIMIT_MARGIN, vehicleMax);
         float cornerLimit = cornerRefSpeed(vehicle, cruise);
         diagCorner = cornerLimit;
         float v0 = Math.min(cruise, cornerLimit);
@@ -911,7 +922,7 @@ public final class AutoDriveController {
      * gap 安全速纯函数 (纵向目标速的下限来源; 抽成 static = 离线自检可调, 见
      * temp/drivetest/AvoidSpeedTest): 返回 km/h 上限, MAX_VALUE = 不干预。
      *  · 正常跟车: ACC 时间间隙律 (净距/时距),
-     *  · 绕行/并入: 豁免时距项, 只留贴住护栏 (恒速 20 由 avoidCap 负责),
+     *  · 绕行/并入: 豁免时距项, 只留贴住护栏 (绕行恒速由 avoidCap = AVOID_SPEED_CAP 负责),
      *  · 堵死态: 不在此处 (由蠕动接近律接管)。
      */
     static float gapSafeSpeed(int mode, float obsLon, float obsLat) {
@@ -919,7 +930,7 @@ public final class AutoDriveController {
             return (!Float.isNaN(obsLon) && obsLon <= BLOCKED_GAP) ? 0.0f : BLOCKED_CREEP_KMH;
         }
         if (mode == AVOID_DETOUR || mode == AVOID_RETURN) {
-            // 绕行/并入: 让开由横向剖面负责, 绕行恒速 20 由 avoidCap 负责
+            // 绕行/并入: 让开由横向剖面负责, 绕行恒速由 avoidCap 负责
             // (并入段一百一十三撤恒速, 改由偏航安全网 20 档接管); 只在贴住区
             // (正前 |obsLat| < 1.5) 降速。检测走廊是 ±3.5 — 侧前 3.4 格的障碍
             // 只是"在走廊里", 不挡道, 误刹会把车整段停死 (2026-09-12 05:22 版
@@ -1402,7 +1413,7 @@ public final class AutoDriveController {
         boolean creep = false;
         if (now < preferTightTierMs && planLattice(n, eLat, CREEP_CLEAR)) {
             creep = true;
-        } else if (!planLattice(n, eLat, AVOID_CLEAR)) {
+        } else if (!planLattice(n, eLat, AVOID_CLEAR + WIDE_CLEAR_MARGIN)) {
             if (planLattice(n, eLat, SQUEEZE_CLEAR)) {
                 squeeze = true;
             } else if (planLattice(n, eLat, CREEP_CLEAR)) {
@@ -2078,6 +2089,11 @@ public final class AutoDriveController {
     /** 服务端限速原值 (UI 提示行)。 */
     public float speedLimit() {
         return (float) ServerOptions.instance.speedLimit.getValue();
+    }
+
+    /** 自适应巡航默认值 (无车时 UI 提示行用, 不含车辆极速钳制): 服务端限速 × 余量。 */
+    public float adaptiveCruiseDefault() {
+        return speedLimit() * SPEED_LIMIT_MARGIN;
     }
 
     /** 制动距离 (格): v(m/s)² / (2·a)。1 格 ≈ 1 m。 */

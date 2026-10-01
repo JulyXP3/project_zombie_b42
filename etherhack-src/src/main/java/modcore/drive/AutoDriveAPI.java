@@ -98,7 +98,7 @@ public final class AutoDriveAPI {
         return ok;
     }
 
-    /** 巡航目标速 km/h, 0 = 自适应 (~55, 仍被硬顶钳制) — 唯一速度旋钮 (§五)。 */
+    /** 巡航目标速 km/h, 0 = 自适应 (= 硬顶, 服务端限速×0.95 与车辆极速取小) — 唯一速度旋钮 (§五)。 */
     @LuaMethod(name = "autoDriveSetCruiseSpeed", global = true)
     public static void autoDriveSetCruiseSpeed(double kmh) {
         INSTANCE().setCruiseSpeed((float) kmh);
@@ -215,7 +215,7 @@ public final class AutoDriveAPI {
     public static double autoDriveGetHardCap() {
         BaseVehicle v = currentVehicle();
         if (v == null) {
-            return INSTANCE().speedLimit() * 0.85;
+            return INSTANCE().adaptiveCruiseDefault();
         }
         return INSTANCE().hardCap(v);
     }
