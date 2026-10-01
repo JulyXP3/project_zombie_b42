@@ -78,7 +78,7 @@ public final class AutoDriveController {
     private static final float BRAKE_DECEL = 6.0f;       // 舒适制动减速度 m/s² (制动距离估算)
     private static final float ARRIVE_RADIUS = 4.0f;     // 到达半径 (格, §五)
     private static final float CRUISE_ADAPTIVE = 55.0f;  // 自适应巡航档 (从容, 观感像人)
-    private static final float SPEED_LIMIT_MARGIN = 0.85f; // 硬顶余量 (永不违规, §四)
+    private static final float SPEED_LIMIT_MARGIN = 0.95f; // 硬顶余量 (一百八十四 用户拍板 0.85→0.95; §四)
     /** Stanley 增益: 横向偏差项的收敛快慢 (e=1 格时低速 ~60°/高速 ~6°)。 */
     private static final float K_STANLEY = 1.5f;
     /** Stanley 输出增益 (A 轮 2026-09-11: 原 2.0 固定, 仿真标定 temp/sim_avoid/pp_compare.py

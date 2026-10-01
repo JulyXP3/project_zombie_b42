@@ -82,7 +82,6 @@
     UI_CharacterPanel_OptimalCalories = "Поддерживать оптимальные калории",
     UI_CharacterPanel_OptimalWeight = "Поддерживать оптимальный вес",
     UI_CharacterPanel_NoMuscleStrain = "Отключить растяжение мышц",
-    UI_CharacterPanel_FullBodyRestore = "Быстрая регенерация (не бессмертие)",
     UI_CharacterPanel_Group_DebugCheats = "Читы отладочных прав",
     UI_CharacterPanel_Group_Combat = "Бой",
     UI_CharacterPanel_Group_Items = "Предметы и перенос",

@@ -117,7 +117,6 @@ public class CoreAPI {
     private HandWeapon jamStompedWeapon;
     private float jamStompedOriginalChance;
     private HandWeapon recoilStompedWeapon;
-    private long lastPlayerDamageSendMs;
     public boolean isHeadshotOnly;
     public boolean isAlwaysHit;
     public boolean isSuperMultiHit;
@@ -180,7 +179,6 @@ public class CoreAPI {
     public boolean isMinimapOpen;
     public boolean isNoJam;
     public boolean isNoMuscleStrain;
-    public boolean isFullBodyRestore;
     public boolean isCharCreateAllTraits;
     public boolean isCharCreateMaxSkills;
     public boolean isCharCreateAllClothes;
@@ -269,7 +267,6 @@ public class CoreAPI {
             {"isMapDrawVehicles", "k61"}, {"isMapDrawZombies", "k62"},
             {"isMapDrawItems", "k63"},
             {"isNoJam", "k64"}, {"isNoMuscleStrain", "k65"},
-            {"isFullBodyRestore", "k66"},
             {"isCharCreateAllTraits", "k67"}, {"isCharCreateMaxSkills", "k68"},
             {"isCharCreateAllClothes", "k69"},
             {"charCreateCustomTraits", "k70"},
@@ -365,7 +362,6 @@ public class CoreAPI {
         var3.setProperty("isMinimapOpen", Boolean.toString(this.isMinimapOpen));
         var3.setProperty("isNoJam", Boolean.toString(this.isNoJam));
         var3.setProperty("isNoMuscleStrain", Boolean.toString(this.isNoMuscleStrain));
-        var3.setProperty("isFullBodyRestore", Boolean.toString(this.isFullBodyRestore));
         var3.setProperty("isCharCreateAllTraits", Boolean.toString(this.isCharCreateAllTraits));
         var3.setProperty("isCharCreateMaxSkills", Boolean.toString(this.isCharCreateMaxSkills));
         var3.setProperty("isCharCreateAllClothes", Boolean.toString(this.isCharCreateAllClothes));
@@ -483,7 +479,6 @@ public class CoreAPI {
         this.isMinimapOpen = ConfigUtils.getBooleanFromConfig(var3, "isMinimapOpen", false);
         this.isNoJam = ConfigUtils.getBooleanFromConfig(var3, "isNoJam", false);
         this.isNoMuscleStrain = ConfigUtils.getBooleanFromConfig(var3, "isNoMuscleStrain", false);
-        this.isFullBodyRestore = ConfigUtils.getBooleanFromConfig(var3, "isFullBodyRestore", false);
         this.isCharCreateAllTraits = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateAllTraits", false);
         this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateMaxSkills", false);
         this.isCharCreateAllClothes = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateAllClothes", false);
@@ -594,14 +589,53 @@ public class CoreAPI {
                 HandWeapon var5 = (HandWeapon)var4;
                 if (!var4.getStringItemType().equals("RangedWeapon") && !var4.getStringItemType().equals("MeleeWeapon") || !this.originalWeaponStats.containsKey(var6 = var5.getFullType())) continue;
                 float[] var7 = this.originalWeaponStats.get(var6);
+                // 一百八十四: 快照面裁剪到伤害三件套 —— maxRange 回写曾把"补丁后的
+                // getMaxRange (字段+攻击距离加成)"烤进武器字段, 造成加成永久残留
+                // (重置不回去/滑块无效); 其余四项本就是 no-op (一百零三), 一并移除。
                 var5.setExtraDamage(var7[0]);
                 var5.setMaxDamage(var7[1]);
                 var5.setMinDamage(var7[2]);
-                var5.setMaxRange(var7[3]);
-                var5.setMinRange(var7[4]);
-                var5.setHitChance((int)var7[5]);
-                var5.setCriticalDamageMultiplier(var7[6]);
             }
+        }
+    }
+
+    /**
+     * 一百八十四: 攻击距离"字段重建" —— 把背包内全部武器的 maxRange 字段洗回
+     * "脚本值 + Σ已挂配件"的原版等价值。历史污染源: 秒杀快照/回写曾读补丁后的
+     * getMaxRange (字段+加成) 再回写; attach/detachWeaponPart 的
+     * setMaxRange(getMaxRange() ± part.getMaxRange()) 同构烤入。本方法只依赖
+     * 未被补丁的 Item.getMaxRange / WeaponPart.getMaxRange, 结果与 vanilla
+     * 配件叠加公式精确等价。纯本地字段写, 零上行 (SyncItemFields 不携带 maxRange)。
+     * 调用点: setAttackRangeBonus 每次应用/重置都重建, 保证加成底数恒为干净脚本值。
+     */
+    public void rebuildWeaponMaxRange() {
+        IsoPlayer player = IsoPlayer.getInstance();
+        if (player == null) {
+            return;
+        }
+        ArrayList<InventoryItem> items = player.getInventory().getItems();
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+        for (InventoryItem item : items) {
+            if (!(item instanceof HandWeapon)) {
+                continue;
+            }
+            HandWeapon weapon = (HandWeapon)item;
+            zombie.scripting.objects.Item script = weapon.getScriptItem();
+            if (script == null) {
+                continue;
+            }
+            float base = script.getMaxRange();
+            java.util.List<zombie.inventory.types.WeaponPart> parts = weapon.getAllWeaponParts();
+            if (parts != null) {
+                for (zombie.inventory.types.WeaponPart part : parts) {
+                    if (part != null) {
+                        base += part.getMaxRange();
+                    }
+                }
+            }
+            weapon.setMaxRange(base);
         }
     }
 
@@ -692,7 +726,11 @@ public class CoreAPI {
             var3 = (HandWeapon)var2;
             String var4 = var3.getFullType();
             if (!this.originalWeaponStats.containsKey(var4)) {
-                this.originalWeaponStats.put(var4, new float[]{var3.getExtraDamage(), var3.getMaxDamage(), var3.getMinDamage(), var3.getMaxRange(), var3.getMinRange(), var3.getHitChance(), var3.getCriticalDamageMultiplier()});
+                // 一百八十四: 快照只存伤害三件套 —— 快照发生在补丁生效期间, 读
+                // getMaxRange 会读到"字段+攻击距离加成", 回写即把加成烤进字段
+                // (attachWeaponPart 的 ±part.getMaxRange() 同构烤入, 由
+                // rebuildWeaponMaxRange 在重置攻击距离时统一洗回脚本值)。
+                this.originalWeaponStats.put(var4, new float[]{var3.getExtraDamage(), var3.getMaxDamage(), var3.getMinDamage()});
             }
             // 秒杀只踩伤害三件套 (extraDamage/max/min): 必死能力 = 本地百万伤害 + 命中包
             // Hit.set 钳 ≤100 (覆盖原版任何僵尸血量), 与射程无关。不再踩 maxRange/minRange/
@@ -833,19 +871,16 @@ public class CoreAPI {
             this.jamStompedWeapon.setJamGunChance(this.jamStompedOriginalChance);
             this.jamStompedWeapon = null;
         }
-        // 一包三用 (负重/拉伤/回血): PlayerDamagePacket 服务端 parse 零校验直采
-        // 客户端自报的 maxWeight/BodyDamage, 但服务端每帧 UpdateStrength 会重算
-        // 覆盖 —— 本地踩值 + **低频重发**压制 last-writer-wins。
-        // 一百一十七 (参考 PienZ 的 carry_weight 设计): 重发从 50ms (20/s) 降到
-        // 1000ms (1/s) —— 无限负重的本地效果 100% 由 RootCapacityPatch (根背包容量
-        // 重写, 零包) + 下方本地踩值承担; 重发只作低频兜底同步, 消除 20Hz 网络噪声
-        // (限流告警/日志面)。该包 anticheats=None, 限流默认 300/s 且超限仅告警。
-        // 注: 原「无尸病」已移除 —— corpseSicknessRate 仅驱动 NOXIOUS_SMELL moodle
-        // 档位 (Moodle:458), UpdateIllness 每帧按尸体数重算 rate 并直加
-        // CharacterStat.FOOD_SICKNESS, 从不读该字段, 清零只遮指示器不挡病情。
+        // 一百八十四: 原"一包三用"上行 (PlayerDamagePacket 携带 maxWeight/BodyDamage
+        // 让服务端 parse 直采) 已随游戏 4a0e9546ec 将该包改为纯服务端→客户端
+        // (handlingType 3→2, onServerPacket 的 (handlingType&1)!=0 门控静默丢弃
+        // 客户端上行) 而整体失效 —— 包照发但服务端连 parse 都不做, 纯噪声, 整块移除。
+        // 各功能的客户端本地踩值不受影响; 服务端副本一致性替代方案见
+        // analysis/红队方法论与早期功能条目(2026-08-19-已实施-索引).md 文末
+        // 2026-10-01 执行记录 (ClientCommand onHealthCheatCurrentPlayer)。
         // 一百三十一 计时生成加速件收尾 (未武装时立即返回, 零开销; 常驻以防中途断线残留 NaN)
         TakeSpawnAPI.tick();
-        if (this.isUnlimitedCarry || this.isNoMuscleStrain || this.isFullBodyRestore
+        if (this.isUnlimitedCarry || this.isNoMuscleStrain
                 || this.isUnlimitedCondition || this.isUnlimitedEndurance) {
             // 一百二十二 (掉血根治, 用户实测驱动): 机制 = 稳定版 (git 仓库, 用户实测不掉血的
             // 那版) 原样 —— **分子侧清零** (GamePatcher 的 getCapacityWeight/getContentsWeight
@@ -857,27 +892,14 @@ public class CoreAPI {
                 var1.setMaxWeight(10000);
             }
             // 无限耐力 stomp 已统一到 onTickUpdate (一百三十五 去重: 本处原为重复实现)
-            if (this.isNoMuscleStrain || this.isFullBodyRestore) {
+            if (this.isNoMuscleStrain) {
                 ArrayList<BodyPart> bodyParts = var1.getBodyDamage().getBodyParts();
                 for (int bodyIndex = 0; bodyIndex < bodyParts.size(); ++bodyIndex) {
                     BodyPart bodyPart = bodyParts.get(bodyIndex);
-                    if (this.isNoMuscleStrain && bodyPart.getStiffness() > 0.0f) {
+                    if (bodyPart.getStiffness() > 0.0f) {
                         bodyPart.setStiffness(0.0f);
                     }
-                    if (this.isFullBodyRestore && bodyPart.getHealth() < 100.0f) {
-                        bodyPart.SetHealth(100.0f);
-                    }
                 }
-            }
-            long nowMs = System.currentTimeMillis();
-            // 一百二十 (用户实测反馈): 拉伤/回血依赖高频压制服务端重算 —— 服务端会把自己的
-            // 玩家副本 (UpdateStrength/体伤) 推回客户端, 1s 节流期间会被回滚 (实测可见)。
-            // 语义拆分: 拉伤/回血在开 → 恢复 50ms (20/s); 仅负重 → 1000ms 低频兜底
-            // (负重效果已由 RootCapacityPatch 零包承载, 低频只为服务端副本一致性)。
-            long interval = (this.isNoMuscleStrain || this.isFullBodyRestore) ? 50L : 1000L;
-            if (GameClient.client && nowMs - this.lastPlayerDamageSendMs >= interval) {
-                this.lastPlayerDamageSendMs = nowMs;
-                GameClient.sendPlayerDamage(var1);
             }
         }
         // 自动修理背包物品 / 修复身上衣物: 本地修复 + 变化时 SyncItemFields 上行(多人化, 2026-08-28)。

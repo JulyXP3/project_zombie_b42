@@ -39,6 +39,8 @@ import zombie.characters.BodyDamage.BodyDamage;
 import zombie.characters.BodyDamage.BodyPart;
 import zombie.characters.BodyDamage.BodyPartType;
 import zombie.network.GameClient;
+import zombie.network.PacketTypes;
+import zombie.network.packets.INetworkPacket;
 import zombie.network.packets.NetTimedActionPacket;
 
 public final class TakeSpawnAPI {
@@ -146,7 +148,8 @@ public final class TakeSpawnAPI {
     private static void poison() {
         try {
             armedHand.setAdditionalPain(Float.NaN);
-            GameClient.sendPlayerDamage(armedPlayer);
+            // 2026-10-01 游戏 4a0e9546ec: GameClient.sendPlayerDamage 删除, 原实现即此一行
+            INetworkPacket.send(PacketTypes.PacketType.PlayerDamage, armedPlayer);
         } catch (Throwable t) {
             Logger.printLog("[TakeSpawn] accelerator poison error: " + t);
         }
@@ -180,7 +183,7 @@ public final class TakeSpawnAPI {
                 armedHand.setAdditionalPain(originalPain);
             }
             if (armedPlayer != null) {
-                GameClient.sendPlayerDamage(armedPlayer);
+                INetworkPacket.send(PacketTypes.PacketType.PlayerDamage, armedPlayer);
             }
             Logger.printLog("[TakeSpawn] accelerator restored (pain=" + originalPain + ")");
         } catch (Throwable t) {

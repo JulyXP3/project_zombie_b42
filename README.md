@@ -17,7 +17,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Survival
 
 - **Items & carry**: auto-repair inventory items / unlimited carry weight
-- **Moodles & needs**: infinite stamina / fast health regen (not godmode) / disable muscle strain / disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / keep optimal calories / keep optimal weight / repair worn clothing / pad worn clothing with leather strips
+- **Moodles & needs**: infinite stamina / disable muscle strain / disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / keep optimal calories / keep optimal weight / repair worn clothing / pad worn clothing with leather strips
 - **Debug privileges (SP only)**: God mode / NoClip / Invisible / Creative mode / instant progress bars — requires "Unlock debug privileges (SP)" on the Other page first
 - **Special modes**: Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / Zombies don't attack the player (MP-ready)
 
@@ -108,7 +108,7 @@ See [UPDATELOG_EN.md](UPDATELOG_EN.md) for the full change history.
 
 Requirements: **JDK 25** and **Gradle 9.1.0**. The build runs through the included Gradle wrapper (`gradlew.bat`), which downloads Gradle automatically on first run — or you can use a locally installed Gradle.
 
-1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, renamed to `zombie.jar` (it is only read at compile time and never modified).
+1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, keeping the original file name (it is only read at compile time and never modified).
 2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
 3. Take `modcore-3.2.5-B42.jar` from the `build` directory.
 4. Copy the jar together with `etherhack-src/install.bat` (and optionally `etherhack-src/uninstall.bat`) into the **game root directory**.

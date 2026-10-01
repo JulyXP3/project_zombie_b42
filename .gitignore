@@ -11,9 +11,11 @@ temp/
 # 全量反编译参考 (CFR 整包输出, 可重生成, 不入仓库)
 analysis/pz_sync_analysis/
 
-# analysis/ 只允许入库 md 文件, 其余(反编译产物等)一律不入库
-analysis/*
-!analysis/*.md
+# analysis/ 只允许入库 md 文件 (任意深度, 2026-10-01 用户拍板), 其余(反编译产物等)一律不入库
+# 写法: analysis/** 全禁 → 重包含所有目录(让 git 能下钻) → 重包含各级 .md; 非 md 文件仍被 analysis/** 压住
+analysis/**
+!analysis/**/
+!analysis/**/*.md
 
 # IDE
 .idea/
@@ -27,7 +29,7 @@ analysis/*
 !etherhack-src/lib/Kahlua.jar
 !etherhack-src/lib/fmod.jar
 !etherhack-src/lib/org.jar
-# zombie.jar 不入 git: 由用户从游戏目录复制 projectzomboid.jar 并改名(见 README 安装步骤)
+# projectzomboid.jar 不入 git: 由用户从游戏目录复制到 etherhack-src/lib/ (保持原名, 见 README 安装步骤)
 analysis/pz_jar/projectzomboid.jarluac.out
 # stale jar xf extraction (junk)
 /EtherHack/

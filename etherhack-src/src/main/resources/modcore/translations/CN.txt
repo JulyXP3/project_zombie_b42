@@ -82,7 +82,6 @@
     UI_CharacterPanel_OptimalCalories = "维持最佳卡路里",
     UI_CharacterPanel_OptimalWeight = "维持最佳体重",
     UI_CharacterPanel_NoMuscleStrain = "禁用肌肉拉伤",
-    UI_CharacterPanel_FullBodyRestore = "高速回血(不是无敌)",
     UI_CharacterPanel_Group_DebugCheats = "调试权限功能",
     UI_CharacterPanel_Group_Combat = "战斗强化",
     UI_CharacterPanel_Group_Items = "物品与携带",

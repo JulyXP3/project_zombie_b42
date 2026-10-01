@@ -658,16 +658,10 @@ public class LuaMethods {
         saveConfig("startup");
     }
 
-    @LuaMethod(name="isFullBodyRestore", global=true)
-    public static boolean isFullBodyRestore() {
-        return CoreMain.getInstance().CoreAPI.isFullBodyRestore;
-    }
-
-    @LuaMethod(name="toggleFullBodyRestore", global=true)
-    public static void toggleFullBodyRestore(boolean var0) {
-        CoreMain.getInstance().CoreAPI.isFullBodyRestore = var0;
-        saveConfig("startup");
-    }
+    // 「高速回血」(isFullBodyRestore/toggleFullBodyRestore) 已于 一百八十四 下线删除:
+    // 游戏 4a0e9546ec 起 PlayerDamage 上行被服务端静默丢弃, 服务端副本无法再被
+    // 压制 —— 替代方案留档于 analysis/红队方法论与早期功能条目(2026-08-19-已实施-索引)
+    // .md 文末 2026-10-01 执行记录, 待拍板后回归。
 
     @LuaMethod(name="isCharCreateAllTraits", global=true)
     public static boolean isCharCreateAllTraits() {
@@ -933,6 +927,10 @@ public class LuaMethods {
     @LuaMethod(name="setAttackRangeBonus", global=true)
     public static void setAttackRangeBonus(float var0) {
         CoreMain.getInstance().CoreAPI.attackRangeBonus = var0;
+        // 一百八十四: 每次应用/重置都把 maxRange 字段洗回"脚本值+配件"干净底数,
+        // 保证实际射程 = 原版值 + 当前加成, 不受历史烤入污染影响 (详见
+        // CoreAPI.rebuildWeaponMaxRange 注释)。
+        CoreMain.getInstance().CoreAPI.rebuildWeaponMaxRange();
         saveConfig("startup");
     }
 

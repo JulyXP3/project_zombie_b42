@@ -315,7 +315,7 @@ function EtherCharacterPanel:build()
                 { key = "UI_CharacterPanel_OptimalCalories",    on = toggleOptimalCalories,    get = isOptimalCalories },
                 { key = "UI_CharacterPanel_OptimalWeight",      on = toggleOptimalWeight,      get = isOptimalWeight },
                 { key = "UI_CharacterPanel_NoMuscleStrain",     on = toggleNoMuscleStrain,     get = isNoMuscleStrain },
-                { key = "UI_CharacterPanel_FullBodyRestore",    on = toggleFullBodyRestore,    get = isFullBodyRestore },
+                -- 「高速回血」已下线 (一百八十四): 服务端同步通道随游戏更新失效, 方案留档待回归
             },
         },
     };

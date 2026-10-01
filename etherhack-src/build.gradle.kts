@@ -80,7 +80,7 @@ dependencies {
     implementation("org.ow2.asm:asm:9.10.1")
     implementation("org.ow2.asm:asm-tree:9.10.1")
     implementation(files("lib/fmod.jar"))
-    implementation(files("lib/zombie.jar"))
+    implementation(files("lib/projectzomboid.jar"))
     implementation(files("lib/Kahlua.jar"))
     implementation(files("lib/org.jar"))
 }

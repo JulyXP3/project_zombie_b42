@@ -2,6 +2,10 @@
 
 ## [3.2.5] - Current
 
+- Removed: the "Fast health regen" option - its server-side sync channel stopped working after the game update; retired for now (a replacement approach is archived for a future comeback).
+- Fixed: "Attack range bonus" could not be reset once enabled, and the range adjustment had no effect (previously affected weapons are automatically restored to their vanilla range on adjust).
+- Improved: autopilot cruise speed raised from 85% to 95% of the server speed limit.
+- Fixed: build failure after the game update (internal adaptation).
 - Added: a "Build" tab - place walls without spending materials (keep planks/nails out of your pack and the nearby ground, or they will be consumed normally; multiplayer only).
 - Improved: the Build tab is now blueprint placement - aim the blueprint (auto-facing + R), press confirm (default `-`, rebindable) to build.
 - Added: an "Unbox spawn" mode on the loot page - keep a carrier (jar box / log stack x2-x4 / firewood bundle) in your backpack, pick a target and count, then spawn; craft the matching unpack recipe once to get the items (multiplayer only; all carriers are prepared at once).

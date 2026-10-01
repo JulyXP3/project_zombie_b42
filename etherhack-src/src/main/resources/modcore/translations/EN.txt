@@ -82,7 +82,6 @@
     UI_CharacterPanel_OptimalCalories = "Maintain optimal calories",
     UI_CharacterPanel_OptimalWeight = "Maintain optimal weight",
     UI_CharacterPanel_NoMuscleStrain = "Disable muscle strain",
-    UI_CharacterPanel_FullBodyRestore = "Fast health regen (not godmode)",
     UI_CharacterPanel_Group_DebugCheats = "Debug-Privilege Cheats",
     UI_CharacterPanel_Group_Combat = "Combat",
     UI_CharacterPanel_Group_Items = "Items & Carry",
