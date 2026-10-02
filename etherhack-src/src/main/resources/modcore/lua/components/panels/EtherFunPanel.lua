@@ -21,6 +21,14 @@ require "ISUI/ISPanel"
 --* addBodyVisualFromItemType/removeBodyVisualFromItemType 直调,
 --* 随 HumanVisual 同包同步; 先清后加 = 每次点击换脸, 恢复一并清。
 --*
+--* 吸引僵尸 (一百九十 A+B, 同一模块区): 勾选 = 每 4s 在脚下发一次
+--* vanilla 世界声音 (addSound 6 参重载, flags=4 引尸语义), MP 走
+--* WorldSoundPacket 上行 (服务端零校验), 半径 200 >= 50 连 ZPOP 未加载
+--* 尣群一起拽; 关闭即停。万象天引按钮 = 单发把可支配 (isLocal, MP=追
+--* 你的那些) 僵尸环形落位到脚下 (zombieGather Java 原语), 0 只提示先
+--* 开吸引转所有权。状态行画在各模块区内部 (用户反馈: 不共享一处)。
+--* 详见 analysis/僵尸吸引与尸群聚集(已实施).md。
+--*
 --* Kahlua 陷阱备忘 (check_kahlua_compat.lua 禁则):
 --*   - 无 string.trim: 手写 ^%s*(.-)%s*$ 模式
 --*   - addItem/drawText 文本一律字符串; type() 可用
@@ -39,10 +47,12 @@ local function trim(s)
 end
 
 --*********************************************************
---* 工具: 状态行设置 (renderContent 绘制)
+--* 工具: 状态行设置 (renderContent 绘制; 每个模块区画自己的状态行,
+--*  用户反馈: 提示不共享一处, 归位到对应模块区内)
+--*   field = "chatStatus" / "skinStatus" / "lureStatus"
 --*********************************************************
-local function setStatus(panel, key)
-    panel.statusText = getTranslate(key);
+local function setStatus(panel, field, key)
+    panel[field] = getTranslate(key);
 end
 
 --*********************************************************
@@ -231,15 +241,15 @@ function EtherFunPanel:build()
             local author = trim(self.authorEntry:getInternalText());
             local text = trim(self.msgEntry:getInternalText());
             if author == "" or text == "" then
-                setStatus(self, "UI_Fun_ErrEmpty");
+                setStatus(self, "chatStatus", "UI_Fun_ErrEmpty");
                 return;
             end
             if sendChatAs(author, self.chatChannel, text) then
                 -- 消息已走 vanilla 发送链 (本地聊天框也会显示一条), 清输入留玩家名便于连发
                 if self.msgEntry.clear then self.msgEntry:clear(); end
-                setStatus(self, "UI_Fun_Sent");
+                setStatus(self, "chatStatus", "UI_Fun_Sent");
             else
-                setStatus(self, "UI_Fun_SendFailed");
+                setStatus(self, "chatStatus", "UI_Fun_SendFailed");
             end
         end, sendW);
         self.sendBtn:initialise();
@@ -262,17 +272,17 @@ function EtherFunPanel:build()
         buttonRow(self, {
             { "UI_Fun_SkinLight", function()
                 if applySkinTexture(self, pickZedTexture(1)) then
-                    setStatus(self, "UI_Fun_SkinDone");
+                    setStatus(self, "skinStatus", "UI_Fun_SkinDone");
                 end
             end },
             { "UI_Fun_SkinHeavy", function()
                 if applySkinTexture(self, pickZedTexture(3)) then
-                    setStatus(self, "UI_Fun_SkinDone");
+                    setStatus(self, "skinStatus", "UI_Fun_SkinDone");
                 end
             end },
             { "UI_Fun_SkinFace", function()
                 if applyZedFace(self) then
-                    setStatus(self, "UI_Fun_SkinFaceDone");
+                    setStatus(self, "skinStatus", "UI_Fun_SkinFaceDone");
                 end
             end },
             { "UI_Fun_SkinRestore", function()
@@ -288,14 +298,14 @@ function EtherFunPanel:build()
                     if did then
                         p:resetModelNextFrame();
                         sendVisual(p);
-                        setStatus(self, "UI_Fun_SkinRestored");
+                        setStatus(self, "skinStatus", "UI_Fun_SkinRestored");
                     else
-                        setStatus(self, "UI_Fun_SkinNoSaved");
+                        setStatus(self, "skinStatus", "UI_Fun_SkinNoSaved");
                     end
                     return;
                 end
                 if applySkinTexture(self, EtherFunPanel.savedSkin) then
-                    setStatus(self, "UI_Fun_SkinRestored");
+                    setStatus(self, "skinStatus", "UI_Fun_SkinRestored");
                 end
             end },
         }, bx, cy, bw);
@@ -304,10 +314,51 @@ function EtherFunPanel:build()
         self.skinStatusY = cy;
     end);
 
-    -- ================= 底部提示 =================
+    self:addSpacer(EtherFormPanel.SECTION_GAP);
+
+    -- ================= 模块三: 吸引僵尸 (一百九十 A+B 同区, 用户反馈合并) =================
+    local lureRowsH = ctrlH * 2 + gap * 2 + EtherTheme.fontHgtSmall;
+    self:addModule("UI_Fun_LureTitle", lureRowsH, function(bx, by, bw)
+        local cy = by;
+        self.lureCb = UICheckbox:new(bx, cy, getTranslate("UI_Fun_LureToggle"),
+            ZombieLure.enabled and true or false, function(v)
+                ZombieLure.setEnabled(v);
+                -- 开启后状态行由实时计数接管 (renderContent); 关闭留一句结果
+                if not v then
+                    self.lureStatus = getTranslate("UI_Fun_LureOff");
+                end
+            end);
+        self.lureCb:initialise();
+        self.lureCb:instantiate();
+        self.lureCb.width = bw;   -- 命中区域 = 整行 (雷达页同款)
+        self:addChild(self.lureCb);
+        self:_track(self.lureCb, { onlyInGame = true });
+        cy = cy + ctrlH + gap;
+
+        buttonRow(self, {
+            { "UI_Fun_GatherBtn", function()
+                local n, msg = ZombieLure.gather();
+                self.lureStatus = msg;
+            end },
+        }, bx, cy, bw);
+        cy = cy + ctrlH + gap;
+
+        -- 状态行锚点 (模块区内部, renderContent 绘制)
+        self.lureStatusX = bx;
+        self.lureStatusY = cy;
+    end);
+
+    -- ================= 底部提示 (每功能一条说明各自起行, 用户反馈不再挤成一团) =================
     self:addSpacer(EtherFormPanel.SECTION_GAP);
     local hintW = self:_rowContentW();
-    self.hintLines = EtherTheme.wrapHint(getTranslate("UI_Fun_Hint"), hintW);
+    self.hintLines = {};
+    local hintKeys = { "UI_Fun_HintChat", "UI_Fun_HintSkin", "UI_Fun_HintLure", "UI_Fun_HintGather" };
+    for i = 1, #hintKeys do
+        local wrapped = EtherTheme.wrapHint(getTranslate(hintKeys[i]), hintW);
+        for j = 1, #wrapped do
+            self.hintLines[#self.hintLines + 1] = wrapped[j];
+        end
+    end
     self.hintH = #self.hintLines * EtherTheme.fontHgtHint;
     -- 行 y 由 addCustomRow 的 builder 回调给出 (游标推进在其内部发生, 外侧算不准)
     self:addCustomRow(self.hintH + 4, function(x, y, w)
@@ -318,13 +369,31 @@ end
 
 --*********************************************************
 --* 状态行 + 提示绘制 (EtherFormPanel:render 回调, 需自带滚动偏移)
+--* 状态行归位: 每个模块区画自己的状态 (用户反馈, 不再共享 chat 锚点)
 --*********************************************************
 function EtherFunPanel:renderContent()
     local ys = self:getYScroll();
-    if self.statusText ~= nil and self.statusText ~= "" then
-        local td = EtherTheme.textDim;
-        self:drawText(self.statusText, self.chatStatusX, self.chatStatusY + ys,
+    local td = EtherTheme.textDim;
+    if self.chatStatus ~= nil and self.chatStatus ~= "" and self.chatStatusX ~= nil then
+        self:drawText(self.chatStatus, self.chatStatusX, self.chatStatusY + ys,
             td.r, td.g, td.b, 1, UIFont.Small);
+    end
+    if self.skinStatus ~= nil and self.skinStatus ~= "" and self.skinStatusX ~= nil then
+        self:drawText(self.skinStatus, self.skinStatusX, self.skinStatusY + ys,
+            td.r, td.g, td.b, 1, UIFont.Small);
+    end
+    if self.lureStatusX ~= nil then
+        -- 吸引开启时显示实时计数; 关闭后显示最近一次操作结果 (开关/聚集)
+        local text = nil;
+        if ZombieLure.enabled then
+            text = tr("UI_Fun_LureActive", { count = tostring(ZombieLure.fired) });
+        elseif self.lureStatus ~= nil then
+            text = self.lureStatus;
+        end
+        if text ~= nil and text ~= "" then
+            self:drawText(text, self.lureStatusX, self.lureStatusY + ys,
+                td.r, td.g, td.b, 1, UIFont.Small);
+        end
     end
     if self.hintLines ~= nil and self.hintX ~= nil then
         for i = 1, #self.hintLines do

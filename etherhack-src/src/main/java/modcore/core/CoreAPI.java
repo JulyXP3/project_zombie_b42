@@ -29,6 +29,7 @@ package modcore.core;
 
 import modcore.core.ChatAPI;
 import modcore.core.CorpseSpawnAPI;
+import modcore.core.ZombieGatherAPI;
 import modcore.core.LuaMethods;
 import modcore.core.CoreMain;
 import modcore.core.RadioXpAPI;
@@ -550,6 +551,8 @@ public class CoreAPI {
             this.exposer.exposeFishingSpawn();
             this.exposer.exposeTrapSpawn();
             this.exposer.exposeCorpseSpawn();
+            // 一百九十 万象天引: B 聚集原语
+            this.exposer.exposeZombieGather();
             // 一百三十一 计时动作真实生成 (ISTakeBricks 真物品路线, 移植 PienZ item_spawner)
             this.exposer.exposeTakeSpawn();
             this.exposer.exposeRadioXp();
@@ -884,13 +887,14 @@ public class CoreAPI {
                 || this.isUnlimitedCondition || this.isUnlimitedEndurance) {
             // 一百二十二 (掉血根治, 用户实测驱动): 机制 = 稳定版 (git 仓库, 用户实测不掉血的
             // 那版) 原样 —— **分子侧清零** (GamePatcher 的 getCapacityWeight/getContentsWeight
-            // 头部注入在开关开时直接 return 0.0f) **+ 下方本地踩值 (maxWeight)**。
-            // 教训: 一百一十七 的"根背包容量重写"与 一百二十一 的"getMaxWeight 读取点重写"
+            // 头部注入在开关开时直接 return 0.0f) + maxWeight 读取点。
+            // 一百九十一: 原"本地踩值 maxWeight=10000"退役 —— 字段被 服务端 PlayerDamagePacket
+            // 推回 (纯下行, parse 无条件覆盖) 与 vanilla BodyDamage 自重算 双源竞态覆盖,
+            // 用户实测"时不时被回退"; 改为 GamePatcher 里 MaxWeightPatch 对 getMaxWeight()
+            // 的读取点重写 (与耐力 Stats.get 同构), 本处仅保留 无拉伤 的 stiffness 踩值。
+            // 教训 (历史): 一百一十七 的"根背包容量重写"与 一百二十一 的"getMaxWeight 读取点重写"
             // 都是分母侧改写, 而分子清零本来一直在 → 掉血与这两者无关 (当时误判, 已回退);
             // 掉血的真实来源仍待定案, 见 analysis/服务器类目 的留档。
-            if (this.isUnlimitedCarry && var1.getMaxWeight() < 10000) {
-                var1.setMaxWeight(10000);
-            }
             // 无限耐力 stomp 已统一到 onTickUpdate (一百三十五 去重: 本处原为重复实现)
             if (this.isNoMuscleStrain) {
                 ArrayList<BodyPart> bodyParts = var1.getBodyDamage().getBodyParts();
@@ -1453,6 +1457,20 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, CorpseSpawnAPI.class, method, name);
                 Logger.printLog("Exposed CorpseSpawnAPI method: " + name);
+            }
+        }
+
+        // 一百九十 万象天引: B 聚集原语 (isLocal 僵尸环形落位, 通道见 analysis/僵尸吸引与尸群聚集(已实施).md)
+        public void exposeZombieGather() {
+            for (Method method : ZombieGatherAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, ZombieGatherAPI.class, method, name);
+                Logger.printLog("Exposed ZombieGatherAPI method: " + name);
             }
         }
 

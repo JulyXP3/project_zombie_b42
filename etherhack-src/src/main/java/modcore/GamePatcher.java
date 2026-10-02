@@ -1471,6 +1471,11 @@ public class GamePatcher {
         // 一百三十九 (用户实测「图标闪一下」驱动): 无限耐力的读取点归零 —— 与负重同一套解法,
         // 让 moodle/冲刺判定一律看到满耐力, 不再与游戏每帧扣减赛跑 (见该类文件头)
         modcore.core.EnduranceStatPatch.install();
+        // 一百九十一 (用户实测「无限负重时不时被服务端回退」驱动): maxWeight 读取点重写重建 ——
+        // 服务端 PlayerDamagePacket (纯下行) 周期推回 + vanilla BodyDamage 自重算 双覆盖源下,
+        // 字段踩值存在可见竞态窗口; 与耐力同构, 按项目原则改读取点 (沿革见该类文件头:
+        // 一百二十一 首建/一百二十二 随掉血误判删除/一百九十一 重建), CoreAPI 踩值随之退役
+        modcore.core.MaxWeightPatch.install();
         // 注 (一百二十三): 一百二十二 在此加的 CarryWeightPatch 已删除 —— 它要做的
         // "重量读取点清零" 早就存在于 patchItemContainer() 里 (getCapacityWeight /
         // getContentsWeight 头部注入, 见本文件前半段), 属重复安装 (实测安装日志出现
