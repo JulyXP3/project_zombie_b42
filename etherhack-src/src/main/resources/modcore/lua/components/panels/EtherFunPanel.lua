@@ -170,9 +170,10 @@ local function entryRow(panel, key, x, y, w)
 end
 
 --*********************************************************
---* 工具: 等宽按钮组一行 (按最宽文字统一宽度, 居中排列)
+--* 工具: 等宽按钮组一行 (按最宽文字统一宽度; 默认居中, alignLeft=true 左对齐
+--*  到行首 — 单按钮行与勾选框同盒时用左对齐, 一百九十五⑧ 用户反馈)
 --*********************************************************
-local function buttonRow(panel, defs, x, y, w)
+local function buttonRow(panel, defs, x, y, w, alignLeft)
     local titles = {};
     for i = 1, #defs do titles[i] = getTranslate(defs[i][1]); end
     local btnW = UIButton.measureGroupWidth(titles);
@@ -182,7 +183,7 @@ local function buttonRow(panel, defs, x, y, w)
         btnW = math.floor((w - gap * (#defs - 1)) / #defs);
         totalW = btnW * #defs + gap * (#defs - 1);
     end
-    local bx = x + math.floor((w - totalW) / 2);
+    local bx = alignLeft and x or x + math.floor((w - totalW) / 2);
     local btns = {};
     for i = 1, #defs do
         local btn = UIButton:new(bx, y, btnW, EtherTheme.ctrlH, titles[i], defs[i][2], btnW);
@@ -340,7 +341,7 @@ function EtherFunPanel:build()
                 local n, msg = ZombieLure.gather();
                 self.lureStatus = msg;
             end },
-        }, bx, cy, bw);
+        }, bx, cy, bw, true);   -- 左对齐 (一百九十五⑧: 与勾选框同盒单按钮, 用户反馈)
         cy = cy + ctrlH + gap;
 
         -- 状态行锚点 (模块区内部, renderContent 绘制)

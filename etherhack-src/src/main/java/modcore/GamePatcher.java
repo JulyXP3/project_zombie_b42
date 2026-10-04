@@ -1476,6 +1476,10 @@ public class GamePatcher {
         // 字段踩值存在可见竞态窗口; 与耐力同构, 按项目原则改读取点 (沿革见该类文件头:
         // 一百二十一 首建/一百二十二 随掉血误判删除/一百九十一 重建), CoreAPI 踩值随之退役
         modcore.core.MaxWeightPatch.install();
+        // 一百九十五 (用户拍板复刻 LuckyPienZ v4 路线): 「连接期授权」— ConnectPacket.write 的
+        // extraInfoFlags 读取点后插掩码改写 (bit0 GodMod/bit2 Invisible), 服务端握手期
+        // isForced 无条件接受 (见 analysis/连接期作弊旗标-多人上帝与隐身(已实施).md)
+        modcore.core.ConnectFlagsPatch.install();
         // 注 (一百二十三): 一百二十二 在此加的 CarryWeightPatch 已删除 —— 它要做的
         // "重量读取点清零" 早就存在于 patchItemContainer() 里 (getCapacityWeight /
         // getContentsWeight 头部注入, 见本文件前半段), 属重复安装 (实测安装日志出现

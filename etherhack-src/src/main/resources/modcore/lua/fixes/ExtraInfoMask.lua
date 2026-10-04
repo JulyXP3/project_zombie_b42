@@ -28,4 +28,34 @@ if type(orig) == "function"
             print("[ExtraInfoMask] original sendPlayerExtraInfo failed: " .. tostring(err));
         end
     end
+
+    --*********************************************************
+    --* 一百九十七/一百九十八: 连接期授权的**服务端残留清除**。作弊旗标会随服务端角色
+    --* 存档持久化 (IsoGameCharacter:5003 load / :5102 save) — 授权开启期间
+    --* 存下的 GOD/INVISIBLE 在重连时被存档加载还原。
+    --* 时序实锤 (一百九十八修正): IngameState.enter 里 OnGameStart (:849) 先于
+    --* sendPlayerConnect (:853) 触发 — 此刻 onlineId=-1、服务端玩家对象未建立,
+    --* 直接发 ExtraInfo 服务端解析不到人 = 白发 (一百九十七的清除上报因此无效)。
+    --* 改为 OnTick 等待连接真正建立 (getOnlineID() ~= -1) 后再发一次**掩蔽上报**
+    --* (我方 6 位全 false) — 服务端 processServer 对 false 无条件应用且不触发
+    --* 能力位授权门 (门只在 true 时查), 线上旗标清零, 存档随下次保存重写为干净。
+    --* 触发条件: 进服且「连接期授权」关闭 (覆盖"主菜单关闭后进服"与历史残留两种
+    --* 情形); 开启时不发 (握手包已授权)。
+    --*********************************************************
+    Events.OnGameStart.Add(function()
+        if not isClient() then return; end
+        local ok, armed = pcall(isConnectFlags);
+        if not ok or armed then return; end
+        local clearOnTick;
+        clearOnTick = function()
+            local p = getPlayer();
+            if p == nil then return; end
+            if p:getOnlineID() ~= -1 then
+                sendPlayerExtraInfo(p);
+                print("[ExtraInfoMask] connect-flags off: server cheat flags cleared via masked upload");
+                Events.OnTick.Remove(clearOnTick);
+            end
+        end
+        Events.OnTick.Add(clearOnTick);
+    end);
 end

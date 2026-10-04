@@ -126,6 +126,7 @@ public class CoreAPI {
     public boolean initialCoreDebugCaptured;
     public boolean initialCoreDebug;
     public boolean isUnlimitedCarry;
+    public boolean isConnectFlags;
     public boolean isUnlimitedCondition;
     public boolean isUnlimitedEndurance;
     public boolean isUnlimitedAmmo;
@@ -273,6 +274,7 @@ public class CoreAPI {
             {"charCreateCustomTraits", "k70"},
             {"charCreateCustomSkillLevels", "k71"},
             {"isVehicleInstantStart", "k72"}, {"isFullbright", "k73"},
+            {"isConnectFlags", "k74"},
         };
         for (String[] e : m) {
             CONFIG_KEY_CODES.put(e[0], e[1]);
@@ -314,6 +316,7 @@ public class CoreAPI {
         var3.setProperty("superMultiHitCount", Integer.toString(this.superMultiHitCount));
         var3.setProperty("isBypassDebugMode", Boolean.toString(this.isBypassDebugMode));
         var3.setProperty("isUnlimitedCarry", Boolean.toString(this.isUnlimitedCarry));
+        var3.setProperty("isConnectFlags", Boolean.toString(this.isConnectFlags));
         var3.setProperty("isUnlimitedEndurance", Boolean.toString(this.isUnlimitedEndurance));
         var3.setProperty("isUnlimitedAmmo", Boolean.toString(this.isUnlimitedAmmo));
         var3.setProperty("ammoFarmCount", Integer.toString(this.ammoFarmCount));
@@ -431,6 +434,7 @@ public class CoreAPI {
         this.superMultiHitCount = ConfigUtils.getIntFromConfig(var3, "superMultiHitCount", 10);
         this.isBypassDebugMode = ConfigUtils.getBooleanFromConfig(var3, "isBypassDebugMode", false);
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCarry", false);
+        this.isConnectFlags = ConfigUtils.getBooleanFromConfig(var3, "isConnectFlags", false);
         this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedEndurance", false);
         this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedAmmo", false);
         this.ammoFarmCount = ConfigUtils.getIntFromConfig(var3, "ammoFarmCount", 30);
@@ -781,14 +785,26 @@ public class CoreAPI {
             }
             LightingJNI.buildingsChanged();
         }
-        if (var1.isGodMod() != this.isEnableGodMode) {
-            var1.setGodMod(this.isEnableGodMode);
+        // 一百九十五 连接期授权 (⑩ 回退拆分, 恢复组合单开关 — 同时授予上帝+隐身):
+        // 开启时本地强制同步 (双参 forced 版绕 Role 能力位门, 服务端已在握手期接受 bit0/bit2),
+        // 跳过下方 SP 单参路径 (其被 Role 门强制 false, 会与本 forced 同步打架); 中途关 = 本地
+        // 立刻停, 服务端位保持到重连。
+        if (this.isConnectFlags) {
+            var1.setGodMod(true, true);
+            var1.setInvisible(true, true);
+        } else {
+            if (var1.isGodMod() != this.isEnableGodMode) {
+                var1.setGodMod(this.isEnableGodMode);
+            }
+            // 一百九十七 修: 旧代码只置 true 从不清 invisible — 连接期授权关闭后
+            // 本地 invisible 残留, 随下次 ConnectPacket 重上传 (服务端残留来源之一)。
+            // 改为按 SP 开关显式同步 (off → setInvisible(false), false 不触发能力门)。
+            if (var1.isInvisible() != this.isEnableInvisible) {
+                var1.setInvisible(this.isEnableInvisible);
+            }
         }
         if (this.isEnableNoclip) {
             var1.setNoClip(true);
-        }
-        if (this.isEnableInvisible) {
-            var1.setInvisible(true);
         }
         // 僵尸不攻击玩家: 不再走 vanilla setZombiesDontAttack —— 该 setter 被 Role.hasCapability
         // 门禁 (单人需 Core.debug 才放行, 否则强制 false), 是"单人下必须先开解锁调试权限才生效"的

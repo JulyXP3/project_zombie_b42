@@ -184,8 +184,23 @@ end
 
 -- 说明文字折行: 先把可用宽换算回未缩放像素再折 (wrapText 用未缩宽度测量)。
 -- 返回行数组, 行距由调用方用 EtherTheme.fontHgtHint 推进。
+-- 换行支持: tr() 把 <br> 转 \n, 而 wrapText 不识别换行 (会把 \n 当普通字符测宽) —
+-- 此处先按 \n 分段再逐段折行拼接 (一百九十五: DebugHint 两句话两行)。
 function EtherTheme.wrapHint(text, maxW)
-    return EtherTheme.wrapText(text, maxW / EtherTheme.hintScale, EtherTheme.hintFontEnum);
+    local out = {};
+    local seg = text;
+    while true do
+        local nl = string.find(seg, "\n", 1, true);
+        local cur = seg;
+        if nl ~= nil then
+            cur = string.sub(seg, 1, nl - 1);
+            seg = string.sub(seg, nl + 1);
+        end
+        local wrapped = EtherTheme.wrapText(cur, maxW / EtherTheme.hintScale, EtherTheme.hintFontEnum);
+        for i = 1, #wrapped do out[#out + 1] = wrapped[i]; end
+        if nl == nil then break; end
+    end
+    return out;
 end
 
 --*********************************************************

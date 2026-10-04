@@ -25,14 +25,20 @@ package modcore.core;
 
 import modcore.utils.Logger;
 import modcore.utils.Patch;
+import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.FieldInsnNode;
+import org.objectweb.asm.tree.FrameNode;
 import org.objectweb.asm.tree.InsnList;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.LineNumberNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
+
+import java.util.ArrayList;
+import java.util.List;
 
 public final class MaxWeightPatch {
 
@@ -50,19 +56,33 @@ public final class MaxWeightPatch {
         Logger.print("Patching IsoGameCharacter.getMaxWeight with read-point override...");
         try {
             Patch.injectIntoClass(TARGET_CLASS, TARGET_METHOD, false,
-                    // ShapeGuard (注入前): 原版体 = `return this.maxWeight;` — desc ()I +
-                    // ALOAD_0 + GETFIELD maxWeight + IRETURN, 四条指令缺一即判版本漂移, 拒绝注入。
+                    // ShapeGuard (注入前, 一百九十三 定稿): 原版体 = `return this.maxWeight;`
+                    // 真实指令恰 3 条 (aload_0 / getfield maxWeight:I / ireturn), 但 ASM 的
+                    // instructions 列表还含元数据节点 —— 本方法实测 6 节点 (首尾 LabelNode +
+                    // LineNumberNode line=3856 + 3 条指令), **不能对原始列表做位置/长度断言**
+                    // (一百九十一 首版断言 size==4 逐位、复核首版断言 size==3, 双双被元数据
+                    // 节点否决; 离线实检 = temp/MaxWeightGuardCheck 对真实 jar 跑 ASM)。
+                    // 正确做法: 剔除 Label/LineNumber/Frame 后断言恰为 3 条规范形。
                     method -> {
                         if (!method.desc.equals(TARGET_DESC)) {
                             throw new IllegalStateException("unexpected getMaxWeight desc: " + method.desc);
                         }
-                        boolean shapeOk = method.instructions.size() == 4
-                                && method.instructions.get(0) instanceof VarInsnNode
-                                && ((VarInsnNode) method.instructions.get(0)).var == 0
-                                && method.instructions.get(1) instanceof FieldInsnNode
-                                && ((FieldInsnNode) method.instructions.get(1)).name.equals("maxWeight")
-                                && method.instructions.get(3) instanceof InsnNode
-                                && ((InsnNode) method.instructions.get(3)).getOpcode() == 172; // IRETURN
+                        List<AbstractInsnNode> real = new ArrayList<AbstractInsnNode>();
+                        for (int i = 0; i < method.instructions.size(); i++) {
+                            AbstractInsnNode n = method.instructions.get(i);
+                            if (n instanceof LabelNode || n instanceof LineNumberNode || n instanceof FrameNode) continue;
+                            real.add(n);
+                        }
+                        boolean shapeOk = real.size() == 3
+                                && real.get(0) instanceof VarInsnNode
+                                && ((VarInsnNode) real.get(0)).var == 0          // aload_0
+                                && real.get(0).getOpcode() == 25
+                                && real.get(1) instanceof FieldInsnNode
+                                && real.get(1).getOpcode() == 180                // GETFIELD
+                                && "maxWeight".equals(((FieldInsnNode) real.get(1)).name)
+                                && "I".equals(((FieldInsnNode) real.get(1)).desc)
+                                && real.get(2) instanceof InsnNode
+                                && real.get(2).getOpcode() == 172;               // IRETURN
                         if (!shapeOk) {
                             throw new IllegalStateException("getMaxWeight shape changed (not `return this.maxWeight;`)");
                         }

@@ -200,7 +200,7 @@ public final class AutoDriveController {
      *  低速剐蹭预算档, 加了会推高误判 BLOCKED 率)。 */
     private static final float WIDE_CLEAR_MARGIN = 0.3f;
     private static final float AVOID_LANE_MAX = 10.0f;    // 横向偏移搜索范围 ± (格)
-    private static final float AVOID_SPEED_CAP = 30.0f;   // 绕行/并入恒速 km/h (2026-09-11 用户裁定 10→20; 2026-10-02 用户拍板 20→30)
+    private static final float AVOID_SPEED_CAP = 25.0f;   // 绕行/并入恒速 km/h (2026-09-11 用户裁定 10→20; 2026-10-02 用户拍板 20→30; 2026-10-03 用户实测回调 30→25)
     /** 挤缝模式净空 (格, C 修复 2026-09-11): 硬净空 AVOID_CLEAR=3.5 = 自车半宽 1.5 +
      *  障碍**包围圆** 2.0 — 圆模型对平行/斜列停放车辆明显偏大 (车横向半宽只有 ~1.0),
      *  密集错位车流恒判无解 → 原地静止 (实测)。硬解无解时降到 2.5 格
@@ -233,7 +233,7 @@ public final class AutoDriveController {
      *  固定低速抵近到 BLOCKED_GAP, 交给"贴住蠕动"分支 (绝不完全停车)。 */
     private static final float BLOCKED_CREEP_KMH = 6.0f;
     private static final float BLOCKED_GAP = IDM_GAP_CLEAR + 1.5f;
-    /** 绕行/并入态贴住护栏 (F 修复 2026-09-12, 用户裁定"绕行恒速 20", 常量现值 30): 时距跟车律
+    /** 绕行/并入态贴住护栏 (F 修复 2026-09-12, 用户裁定"绕行恒速 20", 常量现值 25): 时距跟车律
      *  (IDM_T = 1.2s) 在障碍于正前 10 格时给 (10 − 6.5)/1.2 × 3.6 = 10.5 km/h ——
      *  但绕行层本来就是"横向让开"的解法, 时距项与横向剖面互相打架 (实测避障期掉到
      *  10km/h 的根因: 障碍一进 ±1.5 正前走廊就压速, 横向让开后 obsLon=NaN 又回 20,

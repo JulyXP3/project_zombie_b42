@@ -5,8 +5,10 @@ require "ISUI/ISPanel"
 --*
 --* 2026-08 模块化重构 (用户需求): 从"整页平铺复选框组"改为与战利品/ESP 页
 --* 同款的功能模块形态 (addModule: 背景框 + 标题 + 盒内内容):
---*   - 调试权限功能: 上帝/穿墙/隐身/进度条秒走完 (标签带 (SP)),
---*     盒底附说明: 需在「其他」页开启「解锁调试权限(单人)」, 仅单人有效
+--*   - 调试权限功能: 上帝/穿墙/隐身/进度条秒走完 (标签带 (SP); ⑩ 回退 — 多人上帝/隐身
+--*     不走本页, 由「其他」页「连接期授权: 上帝+隐身 (多人)」组合开关授予),
+--*     盒底附说明: 需在「其他」页开启「解锁调试权限(单人)」, 仅单人有效;
+--*     多人下上帝/隐身开启「其他」页的「连接期授权」(进服前生效)
 --*     (B42 的 Role.isUsingDebugMode 显式排除联网客户端, 多人开关无效);
 --*   - 物品与携带: 手中物品无限耐久/自动修理/无限负重(多人经 PlayerDamage
 --*     自报包周期上报, 服务端每帧重算由 20/s 重发压制);
@@ -288,6 +290,8 @@ function EtherCharacterPanel:build()
                 { key = "UI_VisualsPanel_Fullbright", on = toggleFullbright, get = isFullbright },
                 -- 僵尸不理会 (多人可用): 客户端模拟上传 target=-1, 服务端零校验采纳
                 { key = "UI_CharacterPanel_ZombieDontAttack", on = toggleZombieDontAttack, get = isZombieDontAttack },
+                -- (一百九十五) 连接期授权已迁「其他」页 (与解锁调试权限同列): 多人上帝/隐身的
+                -- 总开关; 本页上帝/隐身/穿墙三行的多人语义见 DebugHint 说明
             },
         },
         {

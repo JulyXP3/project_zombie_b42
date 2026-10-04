@@ -2,12 +2,14 @@
 
 ## [3.2.5] - Current
 
+- Added: a "Connect-time grant" toggle on the Survival tab - makes "God mode" and "Invisible" actually work in multiplayer (arm it before joining; changes need a reconnect; vanilla servers keep almost no log, anti-cheat servers record or kick - see the anti-cheat guide).
+- Fixed: after turning "Connect-time grant" off and rejoining a server, the character could remain god-like on the server side (injuries healing instantly).
 - Added: two troll features on the "Fun" tab - "Zombie Lure" (while on, continuously attracts zombies from a wide area toward you; toggle off to stop) and "Gather Zombies" (one click instantly pulls nearby available zombies into a ring around you). In multiplayer, Gather only affects zombies already targeting you - lure first, then gather.
 - Fixed: "Unlimited carry" intermittently reverting on multiplayer servers (capacity flashing back, placement checks briefly failing) - it now takes effect at the read point and no longer races the server sync.
 - Removed: the "Fast health regen" option - its server-side sync channel stopped working after the game update; retired for now (a replacement approach is archived for a future comeback).
 - Fixed: "Attack range bonus" could not be reset once enabled, and the range adjustment had no effect (previously affected weapons are automatically restored to their vanilla range on adjust).
 - Improved: autopilot cruise speed raised from 85% to 95% of the server speed limit, and the extra fixed 55 km/h cap is gone - the default cruise now follows min(server speed limit x 95%, vehicle top speed), a clear speed-up on open straights (automatic slowing for curves, obstacles and map edges is unchanged).
-- Improved: autopilot detour speed raised from 20 to 30 (the low-speed squeeze/creep tiers are unchanged).
+- Improved: autopilot detour speed raised from 20 to 25 (the low-speed squeeze/creep tiers are unchanged).
 - Fixed: autopilot could misjudge "no detour needed" for obstacles sitting at a specific distance near the lane edge and ram them at full speed (such cases now fall back to the low-speed squeeze tiers or a proper detour).
 - Fixed: build failure after the game update (internal adaptation).
 - Added: a "Build" tab - place walls without spending materials (keep planks/nails out of your pack and the nearby ground, or they will be consumed normally; multiplayer only).

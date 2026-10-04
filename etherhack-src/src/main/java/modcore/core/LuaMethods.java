@@ -565,6 +565,20 @@ public class LuaMethods {
         }
     }
 
+    // 一百九十五 连接期授权 (⑩ 回退拆分, 恢复组合单开关 — 同时授予上帝+隐身): 开关须在
+    // 连接发生前置位 (ConnectPacket 握手一次性上行, 见 analysis/连接期作弊旗标-多人上帝与
+    // 隐身(已实施).md); toggle 落盘 startup 配置, 下次连接 (含本次退出重进) 生效
+    @LuaMethod(name="isConnectFlags", global=true)
+    public static boolean isConnectFlags() {
+        return CoreMain.getInstance().CoreAPI.isConnectFlags;
+    }
+
+    @LuaMethod(name="toggleConnectFlags", global=true)
+    public static void toggleConnectFlags(boolean var0) {
+        CoreMain.getInstance().CoreAPI.isConnectFlags = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isZombieDontAttack", global=true)
     public static boolean isZombieDontAttack() {
         return CoreMain.getInstance().CoreAPI.isZombieDontAttack;
