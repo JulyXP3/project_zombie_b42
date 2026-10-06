@@ -170,8 +170,10 @@ public final class AutoDriveController {
     private long replanCooldownMs;
     private long lastHandleMs;             // 补丁通道最近一次进 handleControls 的时刻 (看门狗用)
     // 进度看门狗 (一百一十二): 正常跟线途中的净进展计时 — 超窗无增益 = 停车报错
+    // 二百零二: 标尺由"到终点直线距离"改为"沿路线剩余长度" (noProgressBestRemain),
+    // 直线距离在切向/绕行路段 20 秒内可零靠近 → 误杀正常绕行 (drive_20261005_221403 实测)
     private long noProgressSinceMs;
-    private float noProgressBestDist = Float.MAX_VALUE;
+    private float noProgressBestRemain = Float.MAX_VALUE;
     private long routeLostSinceMs;         // 路线脱节守卫计时 (一百二十三)
     private boolean worldNoClipApplied;    // chunk 重传去重 (与目标态一致则跳过 refresh)
     private BaseVehicle lastVehicle;       // 最近受控车辆 (deactivate 时关 regulator 用)
@@ -649,20 +651,28 @@ public final class AutoDriveController {
         // 已在续段粘接与弯道剖面两处修掉, 这里兜未知的)。豁免"无进展合法"的状态:
         // 避障/堵死/蠕动 (avoidMode != NONE)、脱困倒车窗、贴边界等待、到达刹车、
         // 近乎静止 — 这些由各自的状态机负责, 不归看门狗管。
+        // 二百零二: 标尺改"沿路线剩余长度" (remainingRouteLength) — 车沿路线正常
+        // 行驶时随里程 1:1 下降, 与路线在地图上怎么绕无关; 原直线距离标尺在切向/
+        // 绕行路段 20 秒可零靠近, 误杀健康行驶 (drive_20261005_221403.csv 实测:
+        // 44km/h 在航线上被停)。极限环特征 = 投影棘轮不前移 → 剩余长度不降, 仍拦得住。
         if (!arrivalBrake && avoidMode == AVOID_NONE && now >= unstickUntilMs
-                && boundaryDist > 60.0f && absSpeed > 2.0f) {
-            if (noProgressSinceMs == 0L || distToTarget < noProgressBestDist - NO_PROGRESS_MIN_GAIN) {
+                && boundaryDist > 60.0f && absSpeed > 2.0f
+                && path != null && pathIdx < path.size()) {
+            float remain = remainingRouteLength(vehicle);
+            if (noProgressSinceMs == 0L || remain < noProgressBestRemain - NO_PROGRESS_MIN_GAIN) {
                 noProgressSinceMs = now;
-                noProgressBestDist = Math.min(noProgressBestDist, distToTarget);
+                noProgressBestRemain = Math.min(noProgressBestRemain, remain);
             } else if (now - noProgressSinceMs > NO_PROGRESS_MS) {
-                log("no-progress watchdog: " + (int) distToTarget + " cells to target, best "
-                        + (int) noProgressBestDist + " in " + (now - noProgressSinceMs) / 1000L + "s");
+                log("no-progress watchdog: " + (int) remain + " cells of route left, best "
+                        + (int) noProgressBestRemain + " in " + (now - noProgressSinceMs) / 1000L + "s");
+                DriveDiag.event("NOPROG", "remain=" + (int) remain + " best=" + (int) noProgressBestRemain
+                        + " speed=" + (int) absSpeed + " pathIdx=" + pathIdx);
                 cancel("UI_DrivePanel_MsgNoProgress");
                 return;
             }
         } else {
             noProgressSinceMs = 0L;
-            noProgressBestDist = Float.MAX_VALUE;
+            noProgressBestRemain = Float.MAX_VALUE;
         }
         // 路线脱节守卫 (一百二十三, 实测 drive_20260921_015806 驱动): 车与**前方路线几何**
         // 的投影距离 (crossTrackError = 路径 pathIdx..pathIdx+4 段的最近距离) 持续超
@@ -824,12 +834,19 @@ public final class AutoDriveController {
 
         // ===== 纵向目标: 巡航/弯道剖面 + 偏航安全网 + 绕行限速 =====
         // 静态物穿墙, 僵尸碾杀 (战损钩子), 车辆/残骸缺口序列绕行 (本层)。
-        float vehicleMax = Math.max(vehicle.getMaxSpeed(), 20.0f);
+        // vehicleMax = 车辆脚本 maxSpeed (BaseVehicle:881 自脚本拷入) — 当前版本它
+        // **不是物理上限** (引擎/变速箱物理不消费; 全库唯一玩法消费面 = 转向手感
+        // 标度 VehicleScript.getSteeringClamp), 实证: 67 Commando 脚本 57 而手动
+        // 实测巡航 80 (一百八十九 "被车辆极速钳住"定案就此修正)。
         // 一百八十七 (用户拍板): 自适应档不再压 55 从容档 — 旧双上限 min(0.95×限速, 55)
         // 在 70 限速服永远被 55 卡死, 0.95 折形同虚设。现自适应目标 = min(0.95×服务端
         // 限速, 车辆脚本极速); 弯道/障碍/边界安全网 (cornerRefSpeed 剖面 + gapSafeSpeed
         // + boundaryDist) 均不依赖该常量, 放宽只抬直路空旷段目标速。
-        float cruise = cruiseSpeed > 0 ? Math.min(cruiseSpeed, vehicleMax)
+        // 二百零三 (用户拍板): 手输巡航不再被脚本 maxSpeed 钳 — 该值非真实能力,
+        // 手输语义 = 信任用户输入 (SpeedChecker 违规风险自担为一百五十既定口径);
+        // 自适应档保守语义不动。
+        float vehicleMax = Math.max(vehicle.getMaxSpeed(), 20.0f);
+        float cruise = cruiseSpeed > 0 ? cruiseSpeed
                 : Math.min((float) ServerOptions.instance.speedLimit.getValue()
                         * SPEED_LIMIT_MARGIN, vehicleMax);
         float cornerLimit = cornerRefSpeed(vehicle, cruise);
@@ -1682,6 +1699,22 @@ public final class AutoDriveController {
         }
     }
 
+    /** 沿路线剩余长度 (二百零二): 车 → path[pathIdx] → 队尾逐段求和, 即"沿路线
+     *  开到终点还要走多少格"。进度看门狗的标尺 — 沿线行驶随里程 1:1 下降, 与
+     *  路线几何绕行无关; path 无效 → Float.MAX_VALUE (看门狗按未武装处理)。 */
+    private float remainingRouteLength(BaseVehicle vehicle) {
+        if (path == null || pathIdx >= path.size()) {
+            return Float.MAX_VALUE;
+        }
+        float remain = dist(vehicle.getX(), vehicle.getY(), path.get(pathIdx)[0], path.get(pathIdx)[1]);
+        for (int i = pathIdx; i < path.size() - 1; i++) {
+            float[] a = path.get(i);
+            float[] b = path.get(i + 1);
+            remain += dist(a[0], a[1], b[0], b[1]);
+        }
+        return remain;
+    }
+
     /** 车到路径中心线的横向偏差 (投影 pathIdx 前后几段), 供偏航限速。 */
     /** 点在路线上的投影 (卌三): {切向x, 切向y, 离线横向距离}; 无路线/退化 → null。
      *  搜索窗 = pathIdx 附近 (路点间距 ~25 格, 窗 -2..+8 段 ≈ 250 格覆盖足够)。 */
@@ -1881,6 +1914,10 @@ public final class AutoDriveController {
             path = assembled;
             pathIdx = 0;
         }
+        // 二百零二: 路线改动使"剩余长度"跳变 (续段加尾/换线/裁尾锚变), 旧 best 不可
+        // 跨缝比较 — 看门狗窗口就此重开
+        noProgressSinceMs = 0L;
+        noProgressBestRemain = Float.MAX_VALUE;
         return true;
     }
 
@@ -1913,7 +1950,7 @@ public final class AutoDriveController {
         this.throttleState = THROTTLE_COAST;
         this.pendingNoClipOffMs = 0;
         this.noProgressSinceMs = 0L;
-        this.noProgressBestDist = Float.MAX_VALUE;
+        this.noProgressBestRemain = Float.MAX_VALUE;
         this.routeLostSinceMs = 0L;
         this.netStuckMs = 0L;
         this.netUnstickStreak = 0;
@@ -1973,7 +2010,7 @@ public final class AutoDriveController {
         this.throttleState = THROTTLE_COAST;
         this.lastHandleMs = 0;
         this.noProgressSinceMs = 0L;
-        this.noProgressBestDist = Float.MAX_VALUE;
+        this.noProgressBestRemain = Float.MAX_VALUE;
         this.routeLostSinceMs = 0L;
         this.netStuckMs = 0L;
         this.netUnstickStreak = 0;
@@ -2080,10 +2117,11 @@ public final class AutoDriveController {
         this.messageKey = key == null ? "" : key;
     }
 
-    /** 期望速上限 (UI 提示行): 用户显式设定 > 车辆物理极速 (服务端限速只作默认)。 */
+    /** 期望速上限 (UI 提示行): 手输 = 用户设定值 (二百零三 起不被脚本 maxSpeed 钳 —
+     *  当前版本该值非物理上限, 仅转向手感标度); 自适应 = 车辆脚本极速。 */
     public float hardCap(BaseVehicle vehicle) {
         float vehicleMax = Math.max(vehicle.getMaxSpeed(), 20.0f);
-        return cruiseSpeed > 0 ? Math.min(cruiseSpeed, vehicleMax) : vehicleMax;
+        return cruiseSpeed > 0 ? cruiseSpeed : vehicleMax;
     }
 
     /** 服务端限速原值 (UI 提示行)。 */

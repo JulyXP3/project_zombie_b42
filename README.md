@@ -67,14 +67,17 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 - **Corpse spawn**: spawn a corpse at your feet carrying the chosen items and loot it (multiplayer only; **it leaves a log entry on the server - use with caution**)
 - **Timed spawn**: uses the game's own action so the item is real and persistent (visible to others), with an "Accelerate" toggle for its speed (multiplayer only)
 - **Unbox spawn**: keep a carrier (jar box / log stack x2-x4 / firewood bundle) in your backpack, pick a target and count, then spawn; craft the matching unpack recipe once to release any listed items (multiplayer only)
-- **Free build**: place walls without spending materials (keep planks/nails out of your pack and the nearby ground, or they will be consumed normally; multiplayer only)
+
+### Build
+
+- **Free build (blueprint placement)**: pick from a 21-entry catalog (walls/stairs/doors/furniture/crates/compost/rain barrels/campfire/floor..., searchable by name/ID; scans buildables from installed mods), place a ghost that follows the mouse (auto-facing + R to rotate), confirm (default `` ` ``, rebindable) to build and auto-chain the next blueprint, ESC/right-click to exit; no materials spent (keep planks/nails out of your pack and the nearby ground, or they will be consumed normally; multiplayer only). Note: legacy-chain "wooden floor" cannot be destroyed or dismantled once placed (labeled on the entry).
 
 ### Vehicles
 
 - **Engine & starting**: start engine unconditionally (once / auto-retry, auto-unchecks on success; the engine still needs fuel and battery)
 - **Repair & supply**: repair vehicle (uses items already in this vehicle's trunk/glovebox/seats as tokens by default, so nothing is consumed; per-step overhead feedback) / direct repair (instant full condition, one server log line per part) / refuel
 - **Remote entry**: enter the nearest vehicle within 20m (driver seat) / stuff the nearest other online player into the driver seat of the vehicle near them (multiplayer)
-- **Navigation mode**: auto-drive along the road network — get in the driver's seat, start the engine, press M and right-click "navigate here"; re-anchor while driving to reroute; cruise speed is adaptive or set manually (hard-capped by the server speed limit); any driving key takes over instantly; ends on arrival / exit / engine stall
+- **Navigation mode**: auto-drive along the road network — get in the driver's seat, start the engine, press M and right-click "navigate here"; re-anchor while driving to reroute; cruise speed is adaptive (95% of the server speed limit) or set manually (honored as-is; going over the server limit counts as speeding on strict servers); any driving key takes over instantly; ends on arrival / exit / engine stall
 
 ### Farming
 
@@ -84,6 +87,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Fun
 
 - **Impersonate chat**: pick a channel (server-wide / say 30 tiles) and a target name, then send (the impersonated player does not see it)
+- **Zombie bait & gather**: a toggle continuously attracts nearby zombies toward you; one click pulls available zombies into a ring around you (in multiplayer, gather only affects zombies already targeting you)
 - **Zombie skin**: rotten face / heavily decayed / slightly decayed / restore skin
 
 ### Create Char
@@ -94,7 +98,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Other
 
-- Unlock debug privileges (SP) / Server sync protection (stops the server from rolling back stats & skills) / admin menu and admin-privilege attempt / debug menu (main) · game debug menu · vehicle mechanics menu · medical menu / grant all materials of the selected recipe / block the default logger / block files mentioning cheats / block files with suspicious words
+- Unlock debug privileges (SP) / Connect-time grant (multiplayer God mode + Invisible; arm before joining, changes need a reconnect) / Server sync protection (stops the server from rolling back stats & skills) / admin menu and admin-privilege attempt / debug menu (main) · game debug menu · vehicle mechanics menu · medical menu / grant all materials of the selected recipe / block the default logger / block files mentioning cheats / block files with suspicious words
 
 ### Settings
 

@@ -35,6 +35,8 @@
 - Fixed: in the Russian UI the Traps page's search label could overlap the search box when switching to weapon mode.
 - Build: version bumped to 3.2.5.
 - Added: a standalone car-kill tool - works without the main mod, toggle with the backslash key in game, zombies hit by your driven vehicle die on contact
+- Fixed: autopilot stopping with a "no progress" error while following legitimate detours and long arcs on trips - it now tracks actual progress along the planned route; genuinely circling while stuck still stops and reports as before.
+- Fixed: the manual cruise speed setting being wrongly capped by the vehicle's nominal top speed - the setting is now honored as-is, actual speed still depends on the vehicle, and automatic slowing for curves/obstacles/map edges is unchanged; note: settings above the server speed limit count as speeding on strict servers.
 ## [3.2.4]
 
 - Fixed: "Vehicle teleport" could get you kicked on some servers (the pace now adapts to the server's settings and it waits for the vehicle to stop before starting; long trips take slightly longer but are stable).

@@ -345,7 +345,7 @@
     UI_Build_Compost = "堆肥箱",
     UI_Build_Rain = "雨水桶",
     UI_Build_Campfire = "营火(未点燃)",
-    UI_Build_Floor = "木地板",
+    UI_Build_Floor = "木地板 (不可拆除)",
     UI_Build_DoorFrame_T = "门框",
     UI_Build_Door_T = "木门",
     UI_Build_DoubleDoor_A = "双门A",

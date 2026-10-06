@@ -345,7 +345,7 @@
     UI_Build_Compost = "Compost Bin",
     UI_Build_Rain = "Rain Barrel",
     UI_Build_Campfire = "Campfire (unlit)",
-    UI_Build_Floor = "Wooden Floor",
+    UI_Build_Floor = "Wooden Floor (cannot be removed)",
     UI_Build_DoorFrame_T = "Door Frame",
     UI_Build_Door_T = "Wooden Door",
     UI_Build_DoubleDoor_A = "Double Door A",

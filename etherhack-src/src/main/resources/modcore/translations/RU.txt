@@ -345,7 +345,7 @@
     UI_Build_Compost = "Компост",
     UI_Build_Rain = "Бочка для дождя",
     UI_Build_Campfire = "Костёр (не горит)",
-    UI_Build_Floor = "Пол",
+    UI_Build_Floor = "Пол (нельзя убрать)",
     UI_Build_DoorFrame_T = "Дверная рама",
     UI_Build_Door_T = "Дверь",
     UI_Build_DoubleDoor_A = "Двойная дверь A",

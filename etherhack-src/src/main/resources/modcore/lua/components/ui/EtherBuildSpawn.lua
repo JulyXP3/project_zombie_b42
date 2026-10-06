@@ -76,6 +76,8 @@ EtherBuildSpawn.catalog = {
     { nameKey = "UI_Build_Campfire", type = "campingCampfire",
       sprite = "camping_01_6", northSprite = "camping_01_6",
       args = {"$player"}, nargs = 1 },
+    -- 遗留链地板: addFloor 强制 solidfloor 旗标 → z=0 大锤选不中且无拆解选项
+    -- (z>0 可砸); 条目名因此带 (不可拆除) 后缀, 详见建造留档 §七
     { nameKey = "UI_Build_Floor", type = "ISWoodenFloor",
       sprite = "carpentry_02_56", northSprite = "carpentry_02_56",
       args = {"$sprite", "$northSprite"}, nargs = 2 },

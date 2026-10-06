@@ -28,7 +28,7 @@ ZombieLure = ZombieLure or {}
 ZombieLure.RADIUS = 200      -- 声音半径 (格): >=50 触发 ZPOP
 ZombieLure.VOLUME = 100      -- 声音响度 (加权权重)
 ZombieLure.INTERVAL = 4000   -- 重发间隔 (ms)
-ZombieLure.GATHER_RADIUS = 40 -- B 聚集搜索半径 (格)
+ZombieLure.GATHER_RADIUS = 60 -- B 聚集搜索半径 (格)
 
 ZombieLure.enabled = false
 ZombieLure.nextFireMs = 0
