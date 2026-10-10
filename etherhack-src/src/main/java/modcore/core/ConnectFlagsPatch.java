@@ -6,8 +6,7 @@
  * isForced=true) 绕过 Role 能力位门 (IsoGameCharacter.java:11099 forced 路径直达
  * setGodModCheat)。本补丁在客户端 ConnectPacket.write 的 extraInfoFlags 读取点后插
  * ConnectFlagsRuntime.applyFlags, 把 bit0 (GodMod) / bit2 (Invisible) 置 1 ——
- * 通道取证与消费侧分析见 analysis/连接期作弊旗标-多人上帝与隐身(已实施).md
- * (源自 LuckyPienZ v4 逆向第九版, 同一机制)。
+ * 通道取证与消费侧分析见 analysis/连接期作弊旗标-多人上帝与隐身(已实施).md。
  *
  * 注入形态 (中段插入, 非 MaxWeightPatch 的头插): write() 内恰有一处
  * `getfield extraInfoFlags:B` (javap 实锤: aload_1/aload_0/getfield/invokevirtual putByte ×3),

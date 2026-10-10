@@ -128,8 +128,7 @@ public class Patch {
     }
 
     /**
-     * 一百三十三 加固 (借鉴 PienZ 的 ReadBack 校验 + 半装检测; 见
-     * analysis/DLL分析/I-PienZ源码可借鉴项-清单与排期(部分已实施).md 二.4/二.5):
+     * 一百三十三 加固 (ReadBack 校验 + 半装检测; 见二.4/二.5):
      *
      * ④ **ReadBack (注入后回读)**: 传 {@code hookOwner/hookName} 时, 注入完必须能在方法里
      *    找到那条 INVOKESTATIC, 找不到即抛错 —— 光靠"注入器跑过了"不足以证明钩子真的进了

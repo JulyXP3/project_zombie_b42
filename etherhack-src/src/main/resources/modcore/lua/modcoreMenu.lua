@@ -96,11 +96,40 @@ EtherMain.currentTabID      = 1; -- Последняя открытая вкла
 EtherMain.accentColor       = {r = getAccentUIColor():getR(), g = getAccentUIColor():getG(), b = getAccentUIColor():getB(), a = 1.0}; -- Акцентный цвет
 
 --*********************************************************
+--* 位置记忆 (二百零八/二百零九): 主面板开着期间每**现实 30 分钟**保存一次
+--* (EveryTenMinutes 节拍唤醒 + getTimestampMs 真实时钟门限, 用户拍板
+--* "现实时间30分钟") + 收起时终存 (不受门限限制, 直接退游戏/崩溃最多丢一个
+--* 节拍); 恢复在 EtherMain:new (上次坐标优先, 钳回屏幕内, 无记忆 -1 则居中)。
+--*********************************************************
+local MAIN_POS_SAVE_INTERVAL_MS = 30 * 60 * 1000;
+EtherMain.lastPosSaveMs = 0;
+
+function EtherMain.doSavePos()
+    if EtherMain.instance ~= nil then
+        setMainPanelPos(EtherMain.instance.x, EtherMain.instance.y);
+    end
+end
+
+function EtherMain.savePos()
+    local now = getTimestampMs();
+    if now - EtherMain.lastPosSaveMs >= MAIN_POS_SAVE_INTERVAL_MS then
+        EtherMain.lastPosSaveMs = now;
+        EtherMain.doSavePos();
+    end
+end
+
+local function stopMainPanelPosWatch()
+    Events.EveryTenMinutes.Remove(EtherMain.savePos);
+    EtherMain.doSavePos();
+end
+
+--*********************************************************
 --* Закрытие окна по нажатию кнопки UI
 --* 主菜单收起时联动收起子面板 (按键绑定等): 否则菜单键切换主面板后,
 --* 子面板悬空在游戏画面上, 主次结构断裂 (实测反馈)
 --*********************************************************
 function EtherMain:close()
+    stopMainPanelPosWatch();
 	EtherMain.instance:setVisible(false);
     EtherMain.instance:removeFromUIManager();
     if EtherKeyBindsPanel ~= nil and EtherKeyBindsPanel.instance ~= nil then
@@ -204,6 +233,7 @@ function EtherMain.toggleMenu()
     -- Если панель уже существует, переключаем видимость (состояние вкладок/прокрутки сохраняется)
     if EtherMain.instance ~= nil then
         if EtherMain.instance:getIsVisible() then
+            stopMainPanelPosWatch();
             EtherMain.instance:setVisible(false);
             EtherMain.instance:removeFromUIManager();
             -- 菜单键收起主面板时联动收起子面板 (同 EtherMain:close)
@@ -213,6 +243,9 @@ function EtherMain.toggleMenu()
         else
             EtherMain.instance:addToUIManager();
             EtherMain.instance:setVisible(true);
+            Events.EveryTenMinutes.Remove(EtherMain.savePos);
+            EtherMain.lastPosSaveMs = getTimestampMs();
+            Events.EveryTenMinutes.Add(EtherMain.savePos);
         end
         return
     end
@@ -228,6 +261,9 @@ function EtherMain.toggleMenu()
     EtherMain.instance:addToUIManager();
     EtherMain.instance:setVisible(true);
     EtherMain.instance:setAlwaysOnTop(false);
+    Events.EveryTenMinutes.Remove(EtherMain.savePos);
+    EtherMain.lastPosSaveMs = getTimestampMs();
+    Events.EveryTenMinutes.Add(EtherMain.savePos);
 end
 
 --*********************************************************
@@ -252,6 +288,14 @@ function EtherMain:new()
     local positionY = math.floor(screenH / 2 - h / 2);
     if positionX < 0 then positionX = 0; end
     if positionY < 0 then positionY = 0; end
+
+    -- 位置记忆 (二百零八): 上次保存的坐标优先 (负值 = 无记忆), 钳回屏幕内
+    local savedX = getMainPanelPosX();
+    local savedY = getMainPanelPosY();
+    if savedX ~= nil and savedY ~= nil and savedX >= 0 and savedY >= 0 then
+        positionX = math.max(0, math.min(math.floor(savedX), screenW - w));
+        positionY = math.max(0, math.min(math.floor(savedY), screenH - h));
+    end
 
     menuTableData = ISPanel:new(positionX, positionY, w, h);
     setmetatable(menuTableData, self);

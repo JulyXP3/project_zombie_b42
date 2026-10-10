@@ -109,9 +109,39 @@ function UIMovableMiniMap:render()
 end
 
 --*********************************************************
+--* 位置记忆 (二百零八/二百零九):开着期间每**现实 30 分钟**保存一次 —
+--* EveryTenMinutes 节拍只当唤醒 (约 10 现实秒一次), 存不存由 getTimestampMs
+--* 真实时钟与上次保存的间隔决定 (用户拍板"现实时间30分钟"; 原版无 30 分钟
+--* 事件, 游戏分钟节拍会随倍速漂移不能用)。关闭时终存不受门限限制 (直接退
+--* 游戏/崩溃最多丢一个节拍); 关闭路径必须先存再拆实例。
+--*********************************************************
+local MINIMAP_POS_SAVE_INTERVAL_MS = 30 * 60 * 1000;
+UIMovableMiniMap.lastPosSaveMs = 0;
+
+function UIMovableMiniMap.doSavePos()
+    if UIMovableMiniMap.instance ~= nil then
+        setMinimapPos(UIMovableMiniMap.instance.x, UIMovableMiniMap.instance.y);
+    end
+end
+
+function UIMovableMiniMap.savePos()
+    local now = getTimestampMs();
+    if now - UIMovableMiniMap.lastPosSaveMs >= MINIMAP_POS_SAVE_INTERVAL_MS then
+        UIMovableMiniMap.lastPosSaveMs = now;
+        UIMovableMiniMap.doSavePos();
+    end
+end
+
+local function stopMiniMapPosWatch()
+    Events.EveryTenMinutes.Remove(UIMovableMiniMap.savePos);
+    UIMovableMiniMap.doSavePos();
+end
+
+--*********************************************************
 --* Закрытие миникарты
 --*********************************************************
 function UIMovableMiniMap:close()
+    stopMiniMapPosWatch();
     UIMovableMiniMap.instance:setVisible(false);
     UIMovableMiniMap.instance:removeFromUIManager();
     UIMovableMiniMap.instance = nil;
@@ -124,6 +154,7 @@ end
 function UIMovableMiniMap.openPanel()
     -- Если панель уже существует, закрываем окно
     if UIMovableMiniMap.instance ~= nil then
+        stopMiniMapPosWatch();
         UIMovableMiniMap.instance:setVisible(false);
         UIMovableMiniMap.instance:removeFromUIManager();
         UIMovableMiniMap.instance = nil;
@@ -138,6 +169,9 @@ function UIMovableMiniMap.openPanel()
     UIMovableMiniMap.instance:addToUIManager();
     UIMovableMiniMap.instance:setVisible(true);
     UIMovableMiniMap.instance:setAlwaysOnTop(false);
+    Events.EveryTenMinutes.Remove(UIMovableMiniMap.savePos);
+    UIMovableMiniMap.lastPosSaveMs = getTimestampMs();
+    Events.EveryTenMinutes.Add(UIMovableMiniMap.savePos);
     setMinimapOpen(true);
 end
 
@@ -152,6 +186,17 @@ function UIMovableMiniMap:new()
 
     local positionX = getCore():getScreenWidth() - width - 15;
     local positionY = getCore():getScreenHeight() - height - 15;
+
+    -- 位置记忆 (二百零八): 上次保存的坐标优先 (负值 = 无记忆), 并钳回屏幕内;
+    -- 尺寸仍固定 300x300 (会话内可拉伸, 不落盘)
+    local savedX = getMinimapPosX();
+    local savedY = getMinimapPosY();
+    if savedX ~= nil and savedY ~= nil and savedX >= 0 and savedY >= 0 then
+        positionX = math.floor(savedX);
+        positionY = math.floor(savedY);
+    end
+    positionX = math.max(0, math.min(positionX, getCore():getScreenWidth() - width));
+    positionY = math.max(0, math.min(positionY, getCore():getScreenHeight() - height));
 
     menuTableData = ISPanel:new(positionX, positionY, width, height);
     setmetatable(menuTableData, self);

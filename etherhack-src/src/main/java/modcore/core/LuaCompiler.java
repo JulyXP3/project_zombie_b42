@@ -11,8 +11,13 @@ import java.util.ArrayList;
 
 public class LuaCompiler {
     private static LuaCompiler instance;
+    // 二百零七→二百零八 (用户拍板): 「提及作弊的文件」默认关 — 实为死开关 (词表
+    // blackListWordsEtherUICompiler 恒空, 填词接口全仓无调用者, 开关不产生任何拦截);
+    // 「默认日志记录器」默认开 — 拦原版 ISPerkLog.lua (服务器开 PerkLogs 时客户端
+    // 上报登录全技能快照/升级/死亡 = 技能痕迹通道), 零破坏零成本默认保底。
+    // 拦截语义与面板开关不变; 配置文件已显式保存的值仍优先 (loadConfig 回退同步)。
     public boolean isBlockCompileDefaultLua = true;
-    public boolean isBlockCompileLuaAboutmodcore = true;
+    public boolean isBlockCompileLuaAboutmodcore = false;
     public boolean isBlockCompileLuaWithBadWords = false;
     public ArrayList<String> whiteListPathCompiler = new ArrayList();
     public ArrayList<String> blackListWordsEtherUICompiler = new ArrayList();

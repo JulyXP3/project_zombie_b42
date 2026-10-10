@@ -37,6 +37,10 @@
 - Added: a standalone car-kill tool - works without the main mod, toggle with the backslash key in game, zombies hit by your driven vehicle die on contact
 - Fixed: autopilot stopping with a "no progress" error while following legitimate detours and long arcs on trips - it now tracks actual progress along the planned route; genuinely circling while stuck still stops and reports as before.
 - Fixed: the manual cruise speed setting being wrongly capped by the vehicle's nominal top speed - the setting is now honored as-is, actual speed still depends on the vehicle, and automatic slowing for curves/obstacles/map edges is unchanged; note: settings above the server speed limit count as speeding on strict servers.
+- Fixed: autopilot being stopped with a "no progress" error while cruising very long straight segments (such as highways) - a follow-up to the route-progress fix above: the portion of the current segment already driven is now subtracted correctly, so straight segments of any length no longer trigger a false stop.
+- Fixed: autopilot endlessly circling in an ellipse on "turnaround" routes (destination behind the car, requiring driving ahead to a U-turn point first) - it now follows the return direction normally after the U-turn; genuinely circling while stuck still stops and reports as before.
+- Changed: "Prohibit the execution of files with the mention of a cheat" on the Exploits page now defaults to unchecked - enable it manually if needed.
+- Added: the main panel and the mini-map remember their last screen position - after moving them, the next open or game session restores the spot (factory reset returns them to the default positions).
 ## [3.2.4]
 
 - Fixed: "Vehicle teleport" could get you kicked on some servers (the pace now adapts to the server's settings and it waits for the vehicle to stop before starting; long trips take slightly longer but are stable).

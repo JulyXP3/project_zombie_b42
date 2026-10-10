@@ -592,7 +592,6 @@ public class LuaMethods {
         // 是读本地玩家对象自查 (player:isZombiesDontAttack()) 并上报的, 包级屏蔽对它无效;
         // 本功能的效果已由三处 IsoZombie 注入 (setTarget/spotted/getShouldAttack, 见
         // GamePatcher.patchZombieSetTarget 等) 独立承载, 作弊位纯冗余 → 删除后本地读取恒 false。
-        // 此即 PienZ 僵尸不攻击"零日志"的真正原因 (他用 SystemDisabler 静态字段, 从不碰玩家标志)。
         // 其它 5 个标志 (隐身/穿墙/无敌/秒动作/无限体力) 的游戏效果依赖标志本身, 无法同法去除,
         // 在 KWRR 框架下仍可被本地上报 (留档见 analysis/服务器类目/KWRR安全mod-分析与无标志对抗(已实施-本地自查篇并入).md)。
         Logger.printLog("[ZDA] toggled " + var0 + " (flag-free; injections carry the effect)");
@@ -1070,6 +1069,44 @@ public class LuaMethods {
     @LuaMethod(name="setMinimapOpen", global=true)
     public static void setMinimapOpen(boolean var0) {
         CoreMain.getInstance().CoreAPI.isMinimapOpen = var0;
+        saveConfig("startup");
+    }
+
+    // ===== 位置记忆 (二百零八): 小地图/主面板窗口坐标, -1 = 无记忆 =====
+    // setter 立即落盘 (与 setMinimapOpen 同模式); Lua 侧负责节流 (关闭时 +
+    // EveryTenMinutes 节拍, 拖动过程不逐帧写盘)。
+
+    @LuaMethod(name="getMinimapPosX", global=true)
+    public static float getMinimapPosX() {
+        return CoreMain.getInstance().CoreAPI.minimapPosX;
+    }
+
+    @LuaMethod(name="getMinimapPosY", global=true)
+    public static float getMinimapPosY() {
+        return CoreMain.getInstance().CoreAPI.minimapPosY;
+    }
+
+    @LuaMethod(name="setMinimapPos", global=true)
+    public static void setMinimapPos(float var0, float var1) {
+        CoreMain.getInstance().CoreAPI.minimapPosX = var0;
+        CoreMain.getInstance().CoreAPI.minimapPosY = var1;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="getMainPanelPosX", global=true)
+    public static float getMainPanelPosX() {
+        return CoreMain.getInstance().CoreAPI.mainPanelPosX;
+    }
+
+    @LuaMethod(name="getMainPanelPosY", global=true)
+    public static float getMainPanelPosY() {
+        return CoreMain.getInstance().CoreAPI.mainPanelPosY;
+    }
+
+    @LuaMethod(name="setMainPanelPos", global=true)
+    public static void setMainPanelPos(float var0, float var1) {
+        CoreMain.getInstance().CoreAPI.mainPanelPosX = var0;
+        CoreMain.getInstance().CoreAPI.mainPanelPosY = var1;
         saveConfig("startup");
     }
 

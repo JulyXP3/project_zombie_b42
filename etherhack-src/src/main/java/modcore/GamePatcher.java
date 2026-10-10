@@ -1461,10 +1461,10 @@ public class GamePatcher {
         this.patchCharacterCreationBoost();
          this.patchApplyTraitsSP();
         this.patchFullbright();
-        // 无限负重: 根背包容量重写 (core/RootCapacityPatch; 一百一十七 参考 PienZ
-        // RootInventoryCapacity 的零包方案, 替代原 20Hz PlayerDamagePacket 重发)
+        // 无限负重: 根背包容量重写 (core/RootCapacityPatch; 一百一十七 零包方案,
+        // 替代原 20Hz PlayerDamagePacket 重发)
         modcore.core.RootCapacityPatch.install();
-        // 一百三十三 (借鉴 PienZ RootInventoryCapacity 的 UI 遮蔽, 做成读取点版):
+        // 一百三十三 (UI 遮蔽做成读取点版):
         // HEAVY_LOAD 档位读取点归零 —— 图标不出现 + 背负过重扣血分支永不成立 (与
         // 分子清零构成双保险), 详见 CarryMoodlePatch 文件头
         modcore.core.CarryMoodlePatch.install();
@@ -1476,7 +1476,7 @@ public class GamePatcher {
         // 字段踩值存在可见竞态窗口; 与耐力同构, 按项目原则改读取点 (沿革见该类文件头:
         // 一百二十一 首建/一百二十二 随掉血误判删除/一百九十一 重建), CoreAPI 踩值随之退役
         modcore.core.MaxWeightPatch.install();
-        // 一百九十五 (用户拍板复刻 LuckyPienZ v4 路线): 「连接期授权」— ConnectPacket.write 的
+        // 一百九十五 (用户拍板): 「连接期授权」— ConnectPacket.write 的
         // extraInfoFlags 读取点后插掩码改写 (bit0 GodMod/bit2 Invisible), 服务端握手期
         // isForced 无条件接受 (见 analysis/连接期作弊旗标-多人上帝与隐身(已实施).md)
         modcore.core.ConnectFlagsPatch.install();

@@ -1,8 +1,8 @@
 /*
  * CarryMoodlePatch (一百三十三) — 无限负重的"HEAVY_LOAD 读取点归零"。
  *
- * 借鉴 = PienZ 源码 (`RootInventoryCapacity.java:36-39,115-149`): 他们除了改容量, 还改写了
- * `MoodlesUI.update` 里 4 处 `getMoodleLevel` → `visibleMoodleLevel`, 把 HEAVY_LOAD 图标恒置 0。
+ * 容量改写之外, 另有一路把 HEAVY_LOAD 图标恒置 0 的做法:
+ * `MoodlesUI.update` 里 4 处 `getMoodleLevel` → `visibleMoodleLevel`。
  * 我们做得更彻底一档: 直接打**读取点本体** `Moodles.getMoodleLevel(MoodleType)` ——
  * 开关开且是本地玩家的 Moodles 且类型 == HEAVY_LOAD 时返回 0。
  *

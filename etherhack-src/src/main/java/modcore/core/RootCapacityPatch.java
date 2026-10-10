@@ -1,8 +1,8 @@
 /*
- * 无限负重 - 根背包容量重写 (一百一十七, 参考 PienZ 的 RootInventoryCapacity 方案)。
+ * 无限负重 - 根背包容量重写 (一百一十七)。
  *
  * 背景: 我方旧实现靠"本地 maxWeight 踩值 + 每 50ms 重发 PlayerDamagePacket (20/s)"
- * 压制服务端重算 —— 高频发包既是网络噪声也是限流/日志面。PienZ 的做法是**零包**:
+ * 压制服务端重算 —— 高频发包既是网络噪声也是限流/日志面。本方案为**零包**:
  * 运行时重写 ItemContainer.getEffectiveCapacity, 仅对本地玩家根背包返回
  * Integer.MAX_VALUE (拖拽上限 = 容量校验的本地读点), 服务端侧另有一次低频同步。
  *

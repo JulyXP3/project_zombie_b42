@@ -1,10 +1,9 @@
 --*********************************************************
 --* 红队 POC: 计时动作真实生成 (ISTakeBricks) — 一百三十一 实施
---* 移植自 PienZ 真实源码: item_spawner.cpp / ItemSpawnTask.java +
---*   timed_action_accelerator.cpp (加速件; 见 TakeSpawnAPI 文件头)。
+--* 技术路线: 计时动作真实生成 + 计时动作加速件 (见 TakeSpawnAPI 文件头)。
 --*
 --* 为什么不是"直投": InvMngGetItem 那条链只让目标客户端本地 addItem, 服务端全程不建物 →
---* 幽灵物品 (重登即失)。PienZ 自己也只把它当 Crash 载体, 不是给物路线。
+--* 幽灵物品 (重登即失)。该链只适合当 Crash 载体, 不是给物路线。
 --* 真物品链 = 原版 ISTakeBricks 计时动作 → 服务端校验 Accept → 完成时
 --*   `AddItems(item, amount)` + **sendAddItemsToContainer** 上行 = 落地真实物品。
 --*

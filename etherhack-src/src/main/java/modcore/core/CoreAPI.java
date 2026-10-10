@@ -179,6 +179,11 @@ public class CoreAPI {
     public boolean isMapDrawZombies;
     public boolean isMapDrawItems;
     public boolean isMinimapOpen;
+    // 位置记忆 (二百零八): 小地图/主面板上次关闭位置; -1 = 无记忆 (按默认位置打开)
+    public float minimapPosX = -1.0f;
+    public float minimapPosY = -1.0f;
+    public float mainPanelPosX = -1.0f;
+    public float mainPanelPosY = -1.0f;
     public boolean isNoJam;
     public boolean isNoMuscleStrain;
     public boolean isCharCreateAllTraits;
@@ -193,7 +198,7 @@ public class CoreAPI {
     }
     public boolean isVehicleInstantStart;
     public boolean isFullbright;
-    /** 试验性 (一百一十八): 早发 Login (移植 PienZ FastLogin 思路; 默认关, 用配置文件开启)。 */
+    /** 试验性 (一百一十八): 早发 Login (默认关, 用配置文件开启)。 */
     private boolean fullbrightApplied;
     private int fullbrightSavedViewConeOpacity = 3;
 
@@ -275,6 +280,10 @@ public class CoreAPI {
             {"charCreateCustomSkillLevels", "k71"},
             {"isVehicleInstantStart", "k72"}, {"isFullbright", "k73"},
             {"isConnectFlags", "k74"},
+            // 位置记忆 (二百零八): k75/k76/k79/k80 — **跳过 k77** (二百零四 isAutoDrinkMix
+            // 曾用过, 二百零五删除后老配置可能残留布尔值, 重映射为 float 会在解析时炸)
+            {"minimapPosX", "k75"}, {"minimapPosY", "k76"},
+            {"mainPanelPosX", "k79"}, {"mainPanelPosY", "k80"},
         };
         for (String[] e : m) {
             CONFIG_KEY_CODES.put(e[0], e[1]);
@@ -364,6 +373,10 @@ public class CoreAPI {
         var3.setProperty("isMapDrawZombies", Boolean.toString(this.isMapDrawZombies));
         var3.setProperty("isMapDrawItems", Boolean.toString(this.isMapDrawItems));
         var3.setProperty("isMinimapOpen", Boolean.toString(this.isMinimapOpen));
+        var3.setProperty("minimapPosX", Float.toString(this.minimapPosX));
+        var3.setProperty("minimapPosY", Float.toString(this.minimapPosY));
+        var3.setProperty("mainPanelPosX", Float.toString(this.mainPanelPosX));
+        var3.setProperty("mainPanelPosY", Float.toString(this.mainPanelPosY));
         var3.setProperty("isNoJam", Boolean.toString(this.isNoJam));
         var3.setProperty("isNoMuscleStrain", Boolean.toString(this.isNoMuscleStrain));
         var3.setProperty("isCharCreateAllTraits", Boolean.toString(this.isCharCreateAllTraits));
@@ -445,8 +458,8 @@ public class CoreAPI {
         this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var3, "isRepairClothing", false);
         this.isPadClothing = ConfigUtils.getBooleanFromConfig(var3, "isPadClothing", false);
         LuaCompiler.getInstance().isBlockCompileLuaWithBadWords = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileLuaWithBadWords", false);
-        LuaCompiler.getInstance().isBlockCompileLuaAboutmodcore = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileLuaAboutmodcore", true);
-        LuaCompiler.getInstance().isBlockCompileDefaultLua = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileDefaultLua", true);
+        LuaCompiler.getInstance().isBlockCompileLuaAboutmodcore = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileLuaAboutmodcore", false);
+        LuaCompiler.getInstance().isBlockCompileDefaultLua = ConfigUtils.getBooleanFromConfig(var3, "isBlockCompileDefaultLua", false);
         this.isDisableFatigue = ConfigUtils.getBooleanFromConfig(var3, "isDisableFatigue", false);
         this.isDisableHunger = ConfigUtils.getBooleanFromConfig(var3, "isDisableHunger", false);
         this.isDisableThirst = ConfigUtils.getBooleanFromConfig(var3, "isDisableThirst", false);
@@ -482,6 +495,10 @@ public class CoreAPI {
         this.isMapDrawZombies = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawZombies", false);
         this.isMapDrawItems = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawItems", false);
         this.isMinimapOpen = ConfigUtils.getBooleanFromConfig(var3, "isMinimapOpen", false);
+        this.minimapPosX = ConfigUtils.getFloatFromConfig(var3, "minimapPosX", -1.0f);
+        this.minimapPosY = ConfigUtils.getFloatFromConfig(var3, "minimapPosY", -1.0f);
+        this.mainPanelPosX = ConfigUtils.getFloatFromConfig(var3, "mainPanelPosX", -1.0f);
+        this.mainPanelPosY = ConfigUtils.getFloatFromConfig(var3, "mainPanelPosY", -1.0f);
         this.isNoJam = ConfigUtils.getBooleanFromConfig(var3, "isNoJam", false);
         this.isNoMuscleStrain = ConfigUtils.getBooleanFromConfig(var3, "isNoMuscleStrain", false);
         this.isCharCreateAllTraits = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateAllTraits", false);
@@ -557,7 +574,7 @@ public class CoreAPI {
             this.exposer.exposeCorpseSpawn();
             // 一百九十 万象天引: B 聚集原语
             this.exposer.exposeZombieGather();
-            // 一百三十一 计时动作真实生成 (ISTakeBricks 真物品路线, 移植 PienZ item_spawner)
+            // 一百三十一 计时动作真实生成 (ISTakeBricks 真物品路线)
             this.exposer.exposeTakeSpawn();
             this.exposer.exposeRadioXp();
             this.exposer.exposeRateLimiter();

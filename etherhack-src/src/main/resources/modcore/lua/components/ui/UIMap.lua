@@ -392,7 +392,7 @@ function UIMap:onRightMouseUp(x, y)
 			context:addOption(getTranslate("UI_Map_VehTeleportContext"), self, self.startVehicleTeleport, worldX, worldY)
 		else
 			context:addOption(getTranslate("UI_Map_TeleportContext"), self, self.onTeleport, worldX, worldY)
-			-- 穿墙档 (2026-09-14): 直线路径不查连通 —— 对应 PienZ TileTeleport 的"直线"兜底档;
+			-- 穿墙档 (2026-09-14): 直线路径不查连通 —— "直线"兜底档;
 			-- 服务端 antiCheatNoClip 关闭 (默认) 时可用, 开启会撞 checkPathClamp/checkReachablePath
 			-- 被踢 (文案已标注)。单机两档同为瞬时, 选项保留以保持菜单一致 (2026-09-14 用户实测反馈
 			-- MP 下选项缺失, 去掉 isMultiplayer 门控排除该变量)。
@@ -622,8 +622,7 @@ function UIMap:onTeleport(x, y)
 end
 
 --*********************************************************
---* 穿墙档 (2026-09-14): 直线路径, 不查连通 —— 对应 PienZ TileTeleport 的
---* "直线"兜底档。服务端 antiCheatNoClip 关闭 (默认) 时可用; 开启的服会撞
+--* 穿墙档 (2026-09-14): 直线路径, 不查连通 —— "直线"兜底档。服务端 antiCheatNoClip 关闭 (默认) 时可用; 开启的服会撞
 --* checkPathClamp/checkReachablePath 被踢, 选项只在 MP 显示且文案已标注。
 --* 限速/取消/超时与安全档共用同一套 (onTeleportTick)。
 --*********************************************************

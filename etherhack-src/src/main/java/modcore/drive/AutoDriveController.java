@@ -224,6 +224,15 @@ public final class AutoDriveController {
      *  超过 arccos(0.82)≈35° 即重锁 (一百一十六) — 防"沿锁死旧切向把车拖过路口" (实测
      *  drive_20260921_001512: 90° 右转口被拖过 87 格, 引发 87 格长并回)。 */
     private static final float CORNER_RELOCK_COS = 0.82f;
+    /** 转向投影"反向腿"封锁阈值 (cos, 二百零六): 掉头式路线 (目的地在车尾方向时
+     *  规划器先向东开到掉头点再折返) 的去程/返程两腿反向平行且贴近, 车横向过零时
+     *  最近段在两腿间随机翻转, 翻到已消费的去程段 → φ 瞬间翻 ±π 舵打满掉头 →
+     *  绕圈极限环 (实测 drive_20261006_213032 椭圆: 投影段 11↔12 横跳 + 4 次
+     *  STEER_SAT, pathIdx 棘轮冻结在 12)。规则: 下标 < pathIdx 且切向与 pathIdx
+     *  段切向点积低于此阈值的候选段不参与转向投影。阈值取 cos(95°) — 网格路直角弯
+     *  两腿点积恰为 0 (浮点精确), 留噪声裕度只封 >95° 的真反向腿; 前向段 (掉头顶点
+     *  瞄准, φ≈π 是掉头执行本身) 与同向后段 (脱困倒车后的进度滞后回线) 不受影响。 */
+    private static final float REVERSE_LEG_COS = -0.087f;
     /** 重锁去抖 (ms): 车在拐点附近投影可能瞬间回摆, 节流防参考系对翻。 */
     private static final long RELOCK_DEBOUNCE_MS = 500L;
     /** 并入段渐进提速 (一百一十六): 偏差从 8 格线性衰减到 2.5 格时, 限速从 20
@@ -655,6 +664,10 @@ public final class AutoDriveController {
         // 行驶时随里程 1:1 下降, 与路线在地图上怎么绕无关; 原直线距离标尺在切向/
         // 绕行路段 20 秒可零靠近, 误杀健康行驶 (drive_20261005_221403.csv 实测:
         // 44km/h 在航线上被停)。极限环特征 = 投影棘轮不前移 → 剩余长度不降, 仍拦得住。
+        // 二百零六: 标尺锚点改"车在当前段的投影点" (当前段只计剩余部分) — 旧锚点
+        // (段起点顶点) 在 pathIdx 被长直段冻结时把已行驶部分重复计入, remain 随行驶
+        // 1:1 膨胀 → 误杀 (drive_20261006_212545: 6000 格公路单段, 20s 涨 338)。
+        // 投影锚定后极限环仍满足"剩余不降" (绕圈时投影点在段内往复), 拦截语义不变。
         if (!arrivalBrake && avoidMode == AVOID_NONE && now >= unstickUntilMs
                 && boundaryDist > 60.0f && absSpeed > 2.0f
                 && path != null && pathIdx < path.size()) {
@@ -1105,11 +1118,27 @@ public final class AutoDriveController {
         int bestSeg = -1;
         float bestT = 0f;
         float bestD2 = Float.MAX_VALUE;
+        // 二百零六: 反向腿封锁的参考切向 = pathIdx 段切向 (进度棘轮当前所在段)。
+        // pathIdx 已到末顶点或退化段时无参考, 不过滤 (原行为)。
+        float refDx = 0.0f, refDy = 0.0f;
+        boolean hasRef = pathIdx > 0 && pathIdx < last;
+        if (hasRef) {
+            float[] ra = path.get(pathIdx);
+            float[] rb = path.get(pathIdx + 1);
+            refDx = rb[0] - ra[0];
+            refDy = rb[1] - ra[1];
+            hasRef = (refDx * refDx + refDy * refDy) > 1e-6f;
+        }
         while (true) {
             for (int s = segStart; s <= segEnd; s++) {
                 float[] a = path.get(s);
                 float[] b = path.get(s + 1);
                 float dx = b[0] - a[0], dy = b[1] - a[1];
+                // 反向腿封锁 (二百零六): 已消费的去程段 (下标 < pathIdx) 若与当前段
+                // 反向平行, 距离打平时被选中会把 φ 翻成 ±π → 掉头绕圈。跳过。
+                if (s < pathIdx && hasRef && (dx * refDx + dy * refDy) < REVERSE_LEG_COS) {
+                    continue;
+                }
                 float l2 = dx * dx + dy * dy;
                 float t = l2 > 0.0f ? ((x - a[0]) * dx + (y - a[1]) * dy) / l2 : 0.0f;
                 t = t < 0.0f ? 0.0f : (t > 1.0f ? 1.0f : t);
@@ -1701,16 +1730,35 @@ public final class AutoDriveController {
 
     /** 沿路线剩余长度 (二百零二): 车 → path[pathIdx] → 队尾逐段求和, 即"沿路线
      *  开到终点还要走多少格"。进度看门狗的标尺 — 沿线行驶随里程 1:1 下降, 与
-     *  路线几何绕行无关; path 无效 → Float.MAX_VALUE (看门狗按未武装处理)。 */
+     *  路线几何绕行无关; path 无效 → Float.MAX_VALUE (看门狗按未武装处理)。
+     *  二百零六: 当前段只计**车投影点之后的剩余部分** (1-t)·L — 旧版锚定段起点
+     *  顶点 (车→path[pathIdx] 距离 + 整段全长), pathIdx 在长直段上冻结 (路段无
+     *  中间路点, 实测 6000 格公路单段) 时, 已行驶部分被重复计入, 剩余路程随行驶
+     *  1:1 膨胀 → 20 秒后 NOPROG 误杀健康直路巡航 (drive_20261006_212545 实测:
+     *  绕障结束后 19.97s 车开 336.5 格, remain 反涨 338)。投影 t 钳 [0,1]: 车
+     *  冲过段尾而 pathIdx 尚未棘轮时, 该段按已消费计, 与 advancePath 衔接一致。 */
     private float remainingRouteLength(BaseVehicle vehicle) {
         if (path == null || pathIdx >= path.size()) {
             return Float.MAX_VALUE;
         }
-        float remain = dist(vehicle.getX(), vehicle.getY(), path.get(pathIdx)[0], path.get(pathIdx)[1]);
-        for (int i = pathIdx; i < path.size() - 1; i++) {
-            float[] a = path.get(i);
-            float[] b = path.get(i + 1);
-            remain += dist(a[0], a[1], b[0], b[1]);
+        if (pathIdx >= path.size() - 1) {
+            // 只剩末顶点 (无当前段): 车 → 终点直线距离
+            float[] p = path.get(pathIdx);
+            return dist(vehicle.getX(), vehicle.getY(), p[0], p[1]);
+        }
+        float[] a = path.get(pathIdx);
+        float[] b = path.get(pathIdx + 1);
+        float dx = b[0] - a[0];
+        float dy = b[1] - a[1];
+        float l2 = dx * dx + dy * dy;
+        float t = l2 > 1e-6f
+                ? clamp(((vehicle.getX() - a[0]) * dx + (vehicle.getY() - a[1]) * dy) / l2, 0.0f, 1.0f)
+                : 0.0f;
+        float remain = (1.0f - t) * (float) Math.sqrt(l2);
+        for (int i = pathIdx + 1; i < path.size() - 1; i++) {
+            float[] s = path.get(i);
+            float[] e = path.get(i + 1);
+            remain += dist(s[0], s[1], e[0], e[1]);
         }
         return remain;
     }

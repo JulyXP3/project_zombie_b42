@@ -3,8 +3,7 @@ package modcore.utils;
 import se.krka.kahlua.integration.annotations.LuaMethod;
 
 /**
- * A1 (2026-09-13, 见 analysis/DLL分析/A-隐蔽性加固-设计方案(待实施).md):
- * 统一发包限速器 —— 滑动窗口, 3 条独立通道, 语义照 ContainerJobs(sent[3][300], 1.001s 窗口)。
+ * 统一发包限速器 —— 滑动窗口, 3 条独立通道 (sent[3][300], 1.001s 窗口)。
  *
  * 目的: 批量功能(陷阱生成 / 弹药农场 / 重掷 / 未来的整理)在短时间内的发包量可能远超
  * 人手可达的形态, 这是最容易被服务端流量统计识别的特征。限速器把窗口内放行量封顶,
@@ -15,9 +14,9 @@ import se.krka.kahlua.integration.annotations.LuaMethod;
  */
 public final class PacketRateLimiter {
 
-    /** 每条通道的滑动窗口容量(条/秒) —— 与同事 DLL 同档(App A1)。 */
+    /** 每条通道的滑动窗口容量(条/秒)。 */
     private static final int WINDOW_CAPACITY = 300;
-    /** 窗口长度(ns): 1.001s, 与 ContainerJobs 的 1001000000L 一致。 */
+    /** 窗口长度(ns): 1.001s。 */
     private static final long WINDOW_NANOS = 1001000000L;
 
     private static final int CH_MOVE = 0;

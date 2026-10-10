@@ -5,8 +5,8 @@
 --*   ① 原版每帧已经算好"鼠标下的物件" —— zombie/ui/UIManager.java:567-571 调
 --*      IsoObjectPicker.Instance.ContextPick 并把结果写进 UIManager.setLastPicked
 --*      (1225-1232); getLastPicked() 是 public static 且 UIManager 已暴露给 Lua
---*      → Lua 直接可读, 零成本。**不需要任何渲染补丁** (PienZ 那 5 处字段改写是
---*      原生侧拿不到 Java 内部实例所致, 我们用现成 API)。
+--*      → Lua 直接可读, 零成本。**不需要任何渲染补丁** (原生侧拿不到 Java 内部实例才需字段改写,
+--*      我们用现成 API)。
 --*   ② 但该值只在"鼠标不在任何 UI 元素上 + 拾取非空 + tooltip 非空"时才写入
 --*      (UIManager.java:1219/1232 否则写 null) —— 我方面板打开时鼠标必在面板上,
 --*      所以面板内取物件走 Java 兜底 pickObjectAt (把 ClickObject 解包成 IsoObject;

@@ -1,12 +1,12 @@
 /*
  * 红队 POC: 计时动作真实生成 (ISTakeBricks) — 一百三十一 实施。
  *
- * 来源 = PienZ 真实源码 (temp\PienZ Source):
- *   · item_spawner.cpp / ItemSpawnTask.java —— 他们的"刷物品"**真路线**;
- *   · timed_action_accelerator.cpp —— 加速件 (Hand_L additionalPain 置 NaN + 上行 PlayerDamage)。
+ * 技术路线:
+ *   · 刷物品真路线;
+ *   · 计时动作加速件 (Hand_L additionalPain 置 NaN + 上行 PlayerDamage)。
  *
  * 为什么换掉"直投"(InvMngGetItem): 那条链只让**目标客户端本地** addItem, 服务端全程不建物 →
- * 幽灵物品 (重登即失/他人不可见)。PienZ 自己也只把它当 Crash 载体 (UI 功能名 "Crash"),
+ * 幽灵物品 (重登即失/他人不可见)。直投只作 Crash 载体 (UI 功能名 "Crash"),
  * 并不是物品生成路线 —— 用户实测"直投是幽灵物品"即此。
  *
  * 真路线原理 (原版动作链, 服务端校验并落地):
@@ -19,14 +19,13 @@
  *      这就是"真物品"的来源: 物品随正常的容器上行同步报给服务端 (可持久化、他人可见)。
  *      (对比: 直投的 InvMngGetItem 接收端只做本地 addItem, 没有这一步。)
  *
- * 加速 (可选, 移植 timed_action_accelerator):
- *   原版 `getDuration()` = `10 * amount`, 数量一多就是几分钟。PienZ 的做法是把 Hand_L 的
+ * 加速 (可选, 计时动作加速):
+ *   原版 `getDuration()` = `10 * amount`, 数量一多就是几分钟。做法是把 Hand_L 的
  *   `additionalPain` 置 NaN 并 `sendPlayerDamage` 上行 → **服务端副本**的该字段也成 NaN →
  *   服务端侧动作时长计算塌成 NaN → 动作在服务端眼里瞬间完成。本类为 **Arm/Maintain/Restore**
  *   三段式照搬 + **硬超时 (3s) + 收尾必还原** (工程纪律 4: 改前值记录, 只写回自己改过的键)。
  *   客户端侧"快"由 Lua 模块的 `ISTakeBricks.getDuration` 覆盖完成 (零作弊位, 见 EtherTakeSpawn.lua),
- *   两者合起来 = PienZ 的 accelerated 档 (他们是 InstantActionManager + 投毒, 我们自己那份等价物
- *   是 Lua 覆盖)。
+ *   两者合起来 = accelerated 档 (服务端投毒的等价物是 Lua 覆盖)。
  *
  * 仅限用户自己的服务器 / 自建测试环境。
  */
@@ -89,7 +88,7 @@ public final class TakeSpawnAPI {
             throw new RuntimeException("accelerator arm failed");
         }
         try {
-            // 与 PienZ ItemSpawnTask 同形: values = (character, pallet, square, sprite, item, amount)
+            // values = (character, pallet, square, sprite, item, amount)
             // (pallet 传玩家自己 —— 原版 isValid 只要求 isExistInTheWorld)
             NetTimedActionPacket.createNewAndSend("ISTakeBricks", p,
                     p, p, p.getCurrentSquare(), null, itemType, (double) count);
@@ -116,7 +115,7 @@ public final class TakeSpawnAPI {
         return armed;
     }
 
-    // ===== 加速件: Arm / Maintain / Restore (timed_action_accelerator 三段式) =====
+    // ===== 加速件: Arm / Maintain / Restore (三段式) =====
 
     private static boolean arm(IsoPlayer p) {
         try {

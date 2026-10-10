@@ -4,7 +4,7 @@ require "ISUI/ISPanel"
 --* EtherVehiclePanel: 载具操作页
 --*
 --* 通道: 「修理车辆」走**原版计时动作** ISRepairLightbar 状态机 (B1 四修, 2026-09-14
---* 八十五, PienZ 同款: 服务端权威执行 + 不进 cmd 日志, 默认不消耗物品 —— 只用**本车**容器里的
+--* 八十五: 服务端权威执行 + 不进 cmd 日志, 默认不消耗物品 —— 只用**本车**容器里的
 --* 物品当"过账件", 优先级 后备箱 → 手套箱 → 座椅 (九十一 用户裁定, 见 §修理); 每步结果
 --* (成功/失败) 走头顶浮动提示;
 --* 其余通道是 vanilla 服务器车辆指令 (media/lua/server/Vehicles/
@@ -99,8 +99,8 @@ local function repairVehicleDirectNow()
 end
 
 --*********************************************************
---* 修理 (B1 四修, 2026-09-14 八十五, 用户指示"按 PienZ 的来")
---* = **原版计时动作路线** (PienZ.dll 的 VehicleRepair 同款做法):
+--* 修理 (B1 四修, 2026-09-14 八十五)
+--* = **原版计时动作路线**:
 --*   逐件排队**原版** ISRepairLightbar —— 原版 complete() 对任意 VehiclePart 做
 --*   setCondition(+15+机械学-引擎修理等级) 并调 transmitPartCondition 同步; MP 下该动作
 --*   被 LuaTimedActionNew 判为**服务端权威** (它定义了 complete → useCustomRemoteTimedActionSync
@@ -133,19 +133,20 @@ local ETHER_REPAIR_JOB_MAX_MS = 600000;  -- 整单上限 (整车重损约上百�
 --*   → NetTimedAction.set 按 new 的**参数名**把它当动作参数一起发上行 (NetTimedAction.java:42-58)
 --*   → 服务端照原样重建动作 (NetTimedAction.parse:145-171) 并拿它当自己的时长
 --*     (Action.setTimeData:35-39 → NetTimedAction.getDuration:74-98)。**服务端不校验、不钳制**。
---* 档位取舍 (2026-09-14 九十四, 用户: "放缓读条做安全冗余"):
---*   200 = 本档: 原版, 单步端到端 ~4.3 秒 ≈ 13 件/分, 工作动画完整;
---*   40  = 快档: 原版一半, 单步端到端 ~2.3 秒 ≈ 26 件/分, 工作动画能播完 (不要在他人服使用);
+--* 档位取舍 (2026-09-14 九十四, 用户: "放缓读条做安全冗余"; 2026-10-10 用户改 2 秒档):
+--*   200 = 原版, 单步端到端 ~4.3 秒 ≈ 13 件/分, 工作动画完整;
+--*   100 = 本档: 动作 2.0 秒, 端到端约 2.5 秒 ≈ 20 件/分;
+--*   40  = 快档: 端到端 ~2.3 秒 ≈ 26 件/分, 工作动画能播完 (不要在他人服使用);
 --*   1   = 九十二的"秒修": 单步 ~0.3 秒 = 200 件/分, 工作动画一帧即被打断 —— 不要在他人服使用。
 --* 依据 (为何回调): 官方反作弊 (zombie/network/anticheats 24 项) 无一读动作时长, 也不会被钳制;
 --*   但 maxTime 是 vanilla 类实例上的普通字段, 任何 Lua 侧钩子 (含原版
 --*   ISTimedActionQueue.getTimedActionQueue(p).queue 遍历) 一行就能读到, 1 这种
 --*   "原版不可能出现"的极端值 + 200 件/分的频率是唯一会自曝的形态, 故留冗余。
-local ETHER_REPAIR_ACTION_TIME = 200;
+local ETHER_REPAIR_ACTION_TIME = 100;
 local ETHER_REPAIR_STALL_MS = 16000;     -- 条件长时间不上升判停窗口: 服务端条件经载具周期更新回包,
                                          -- 可能滞后数秒 (实测)。按**时间窗**判定而非步数 (九十一教训),
                                          -- 窗口 = 走位 (1~4s, 九十四 起每件先走到该部件区域) + 单件动作
-                                         -- (4s) + 数秒同步滞后余量; 秒修档可调回 6000
+                                         -- (2s) + 数秒同步滞后余量; 秒修档可调回 6000
 
 EtherRepairJob = nil;                    -- 当前修理单 (状态机数据)
 
@@ -158,7 +159,7 @@ local function endRepairJob()
     local cb = cbs ~= nil and cbs["UI_VehiclePanel_RepairAuto"] or nil;
     if cb ~= nil then pcall(function() cb:setCheked(false); end); end
 end
---* 取"过账件" (即 PienZ 的"供给件"): 服务端 complete() 对该件只做 inventory:Remove(item) ——
+--* 取"过账件": 服务端 complete() 对该件只做 inventory:Remove(item) ——
 --* 若该件**不在玩家背包**里, Remove 是**空操作** (ItemContainer.Remove:1940 遍历不到即返回,
 --* 无任何副作用) → 条件照修、东西不消耗。
 --* 能被服务端解析的前提 = 该物品有个能编码的容器 (PZNetKahluaTableImpl.saveInventoryItem
@@ -167,7 +168,7 @@ end
 --* **不可行 (实测取证)**: ① 装在部件上的那个件 —— VehiclePart.setInventoryItem:170 只存
 --* this.item, 没有容器; ② **地上的物品** —— IsoWorldInventoryObject 构造里就
 --* item.setContainer(null) (:82), 落地即无容器 → 服务端一律解析成 null → complete 直接
---* return false 且不报错 (PienZ 菜单那句 "No packet-resolvable item found outside player
+--* return false 且不报错 (菜单提示 "No packet-resolvable item found outside player
 --* root inventories" 就是踩的这类坑)。
 --* 优先级 (2026-09-14 九十一 用户裁定): ① 本车后备箱 (TruckBed/TruckBedOpen/TrailerTrunk) →
 --*   ② 本车手套箱 (GloveBox) → ③ 本车座椅容器 (Seat*) —— 全部**免费**。
@@ -460,7 +461,7 @@ end
 --* enter + 广播; requiredCapability=LoginOnServer, 不进 cmd 日志)。
 --* 仅自建测试环境使用; MP 有效, 单机隐藏。
 --*********************************************************
-local C2_RADIUS = 20;   -- 米, 与 PienZ "Vehicle beyond 20 m" 同档
+local C2_RADIUS = 20;   -- 米, 取 20 米内最近载具
 
 local function nearestVehicle(px, py, exclude)
     local best, bestD = nil, C2_RADIUS;

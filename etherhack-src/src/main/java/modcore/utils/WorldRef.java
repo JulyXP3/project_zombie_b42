@@ -7,11 +7,10 @@ import zombie.iso.IsoObject;
 import zombie.iso.IsoWorld;
 
 /**
- * D4 (2026-09-13, 见 analysis/DLL分析/D-容器与物品-设计方案(待实施).md):
  * 世界对象/容器的**引用稳定性校验** —— 批量操作(或被索引寻址的网络命令)发出前,
  * 确认 (格坐标 + 对象 index + 容器 index) 仍指向同一个对象/容器。
  *
- * 语义照同事 DLL 的 ContainerJobs.resolve(): 格一致 -> 对象 index 有效 ->
+ * 解析语义: 格一致 -> 对象 index 有效 ->
  * 对象确实在该格上 -> 容器 index 有效 -> 容器确实属于该对象且反查 index 一致。
  * index 型操作(如 object.clearContainerExplore 的 index/containerIndex)在目标
  * 加载/卸载之间会错位, 校验失败时调用方应跳过该项而不是照发。
