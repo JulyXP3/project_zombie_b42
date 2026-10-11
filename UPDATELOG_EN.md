@@ -2,6 +2,7 @@
 
 ## [3.2.5] - Current
 
+- Reworked: auto-drive cornering - much tighter corner radius, turns complete right at the bend, and the car arcs cleanly back onto the route afterwards (no more wide swings or drifting back at an angle); straight-line holding is also strengthened (no creeping drift, no unexplained mid-drive slowdowns); straight-road cruising speed is unchanged (sharp corners are taken at low speed).
 - Added: a "Connect-time grant" toggle on the Survival tab - makes "God mode" and "Invisible" actually work in multiplayer (arm it before joining; changes need a reconnect; vanilla servers keep almost no log, anti-cheat servers record or kick - see the anti-cheat guide).
 - Fixed: after turning "Connect-time grant" off and rejoining a server, the character could remain god-like on the server side (injuries healing instantly).
 - Added: two troll features on the "Fun" tab - "Zombie Lure" (while on, continuously attracts zombies from a wide area toward you; toggle off to stop) and "Gather Zombies" (one click instantly pulls nearby available zombies into a ring around you). In multiplayer, Gather only affects zombies already targeting you - lure first, then gather.

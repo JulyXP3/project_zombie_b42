@@ -78,21 +78,38 @@ public final class AutoDriveController {
     private static final float BRAKE_DECEL = 6.0f;       // 舒适制动减速度 m/s² (制动距离估算)
     private static final float ARRIVE_RADIUS = 4.0f;     // 到达半径 (格, §五)
     private static final float SPEED_LIMIT_MARGIN = 0.95f; // 硬顶余量 (一百八十四 用户拍板 0.85→0.95; §四)
-    /** Stanley 增益: 横向偏差项的收敛快慢 (e=1 格时低速 ~60°/高速 ~6°)。 */
-    private static final float K_STANLEY = 1.5f;
-    /** Stanley 输出增益 (A 轮 2026-09-11: 原 2.0 固定, 仿真标定 temp/sim_avoid/pp_compare.py
-     *  — 摆头极限环主因之一是输出增益过高 + 无阻尼)。 */
-    private static final float STEER_GAIN = 1.6f;
-    /** 偏航角速度阻尼 (工业 Stanley 实践标配): 抑制方向角闭环极限环 (实测直线摆头)。 */
+    // ===== 横向层 = Pure Pursuit 纯追踪 (二百一十二, 替换 Stanley; 仿真定参 temp/drivetest/SimCorner.java) =====
+    // Stanley (DARPA Junior) 适配曲率连续路径; 本项目路径是折线+90°尖顶点, 顶点处切向瞬跳 →
+    // 结构性"过点才打舵的大弧 + 弱横向项三角漂回" (用户两轮 CSV 实测 194240/201523 实锤)。
+    // Pure Pursuit (Coulter 1992; ROS 导航/农机标配): 瞄准路径前方 L 处目标点, 前视点先于
+    // 车身跨过弯角 → 天然提前打舵 + 贴内切弯 + 指数弧线收敛。仿真: 越角 10.6→2.7m, 无三角。
+    /** 前视时距 (s): L = clamp(PP_LOOKAHEAD_S×v, 下限, 上限); 大 = 高速稳/切弯宽, 小 = 贴角/易摆。 */
+    private static final float PP_LOOKAHEAD_S = 1.1f;
+    /** 前视下限 (格): 急弯贴角 (低速时距项缩到下限); 0.9s 版高速漂移 ±1.2 格, 1.1s 版 ±0.5。 */
+    private static final float PP_L_MIN = 2.5f;
+    /** 前视上限 (格)。 */
+    private static final float PP_L_MAX = 20.0f;
+    /** 轴距近似 (格, 曲率→前轮角换算用)。 */
+    private static final float PP_WHEELBASE = 2.8f;
+    /** 混合横向项增益 (二百一十三): 等效旧 Stanley 输出增益 1.6 × 横向增益 1.5 — 纯追踪稳态
+     * 扰动抑制不足 (实测 213201: 高速 alpha 钉死 ±0.17 偏差爬到 1.8 触发保速刹车循环),
+     * 补回 Stanley 同式横向项 (PZ 符号配对为数月实证), 钳 ±0.4 rad。 */
+    private static final float PP_K_CTE = 2.4f;
+    /** 弯中保速 (二百一十三 修订): 航向差>25° (真在转弯) → 12; 未回线 cte>1.5 → 20 (软档,
+     * 原 12 会把直线跟踪瞬态放大成刹车循环); 旧偏航网 cte>2.5→20 被 1.5→20 吸收。 */
+    private static final float CORNER_HOLD_ALPHA = 0.44f;
+    private static final float CORNER_HOLD_CTE = 1.5f;
+    private static final float CORNER_HOLD_KMH = 12.0f;
+    /** 偏航角速度阻尼 (沿用 Stanley 期标定, Pure Pursuit 同样需要 — 舵机滞后引起的相位超前摆振)。 */
     private static final float K_DAMP = 0.35f;
     /** psiDot 一阶低通时间常数 (s): 差分噪声抑制。 */
     private static final float PSI_LP_TAU = 0.2f;
 
     // ===== 纵向层 (速度剖面 + gap 安全速) 参数 — 单位制: 内部 m/s, 对外 km/h =====
     /** 弯道横向加速度上限 (m/s²): v = √(a·R) 的 a。 */
-    private static final float A_LAT_MAX = 1.8f;   // 旧 2.5 高估 PZ 轮胎抓地 → 弯中甩出 (实测); 1.8 = 保守弯速
+    private static final float A_LAT_MAX = 1.2f;   // 沿革: 2.5 高估 PZ 抓地弯中甩出 (实测) → 1.8 → 1.2 (二百一十一 用户反馈"转弯半径太大", 弯速 ×0.82 换跟线贴; 直路巡航不受影响)
     /** 剖面规划舒适减速度 (m/s², 后向传递用; 急刹由 BRAKE_DECEL 负责)。 */
-    private static final float A_PLAN_BRAKE = 4.0f;
+    private static final float A_PLAN_BRAKE = 3.0f;   // 4.0→3.0 (二百一十一): 入弯减速提前 ~1/3 距离, 消"带速入弯外甩"; 仍 < 物理急刹 6.0
     /** ACC 期望车头时距 (s): vSafe = (gap−净距−S0)/T (A 轮 2026-09-11 替代 IDM 加速度式)。 */
     private static final float IDM_T = 1.2f;
     /** ACC 最小停车间距 (m, 格)。 */
@@ -339,7 +356,7 @@ public final class AutoDriveController {
     private long pendingNoClipOffMs;
     private static final long NOCLIP_GRACE_MS = 15000;
 
-    // 诊断采样 stash (DriveDiag.sample 用; 每帧由 stanleySteer/driveTick 写入):
+    // 诊断采样 stash (DriveDiag.sample 用; 每帧由 purePursuitSteer/driveTick 写入):
     private float diagPhi;      // 最近一次 Stanley 航向误差 (rad)
     private float diagCTE;      // 最近一次 Stanley 横向偏差 e (格)
     private int diagSeg = -1;   // 最近一次投影段号
@@ -714,7 +731,7 @@ public final class AutoDriveController {
             ctlForward = false;
             ctlBackward = false;
             ctlBrake = absSpeed > 0.4f;
-            ctlSteer = stanleySteer(vehicle, absSpeed);   // 边刹边回线 (绕行残留偏移, 仿真 S5)
+            ctlSteer = purePursuitSteer(vehicle, absSpeed);   // 边刹边回线 (绕行残留偏移, 仿真 S5)
             if (absSpeed <= 0.4f) {
                 // 裁尾路线: 到达即"已停在最近道路", 用 A 规则提示保留"剩余自行驾驶"语义
                 setState(STATE_ARRIVED, routeEndsAtRoad
@@ -875,7 +892,13 @@ public final class AutoDriveController {
         // 巡航, 不再等贴死 2.5 才整段跳变 (用户反馈"回归主航线途中依旧 20")。
         float cteNow = crossTrackError(vehicle);
         if (avoidMode == AVOID_NONE) {
-            if (cteNow > 2.5f) {
+            // 弯中保速 (二百一十三 分档): 真在转弯 (航向差>25°) → 12; 未回线 → 20 (软档)。
+            // 二百一十二 初版 cte>1.5 也钉 12, 实测把直线跟踪瞬态放大成"漂移-刹车"循环
+            // (213201); alpha 腿才是弯道语义, cte 腿只防带偏加速。吸收旧偏航网 2.5→20。
+            // (diagPhi = 上一拍 purePursuitSteer 写入, ~20ms 滞后可忽略; 激活首拍为 0)
+            if (Math.abs(diagPhi) > CORNER_HOLD_ALPHA) {
+                v0 = Math.min(v0, CORNER_HOLD_KMH);
+            } else if (cteNow > CORNER_HOLD_CTE) {
                 v0 = Math.min(v0, 20.0f);
             }
         } else if (avoidMode == AVOID_RETURN && cteNow > 2.5f) {
@@ -926,19 +949,19 @@ public final class AutoDriveController {
         throttleState = brakeLatched ? THROTTLE_BRAKE
                 : (vehicle.isRegulator() ? THROTTLE_COAST : THROTTLE_FWD);
 
-        // ===== 横向: 绕行模式 = 朝缺口序列当前点直插 / 正常 = Stanley 跟线 =====
+        // ===== 横向: 绕行模式 = 朝缺口序列当前点直插 / 正常 = Pure Pursuit 跟线 (二百一十二) =====
         if (avoidMode == AVOID_DETOUR && !Float.isNaN(avoidTargetX)) {
             ctlSteer = steerToPoint(vehicle, absSpeed, avoidTargetX, avoidTargetY);
         } else if (avoidMode == AVOID_RETURN) {
-            // 卌五: RETURN 改用 Stanley (和 NONE 期同) — 旧纯追踪增益 2.0 饱和满舵,
-            // 大横向偏差时打满方向 → 过冲 → 开回头 → 重新接敌 (实测 f:3600 RETURN → f:3840 DETOUR)。
-            // Stanley 兼顾横向偏差 + 航向角, 近线后自然收敛不振荡。
-            ctlSteer = stanleySteer(vehicle, absSpeed);
+            // 卌五: RETURN 与 NONE 期同控制器 (旧 steerToPoint 增益 2.0 大偏差打满舵
+            // → 过冲 → 开回头 → 重新接敌, 实测 f:3600 RETURN → f:3840 DETOUR); 二百一十二
+            // 起两者都是 Pure Pursuit — 前视点随速度缩放, 大偏差不饱和, 近线自然收敛。
+            ctlSteer = purePursuitSteer(vehicle, absSpeed);
             if (Math.abs(crossTrackError(vehicle)) < AVOID_RETURN_CTE_EXIT) {
                 avoidMode = AVOID_NONE;
             }
         } else {
-            ctlSteer = stanleySteer(vehicle, absSpeed);
+            ctlSteer = purePursuitSteer(vehicle, absSpeed);
         }
     }
 
@@ -1034,9 +1057,21 @@ public final class AutoDriveController {
                         prev[1] + (wp[1] - prev[1]) * f});
                 t0 += need;
                 acc = 0;
-                if (pts.size() > 64) break outer;
+                if (pts.size() > 96) break outer;
             }
             acc += seg - t0;
+            // 顶点必采样 (二百一十二): 折线路径的曲率全在顶点上, 纯 2m 步长会把顶点跳进
+            // "投影点→首采样"的盲缝 → 弯前 2m 剖面失明、目标速弹回巡航 (实测 194240/201523:
+            // corner 12.8→52→100 带速过弯 = 大弧主因之一)。顶点入样后盲缝消失, 刹车一路
+            // 刹到弯点上。防重: 与上一采样距 <0.25 格的顶点跳过 (恰有采样贴在顶点时)。
+            if (i < path.size() - 1) {
+                boolean dup = !pts.isEmpty() && dist(pts.get(pts.size() - 1)[0], pts.get(pts.size() - 1)[1], wp[0], wp[1]) < 0.25f;
+                if (!dup) {
+                    pts.add(wp);
+                    acc = 0;
+                    if (pts.size() > 96) break;
+                }
+            }
             prev = wp;
         }
         int n = pts.size();
@@ -1060,10 +1095,11 @@ public final class AutoDriveController {
         }
         vms[0] = Float.MAX_VALUE;
         vms[n - 1] = Float.MAX_VALUE;
-        // 后向传递 (从远到近): 保证物理上刹得到
+        // 后向传递 (从远到近): 保证物理上刹得到 — 步长取相邻样本实际间距 (顶点入样后不等距)
         for (int j = n - 2; j >= 0; j--) {
+            float ds = Math.max(dist(pts.get(j)[0], pts.get(j)[1], pts.get(j + 1)[0], pts.get(j + 1)[1]), 0.25f);
             vms[j] = Math.min(vms[j],
-                    (float) Math.sqrt(vms[j + 1] * vms[j + 1] + 2.0f * A_PLAN_BRAKE * PROFILE_DS));
+                    (float) Math.sqrt(vms[j + 1] * vms[j + 1] + 2.0f * A_PLAN_BRAKE * ds));
         }
         // 当前参考速 = 样本 0 (车旁), 换 km/h 并封顶
         return Math.min(vms[0] == Float.MAX_VALUE ? capKmh : vms[0] * 3.6f, capKmh);
@@ -1100,7 +1136,7 @@ public final class AutoDriveController {
      * 投影窗口自适应延伸 (起点 pathIdx-2, 加倍延伸上限 64 段)。
      * 绕行 (waypoint detour) 时不走本方法 — 由 steerToPoint 直插目标点 (卅一)。
      */
-    private float stanleySteer(BaseVehicle vehicle, float absSpeedKmh) {
+    private float purePursuitSteer(BaseVehicle vehicle, float absSpeedKmh) {
         if (path == null || path.isEmpty()) return 0.0f;
         int last = path.size() - 1;
         if (last == 0) {
@@ -1161,33 +1197,64 @@ public final class AutoDriveController {
             segEnd = Math.min(last - 1, segEnd + Math.max(8, segEnd - segStart));
         }
         if (bestSeg < 0) return 0.0f;
+        // ===== Pure Pursuit 核 (二百一十二): 瞄准投影点沿路径前进 L 处的目标点 =====
+        // 前视点先于车身跨过弯角 → 提前打舵 + 贴内切弯 + 指数弧线收敛 (无 Stanley 的
+        // 顶点切向跳变问题)。参数仿真定标 temp/drivetest/SimCorner.java (67 Commando
+        // 口径): 越角 10.6→2.7 格, 出弯转正 9.9→3.7 格, 无三角漂移。
+        float v = Math.max(absSpeedKmh / 3.6f, 0.8f);   // m/s (下限防静止退化)
+        float look = clamp(PP_LOOKAHEAD_S * v, PP_L_MIN, PP_L_MAX);
+        float[] tp = pathPointAhead(bestSeg, bestT, look);
+        float alpha = wrapPi((float) Math.atan2(tp[1] - y, tp[0] - x) - heading(vehicle));
+        // 曲率→前轮角 (自行车模型 κ=2sinα/L), 按原版轮角钳 (getSteeringClamp, 随速
+        // 0.4~0.9 rad) 换算舵量 — 与原版执行物理同标度
+        float wheelAngle = (float) Math.atan((2.0f * (float) Math.sin(alpha) / look) * PP_WHEELBASE);
+        float cap = 0.6f;
+        try {
+            if (vehicle.getScript() != null) {
+                cap = vehicle.getScript().getSteeringClamp(absSpeedKmh);
+            }
+        } catch (Throwable ignored) {
+        }
+        if (cap < 0.2f) cap = 0.2f;
+        // 诊断采样 (CSV phi 列 = 对瞄准点航向差; cte 列 = 投影横向偏差, 与旧版可比)
+        diagPhi = alpha;
         float[] a = path.get(bestSeg);
         float[] b = path.get(bestSeg + 1);
-        // 切向角 → 航向误差 φ
-        float tangentAngle = (float) Math.atan2(b[1] - a[1], b[0] - a[0]);
-        float phi = wrapPi(tangentAngle - heading(vehicle));
-        // 有符号横向偏差 e = cross(切向, 车→投影点): 投影点在切向 +90° 侧 (atan2
-        // 正角方向) 为正 → 需正舵回线。与 steer/heading 的角度符号空间一致。
-        float px = a[0] + (b[0] - a[0]) * bestT;
-        float py = a[1] + (b[1] - a[1]) * bestT;
         float tx = b[0] - a[0], ty = b[1] - a[1];
         float tl = (float) Math.sqrt(tx * tx + ty * ty);
-        if (tl < 1e-4f) return clamp(phi * 2.0f, -1.0f, 1.0f);
-        tx /= tl;
-        ty /= tl;
-        float e = tx * (py - y) - ty * (px - x);
-        // 速度 m/s (世界格即米), 下限 0.8 防静止除零发散
-        float v = Math.max(absSpeedKmh / 3.6f, 0.8f);
-        // Stanley 误差项限幅 (原论文实践): 低速大偏差时 atan2 项可 >60°, 舵量饱和
-        // → 车头来回过冲甩尾 (实测弯道摆头)。限 ±0.4rad 让航向项主导, 误差项只微调。
-        float eTerm = (float) Math.atan2(K_STANLEY * e, v);
-        eTerm = Math.max(-0.4f, Math.min(0.4f, eTerm));
-        float delta = phi + eTerm - K_DAMP * psiDotLp;
-        // 诊断采样 stash (DriveDiag.sample 读: 摆头/段跳变/饱和的事件证据)
-        diagPhi = phi;
-        diagCTE = e;
+        float px = a[0] + tx * bestT, py = a[1] + ty * bestT;
+        diagCTE = tl > 1e-4f
+                ? (tx / tl) * (py - y) - (ty / tl) * (px - x)
+                : 0.0f;
         diagSeg = bestSeg;
-        return clamp(delta * STEER_GAIN, -1.0f, 1.0f);
+        // 混合横向项 (二百一十三): 瞄准点几何在 L=10-20 时横向误差增益只有 Stanley 的几分之一,
+        // 高速+舵机滞后下追不回扰动 → 补 cte 比例项 (直线保持), 与弯道预瞄互补。
+        float eTerm = clamp((float) Math.atan2(PP_K_CTE * diagCTE, v), -0.4f, 0.4f);
+        return clamp(wheelAngle / cap + eTerm - K_DAMP * psiDotLp, -1.0f, 1.0f);
+    }
+
+    /** 沿路径从 (seg,t) 前进 distAhead 格的目标点 (Pure Pursuit 前视; 到路径尾返回末点)。 */
+    private float[] pathPointAhead(int seg, float t, float distAhead) {
+        float[] a = path.get(seg);
+        float[] b = path.get(seg + 1);
+        float segLen = dist(a[0], a[1], b[0], b[1]);
+        float rem = (1.0f - t) * segLen;
+        if (rem >= distAhead) {
+            float f = (t * segLen + distAhead) / Math.max(segLen, 0.001f);
+            return new float[]{a[0] + (b[0] - a[0]) * f, a[1] + (b[1] - a[1]) * f};
+        }
+        float left = distAhead - rem;
+        for (int s = seg + 1; s < path.size() - 1; s++) {
+            float[] p0 = path.get(s);
+            float[] p1 = path.get(s + 1);
+            float sl = dist(p0[0], p0[1], p1[0], p1[1]);
+            if (left <= sl) {
+                float f = left / Math.max(sl, 0.001f);
+                return new float[]{p0[0] + (p1[0] - p0[0]) * f, p0[1] + (p1[1] - p0[1]) * f};
+            }
+            left -= sl;
+        }
+        return path.get(path.size() - 1);
     }
 
     /** 偏航角速度低通 (每 tick 一次, driveTick 头部调用)。 */
