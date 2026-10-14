@@ -100,7 +100,7 @@ public class CoreAPI {
     private SafeExposer exposer;
     final ConcurrentHashMap<String, Texture> textureCache = new ConcurrentHashMap();
     private final ConcurrentHashMap<String, float[]> originalWeaponStats = new ConcurrentHashMap();
-    private final ConcurrentHashMap<String, Boolean> critMaxAlwaysKnockdown = new ConcurrentHashMap();
+    private final ConcurrentHashMap<String, Float> critChanceSnapshot = new ConcurrentHashMap();
     public Color mainUIAccentColor;
     public Color vehiclesUIColor;
     public Color zombiesUIColor;
@@ -663,7 +663,10 @@ public class CoreAPI {
         }
     }
 
-    public void resetCritMax() {
+    public void resetCritChance() {
+        if (this.isCritMax || this.isNoRecoil) {
+            return;
+        }
         IsoPlayer player = IsoPlayer.getInstance();
         if (player != null) {
             ArrayList<InventoryItem> items = player.getInventory().getItems();
@@ -674,13 +677,13 @@ public class CoreAPI {
                     }
                     HandWeapon weapon = (HandWeapon)item;
                     String weaponType = weapon.getFullType();
-                    if (this.critMaxAlwaysKnockdown.containsKey(weaponType)) {
-                        weapon.setAlwaysKnockdown(this.critMaxAlwaysKnockdown.get(weaponType));
+                    if (this.critChanceSnapshot.containsKey(weaponType)) {
+                        weapon.setCriticalChance(this.critChanceSnapshot.get(weaponType));
                     }
                 }
             }
         }
-        this.critMaxAlwaysKnockdown.clear();
+        this.critChanceSnapshot.clear();
     }
 
     private void applyUnlimitedAmmo(IsoPlayer player, InventoryItem item) {
@@ -768,10 +771,9 @@ public class CoreAPI {
         if (this.isCritMax && var2 != null && (var2.getStringItemType().equals("RangedWeapon") || var2.getStringItemType().equals("MeleeWeapon")) && var2 instanceof HandWeapon) {
             var3 = (HandWeapon)var2;
             String critWeaponType = var3.getFullType();
-            if (!this.critMaxAlwaysKnockdown.containsKey(critWeaponType)) {
-                this.critMaxAlwaysKnockdown.put(critWeaponType, var3.isAlwaysKnockdown());
+            if (!this.critChanceSnapshot.containsKey(critWeaponType)) {
+                this.critChanceSnapshot.put(critWeaponType, var3.getCriticalChance());
             }
-            var3.setAlwaysKnockdown(true);
             var3.setCriticalChance(100.0f);
         }
         if ((Boolean)SandboxOptions.instance.getOptionByName("MultiHitZombies").asConfigOption().getValueAsObject() != this.isMultiHitZombies) {
@@ -839,8 +841,11 @@ public class CoreAPI {
         //    还原脚本 recoilDelay, 防加速值残留把单发打穿 150ms 阈值。
         if (this.isNoRecoil && var2 != null && var2.getStringItemType().equals("RangedWeapon") && var2 instanceof HandWeapon) {
             var3 = (HandWeapon)var2;
+            String norecoilWeaponType = var3.getFullType();
+            if (!this.critChanceSnapshot.containsKey(norecoilWeaponType)) {
+                this.critChanceSnapshot.put(norecoilWeaponType, var3.getCriticalChance());
+            }
             var3.setCriticalChance(100.0f);
-            var3.setAlwaysKnockdown(true);
             var3.setAimingTime(0);
             if ("Auto".equals(var3.getFireMode())) {
                 if (this.recoilStompedWeapon != null && this.recoilStompedWeapon != var3 && this.recoilStompedWeapon.getScriptItem() != null) {

@@ -647,6 +647,9 @@ public class LuaMethods {
     public static void toggleNoRecoil(boolean var0) {
         CoreMain.getInstance().CoreAPI.isNoRecoil = var0;
         saveConfig("startup");
+        if (!var0) {
+            CoreMain.getInstance().CoreAPI.resetCritChance();
+        }
     }
 
     @LuaMethod(name="isNoJam", global=true)
@@ -912,7 +915,7 @@ public class LuaMethods {
         CoreMain.getInstance().CoreAPI.isCritMax = var0;
         saveConfig("startup");
         if (!var0) {
-            CoreMain.getInstance().CoreAPI.resetCritMax();
+            CoreMain.getInstance().CoreAPI.resetCritChance();
         }
     }
 
