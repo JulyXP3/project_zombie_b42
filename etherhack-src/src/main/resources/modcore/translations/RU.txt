@@ -46,6 +46,7 @@
     UI_CharacterPanel_BuildCheat = "Режим творчества (SP)",
     UI_CharacterPanel_UnlimitedAmmo = "Бесконечные патроны",
     UI_CharacterPanel_NoJam = "Без осечек",
+    UI_CharacterPanel_ShootThroughWindow = "Стрельба при закрытых окнах (в машине)",
     UI_CharacterPanel_AmmoFarmSet = "Задать патроны",
     UI_CharacterPanel_AmmoFarmAuto = "Автофарм (вкл, сначала разрядите оружие)",
     UI_CharacterPanel_AmmoFarmStop = "Автофарм (выкл)",

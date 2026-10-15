@@ -54,7 +54,12 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "iso/IsoChunk.class", "core/opengl/RenderSettings$PlayerRenderSettings.class", "iso/LightingJNI$JNILighting.class", "network/ServerLOS$ServerLighting.class", "core/physics/CarController.class"};
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "iso/IsoChunk.class", "core/opengl/RenderSettings$PlayerRenderSettings.class", "iso/LightingJNI$JNILighting.class", "network/ServerLOS$ServerLighting.class", "core/physics/CarController.class",
+            // 二百一十七: IsoPlayer.class 自 exposePrivateFields (modifyClass) 起就一直被写盘,
+            // 但从未登记在本表 —— 卸载时 restoreFiles 只按本表删除补丁类, 导致该文件残留。
+            // 「关窗射击」(WindowShotPatch) 注入 IsoPlayer.updateWhileInVehicle 后正式登记,
+            // 卸载/重装恢复路径随之覆盖该文件 (原版类始终可从 projectzomboid.jar 载入)。
+            "characters/IsoPlayer.class"};
     private final String gameClassFolder = "zombie";
     private final String whiteListPathEtherFiles = "modcore";
 
@@ -1476,6 +1481,19 @@ public class GamePatcher {
         // 字段踩值存在可见竞态窗口; 与耐力同构, 按项目原则改读取点 (沿革见该类文件头:
         // 一百二十一 首建/一百二十二 随掉血误判删除/一百九十一 重建), CoreAPI 踩值随之退役
         modcore.core.MaxWeightPatch.install();
+        // 二百一十六 (用户拍板"做读取点补丁"): 「无卡壳」每帧踩值 → 读取点补丁 ——
+        // HandWeapon.getJamGunChance()/isJammed() 头部注入, 开关开且本机手持时读点返回
+        // 0f/false: 原版两处掷骰门 (getJamGunChance() > 0) 直接短路, 且吞掉一切来源的
+        // "已卡壳" (含服务端每枪经 syncHandWeaponFields 广播回来的服务端副本 jammed —
+        // 修 ≤1 帧竞态窗口下偶发单发被 canShoot 吞掉); CoreAPI 每帧块/记账字段随之退役
+        modcore.core.NoJamPatch.install();
+        // 二百一十七 (用户拍板实现方案 A): 「关窗射击」门控重定向 ——
+        // IsoPlayer.updateWhileInVehicle() 内唯一一处 VehicleWindow.isHittable() 调用点
+        // redirect 为 WindowShotRuntime.overrideHittable (开关开且手持远程武器时返回
+        // false = 窗不可命中 → canAttack, 关着完好车窗也能进车内攻击分支; isHittable 本体
+        // 与其余 5 个调用点零改动)。IsoPlayer 为此登记进 patchFiles (原本就因
+        // exposePrivateFields 写盘, 曾缺登记导致卸载残留)。
+        modcore.core.WindowShotPatch.install();
         // 一百九十五 (用户拍板): 「连接期授权」— ConnectPacket.write 的
         // extraInfoFlags 读取点后插掩码改写 (bit0 GodMod/bit2 Invisible), 服务端握手期
         // isForced 无条件接受 (见 analysis/连接期作弊旗标-多人上帝与隐身(已实施).md)

@@ -46,6 +46,7 @@
     UI_CharacterPanel_BuildCheat = "创造模式(SP)",
     UI_CharacterPanel_UnlimitedAmmo = "无限弹药",
     UI_CharacterPanel_NoJam = "无卡壳",
+    UI_CharacterPanel_ShootThroughWindow = "关窗射击(在车上)",
     UI_CharacterPanel_AmmoFarmSet = "设置弹药数",
     UI_CharacterPanel_AmmoFarmAuto = "自动刷(开, 需要先手动退弹一次)",
     UI_CharacterPanel_AmmoFarmStop = "自动刷(关)",

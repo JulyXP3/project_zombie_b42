@@ -114,7 +114,7 @@ Requirements: **JDK 25** and **Gradle 9.1.0**. The build runs through the includ
 
 1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, keeping the original file name (it is only read at compile time and never modified).
 2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-3. Take `modcore-3.2.5-B42.jar` from the `build` directory.
+3. Take `modcore-3.2.6-B42.jar` from the `build` directory.
 4. Copy the jar together with `etherhack-src/install.bat` (and optionally `etherhack-src/uninstall.bat`) into the **game root directory**.
 5. Run `install.bat` to install the mod.
 
@@ -131,7 +131,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/modcore-3.2.5-B42.jar`. The build embeds the Lua sources from `src/main/resources/modcore/lua/`.
+The output jar is at `etherhack-src/build/modcore-3.2.6-B42.jar`. The build embeds the Lua sources from `src/main/resources/modcore/lua/`.
 
 ## Testing
 
@@ -149,7 +149,7 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/modcore-3.2.5-B42.jar` | Ready-to-use build (current release) |
+| `etherhack-src/build/modcore-3.2.6-B42.jar` | Ready-to-use build (current release) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `analysis/` | Reverse-engineering evidence and design docs (`analysis/**/*.md` is tracked; decompiled sources stay local only) |

@@ -115,8 +115,6 @@ public class CoreAPI {
     public boolean isEnableNightVision;
     public boolean isZombieDontAttack;
     public boolean isNoRecoil;
-    private HandWeapon jamStompedWeapon;
-    private float jamStompedOriginalChance;
     private HandWeapon recoilStompedWeapon;
     public boolean isHeadshotOnly;
     public boolean isAlwaysHit;
@@ -185,6 +183,8 @@ public class CoreAPI {
     public float mainPanelPosX = -1.0f;
     public float mainPanelPosY = -1.0f;
     public boolean isNoJam;
+    /** 二百一十七 「关窗射击」: 开且手持远程武器时车窗门控读取点视为「窗不可命中」(见 WindowShotPatch)。 */
+    public boolean isShootThroughWindow;
     public boolean isNoMuscleStrain;
     public boolean isCharCreateAllTraits;
     public boolean isCharCreateMaxSkills;
@@ -284,6 +284,7 @@ public class CoreAPI {
             // 曾用过, 二百零五删除后老配置可能残留布尔值, 重映射为 float 会在解析时炸)
             {"minimapPosX", "k75"}, {"minimapPosY", "k76"},
             {"mainPanelPosX", "k79"}, {"mainPanelPosY", "k80"},
+            {"isShootThroughWindow", "k81"},
         };
         for (String[] e : m) {
             CONFIG_KEY_CODES.put(e[0], e[1]);
@@ -378,6 +379,7 @@ public class CoreAPI {
         var3.setProperty("mainPanelPosX", Float.toString(this.mainPanelPosX));
         var3.setProperty("mainPanelPosY", Float.toString(this.mainPanelPosY));
         var3.setProperty("isNoJam", Boolean.toString(this.isNoJam));
+        var3.setProperty("isShootThroughWindow", Boolean.toString(this.isShootThroughWindow));
         var3.setProperty("isNoMuscleStrain", Boolean.toString(this.isNoMuscleStrain));
         var3.setProperty("isCharCreateAllTraits", Boolean.toString(this.isCharCreateAllTraits));
         var3.setProperty("isCharCreateMaxSkills", Boolean.toString(this.isCharCreateMaxSkills));
@@ -500,6 +502,7 @@ public class CoreAPI {
         this.mainPanelPosX = ConfigUtils.getFloatFromConfig(var3, "mainPanelPosX", -1.0f);
         this.mainPanelPosY = ConfigUtils.getFloatFromConfig(var3, "mainPanelPosY", -1.0f);
         this.isNoJam = ConfigUtils.getBooleanFromConfig(var3, "isNoJam", false);
+        this.isShootThroughWindow = ConfigUtils.getBooleanFromConfig(var3, "isShootThroughWindow", false);
         this.isNoMuscleStrain = ConfigUtils.getBooleanFromConfig(var3, "isNoMuscleStrain", false);
         this.isCharCreateAllTraits = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateAllTraits", false);
         this.isCharCreateMaxSkills = ConfigUtils.getBooleanFromConfig(var3, "isCharCreateMaxSkills", false);
@@ -894,24 +897,11 @@ public class CoreAPI {
                 var2.syncItemFields();
             }
         }
-        // 无卡壳: 卡壳 roll 在持有者客户端的装弹/拉栓动作里(ISReloadWeaponAction/
-        // ISRackFirearm 调 checkJam), 服务端不重判 —— 每帧清卡壳概率与已卡壳状态;
-        // 关闭/换枪时还原进入时的原始概率
-        if (this.isNoJam && var2 != null && var2.getStringItemType().equals("RangedWeapon") && var2 instanceof HandWeapon) {
-            var3 = (HandWeapon)var2;
-            if (this.jamStompedWeapon != var3) {
-                if (this.jamStompedWeapon != null) {
-                    this.jamStompedWeapon.setJamGunChance(this.jamStompedOriginalChance);
-                }
-                this.jamStompedWeapon = var3;
-                this.jamStompedOriginalChance = var3.getJamGunChance();
-            }
-            var3.setJamGunChance(0.0f);
-            var3.setJammed(false);
-        } else if (this.jamStompedWeapon != null) {
-            this.jamStompedWeapon.setJamGunChance(this.jamStompedOriginalChance);
-            this.jamStompedWeapon = null;
-        }
+        // 无卡壳: 二百一十六 起改为读取点补丁 (NoJamPatch → HandWeapon.getJamGunChance()/isJammed()
+        // 头部注入), 原每帧踩值块与记账字段 (jamStompedWeapon/jamStompedOriginalChance) 随之下线。
+        // 原因: ①服务端每次开枪会在自己副本上掷卡壳并经 syncHandWeaponFields 广播回来, 踩值
+        // 存在 ≤1 帧窗口 (撞上的开枪被 canShoot 吞掉) —— 读点从根上吞掉一切来源的"已卡壳";
+        // ②消每帧足迹与记账逻辑。详见 NoJamPatch 文件头。
         // 一百八十四: 原"一包三用"上行 (PlayerDamagePacket 携带 maxWeight/BodyDamage
         // 让服务端 parse 直采) 已随游戏 4a0e9546ec 将该包改为纯服务端→客户端
         // (handlingType 3→2, onServerPacket 的 (handlingType&1)!=0 门控静默丢弃

@@ -259,6 +259,9 @@ function EtherCombatPanel:build()
         { key = "UI_CharacterPanel_MultiHitZombies",  on = toggleMultiHitZombies, get = isMultiHitZombies },
         { key = "UI_CharacterPanel_UnlimitedAmmo",    on = toggleUnlimitedAmmo,  get = isUnlimitedAmmo },
         { key = "UI_CharacterPanel_NoJam",            on = toggleNoJam,          get = isNoJam },
+        -- 关窗射击 (二百一十七): 手持枪械时关着完好车窗也可车内瞄准开火 (仅枪械;
+        -- 门控为 IsoPlayer 车内攻击分支的读取点, 随时开关即时生效)
+        { key = "UI_CharacterPanel_ShootThroughWindow", on = toggleShootThroughWindow, get = isShootThroughWindow },
     };
     local rows, gridH, colW = planGrid(combatItems, innerW);
     local hintH = #EtherTheme.wrapHint(tr("UI_CharacterPanel_CombatHint"), innerW - 8) * EtherTheme.fontHgtHint + 2;

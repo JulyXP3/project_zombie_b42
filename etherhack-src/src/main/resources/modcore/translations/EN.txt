@@ -46,6 +46,7 @@
     UI_CharacterPanel_BuildCheat = "Creative mode (SP)",
     UI_CharacterPanel_UnlimitedAmmo = "Unlimited ammo",
     UI_CharacterPanel_NoJam = "No jamming",
+    UI_CharacterPanel_ShootThroughWindow = "Shoot through closed windows (in vehicle)",
     UI_CharacterPanel_AmmoFarmSet = "Set ammo",
     UI_CharacterPanel_AmmoFarmAuto = "Auto farm (on, unload manually first)",
     UI_CharacterPanel_AmmoFarmStop = "Auto farm (off)",

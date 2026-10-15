@@ -149,17 +149,19 @@ end
 --* 物品列表过滤 (名称 + ID 双条件)
 --*********************************************************
 function EtherLootRollPanel:applyFishFilter()
+    -- 纯子串匹配 (与 UIItemTables 修复同款): 物品名含 ( ) : . 等时
+    -- Lua 模式匹配会把括号当捕获组, 完整名称失配; 名称/ID 用 initFishList
+    -- 预取的小写字段, 逐键过滤零 Java 跨界 (原每键全库 2 次跨界/条)
     local nameTxt = string.lower(self.filterName:getInternalText() or "");
     local idTxt = string.lower(self.filterId:getInternalText() or "");
     self.datas:clear();
     self.totalResult = 0;
-    for i, item in ipairs(self.fullList) do
-        -- 纯子串匹配 (与 UIItemTables 修复同款): 物品名含 ( ) : . 等时
-        -- Lua 模式匹配会把括号当捕获组, 完整名称失配
-        local okName = nameTxt == "" or string.find(string.lower(item:getDisplayName()), nameTxt, 1, true);
-        local okId = idTxt == "" or string.find(string.lower(item:getFullName() or ""), idTxt, 1, true);
+    for i, v in ipairs(self.fullList) do
+        local okName = nameTxt == "" or string.find(v.lname, nameTxt, 1, true);
+        local okId = idTxt == "" or string.find(v.lfid, idTxt, 1, true);
         if okName and okId then
-            self.datas:addItem(i, item);
+            -- 行文本传名称 (修复前传数字 i, 行 text 会变成序号 — UIItemTables 同款遗留)
+            self.datas:addItem(v.name, v.item);
             self.totalResult = self.totalResult + 1;
         end
     end
@@ -186,7 +188,7 @@ function EtherLootRollPanel:drawFishItem(y, item, alt)
     local clipY2 = math.min(self.height, y + self:getYScroll() + self.itemheight)
 
     self:setStencilRect(clipX, clipY, clipX2 - clipX, clipY2 - clipY)
-    self:drawText(item.item:getDisplayName(), 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
+    self:drawText(item.text, 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
     self:clearStencilRect()
 
     local itemId = item.item:getFullName()
@@ -216,16 +218,24 @@ function EtherLootRollPanel:initFishList()
     for i = 0, items:size() - 1 do
         local item = items:get(i);
         if item ~= nil and not item:getObsolete() and not item:isHidden() then
-            table.insert(all, item);
+            -- 名称/物品ID 预取小写 (与陷阱页/物品页同款修法): 排序/过滤全程纯 Lua。
+            -- 原比较器每次比较调两次 getDisplayName(), 全库 N log N 次 Java 跨界,
+            -- 是点开页面卡顿主因 (开发日志 2026-08-30 物品页同款定罪)
+            local name = item:getDisplayName();
+            table.insert(all, {
+                item = item, name = name,
+                lname = string.lower(name),
+                lfid = string.lower(item:getFullName() or ""),
+            });
         end
     end
-    table.sort(all, function(a, b) return not string.sort(a:getDisplayName(), b:getDisplayName()); end);
+    table.sort(all, function(a, b) return not string.sort(a.lname, b.lname); end);
 
     self.fullList = all;
     self.totalResult = 0;
     self.datas:clear();
-    for i, item in ipairs(all) do
-        self.datas:addItem(item:getDisplayName(), item);
+    for i, v in ipairs(all) do
+        self.datas:addItem(v.name, v.item);
         self.totalResult = self.totalResult + 1;
     end
 end

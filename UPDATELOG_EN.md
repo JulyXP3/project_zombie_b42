@@ -1,7 +1,13 @@
 # Changelog
 
-## [3.2.5] - Current
+## [3.2.6] - Current
 
+- Improved: the Loot page no longer stutters when opened or while typing in its search boxes (its item list sorting and filtering are much faster).
+- Added: a "Shoot through closed windows (in vehicle)" toggle on the Combat tab - with a firearm in hand, you can attack zombies outside while seated in a vehicle even with the window fully closed (firearms only; melee and shoving are unaffected).
+- Build: version bumped to 3.2.6.
+## [3.2.5]
+
+- Fixed: "No jamming" could, very rarely, make a single shot fail to fire in multiplayer.
 - Changed: "Crit Max" now only forces critical hits with no separate knockdown toggle (vanilla crits always knock down, so knockdown comes free); "Increase Fire Rate" no longer stomps the knockdown flag either.
 - Reworked: auto-drive cornering - much tighter corner radius, turns complete right at the bend, and the car arcs cleanly back onto the route afterwards (no more wide swings or drifting back at an angle); straight-line holding is also strengthened (no creeping drift, no unexplained mid-drive slowdowns); straight-road cruising speed is unchanged (sharp corners are taken at low speed).
 - Added: a "Connect-time grant" toggle on the Survival tab - makes "God mode" and "Invisible" actually work in multiplayer (arm it before joining; changes need a reconnect; vanilla servers keep almost no log, anti-cheat servers record or kick - see the anti-cheat guide).

@@ -663,6 +663,17 @@ public class LuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="isShootThroughWindow", global=true)
+    public static boolean isShootThroughWindow() {
+        return CoreMain.getInstance().CoreAPI.isShootThroughWindow;
+    }
+
+    @LuaMethod(name="toggleShootThroughWindow", global=true)
+    public static void toggleShootThroughWindow(boolean var0) {
+        CoreMain.getInstance().CoreAPI.isShootThroughWindow = var0;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="isNoMuscleStrain", global=true)
     public static boolean isNoMuscleStrain() {
         return CoreMain.getInstance().CoreAPI.isNoMuscleStrain;
