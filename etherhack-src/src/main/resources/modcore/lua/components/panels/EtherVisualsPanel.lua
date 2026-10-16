@@ -42,6 +42,9 @@ EtherVisualsPanel = EtherFormPanel:derive("EtherVisualsPanel");
 --* 长标签按模块内容宽折行; 单行紧凑 ROW_STEP, 多行按实际行高 + 盒内边距。
 --*********************************************************
 local function rowStep(item, w)
+    if item.combo then
+        return EtherTheme.entryH + 10;      -- 下拉行: 控件高 + 与下行的间隙
+    end
     local title = tr(item.key);
     local availW = w - (18 + 10 + 8);
     if getTextManager():MeasureStringX(UIFont.Small, title) > availW then
@@ -78,6 +81,57 @@ local function moduleRow(panel, item, x, y, w)
     end
     panel:addWidget(cb, item);
     return rowStep(item, w);
+end
+
+--*********************************************************
+--* 动物模块 (二百二十六) 的物种下拉行:
+--* 选项与显示名都来自 Java (物种表炸开自游戏定义, 词条翻译在 Java 侧);
+--* 未登记物种显示原始 id。「全部」(data = "") 默认选中。
+--*********************************************************
+local function moduleComboRow(panel, item, x, y, w)
+    local title = tr(item.key);
+    local tm = getTextManager();
+    local entryH = EtherTheme.entryH;
+
+    local label = EtherTheme.makeLabel(x, y, entryH, title);
+    panel:addChild(label);
+    panel:_track(label, item);
+
+    local ids = getAnimalSpeciesIds();
+    local names = getAnimalSpeciesNames();
+    local allT = tr("UI_VisualsPanel_AnimalSpecies_All");
+    local comboPad = 26;                      -- 右侧箭头 + 内边距
+    local comboW = UIButton.measureWidth(allT) + comboPad;
+    for i = 0, ids:size() - 1 do
+        local ow = UIButton.measureWidth(names:get(i)) + comboPad;
+        if ow > comboW then comboW = ow; end
+    end
+    if comboW < 120 then comboW = 120; end
+    local labelW = tm:MeasureStringX(UIFont.Small, title);
+    local maxW = w - labelW - 12 - EtherFormPanel.BOX_PAD_X;
+    if comboW > maxW then comboW = maxW; end
+    local cx = x + w - comboW - EtherFormPanel.BOX_PAD_X;
+    if cx < x + labelW + 12 then cx = x + labelW + 12; end
+
+    local combo = ISComboBox:new(cx, y, comboW, entryH, panel, function(t, c)
+        local data = c:getSelectedData();
+        if data ~= nil then
+            setAnimalSpeciesFilter(data);
+        end
+    end);
+    combo:addOptionWithData(allT, "");
+    for i = 0, ids:size() - 1 do
+        combo:addOptionWithData(names:get(i), ids:get(i));
+    end
+    local cur = getAnimalSpeciesFilter();
+    if cur == nil then cur = ""; end
+    combo:setSelectedData(cur);
+    -- 存档里是已消失的物种时, 回写为实际选中项 (避免"显示全部但仍在过滤")
+    local sel = combo:getSelectedData();
+    if sel ~= nil and sel ~= cur then
+        setAnimalSpeciesFilter(sel);
+    end
+    panel:addWidget(combo, item);
 end
 
 --*********************************************************
@@ -125,6 +179,15 @@ function EtherVisualsPanel:build()
                 { key = "UI_VisualsPanel_DrawLineToZombies",      on = toggleVisualDrawLineToZombies,  get = isVisualDrawLineToZombies },
             },
         },
+        {
+            title = "UI_VisualsPanel_Group_Animals",
+            items = {
+                { key = "UI_VisualsPanel_AnimalSpecies", combo = true },
+                { key = "UI_VisualsPanel_IsVisualsAnimalsEnable", on = toggleVisualsAnimalsEnable,    get = isVisualsAnimalsEnable },
+                { key = "UI_VisualsPanel_DrawLineToAnimals",      on = toggleVisualDrawLineToAnimals, get = isVisualDrawLineToAnimals },
+                { key = "UI_VisualsPanel_IsVisualsTrailersEnable", on = toggleVisualsTrailersEnable, get = isVisualsTrailersEnable },
+            },
+        },
     };
 
     for mi = 1, #modules do
@@ -141,7 +204,13 @@ function EtherVisualsPanel:build()
         self:addModule(mod.title, contentH + 2, function(bx, by, bw)
             local cy = by;
             for i = 1, #mod.items do
-                cy = cy + moduleRow(self, mod.items[i], bx, cy, bw);
+                local item = mod.items[i];
+                if item.combo then
+                    moduleComboRow(self, item, bx, cy, bw);
+                    cy = cy + rowStep(item, bw);
+                else
+                    cy = cy + moduleRow(self, item, bx, cy, bw);
+                end
             end
         end);
     end

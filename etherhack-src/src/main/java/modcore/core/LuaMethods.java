@@ -1179,6 +1179,65 @@ public class LuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="isVisualsAnimalsEnable", global=true)
+    public static boolean isVisualsAnimalsEnable() {
+        return CoreMain.getInstance().CoreAPI.isVisualsAnimalsEnable;
+    }
+
+    @LuaMethod(name="toggleVisualsAnimalsEnable", global=true)
+    public static void toggleVisualsAnimalsEnable(boolean var0) {
+        CoreMain.getInstance().CoreAPI.isVisualsAnimalsEnable = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isVisualDrawLineToAnimals", global=true)
+    public static boolean isVisualDrawLineToAnimals() {
+        return CoreMain.getInstance().CoreAPI.isVisualDrawLineToAnimals;
+    }
+
+    @LuaMethod(name="toggleVisualDrawLineToAnimals", global=true)
+    public static void toggleVisualDrawLineToAnimals(boolean var0) {
+        CoreMain.getInstance().CoreAPI.isVisualDrawLineToAnimals = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isVisualsTrailersEnable", global=true)
+    public static boolean isVisualsTrailersEnable() {
+        return CoreMain.getInstance().CoreAPI.isVisualsTrailersEnable;
+    }
+
+    @LuaMethod(name="toggleVisualsTrailersEnable", global=true)
+    public static void toggleVisualsTrailersEnable(boolean var0) {
+        CoreMain.getInstance().CoreAPI.isVisualsTrailersEnable = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="getAnimalSpeciesFilter", global=true)
+    public static String getAnimalSpeciesFilter() {
+        String var0 = CoreMain.getInstance().CoreAPI.animalSpeciesFilter;
+        return var0 == null ? "" : var0;
+    }
+
+    @LuaMethod(name="setAnimalSpeciesFilter", global=true)
+    public static void setAnimalSpeciesFilter(String var0) {
+        CoreMain.getInstance().CoreAPI.animalSpeciesFilter = var0 == null ? "" : var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="getAnimalSpeciesIds", global=true)
+    public static ArrayList<String> getAnimalSpeciesIds() {
+        return CoreAPI.getAnimalSpeciesIds();
+    }
+
+    @LuaMethod(name="getAnimalSpeciesNames", global=true)
+    public static ArrayList<String> getAnimalSpeciesNames() {
+        ArrayList<String> var0 = new ArrayList<String>();
+        for (String var1 : CoreAPI.getAnimalSpeciesIds()) {
+            var0.add(CoreAPI.getAnimalSpeciesDisplayName(var1));
+        }
+        return var0;
+    }
+
     @LuaMethod(name="isVisualsEnable", global=true)
     public static boolean isVisualsEnable() {
         return CoreMain.getInstance().CoreAPI.isVisualsEnable;

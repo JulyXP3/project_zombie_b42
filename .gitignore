@@ -26,9 +26,6 @@ analysis/**
 *.jar.bak
 *.jar
 !etherhack-src/gradle/wrapper/gradle-wrapper.jar
-!etherhack-src/lib/Kahlua.jar
-!etherhack-src/lib/fmod.jar
-!etherhack-src/lib/org.jar
 # projectzomboid.jar 不入 git: 由用户从游戏目录复制到 etherhack-src/lib/ (保持原名, 见 README 安装步骤)
 analysis/pz_jar/projectzomboid.jarluac.out
 # stale jar xf extraction (junk)

@@ -29,6 +29,10 @@ require "ISUI/ISPanel"
 --* 开吸引转所有权。状态行画在各模块区内部 (用户反馈: 不共享一处)。
 --* 详见 analysis/僵尸吸引与尸群聚集(已实施).md。
 --*
+--* 钓鱼两件套 (2/4 号候选, 各独立开关): 完美搏鱼 / 自动收网 ——
+--* 机制与实现见各模块文件头 (EtherPerfectFish / EtherAutoFishingNet);
+--* 详见 analysis/钓鱼作弊功能研判(2-4已实施-已实测-5已撤下留档).md。
+--*
 --* Kahlua 陷阱备忘 (check_kahlua_compat.lua 禁则):
 --*   - 无 string.trim: 手写 ^%s*(.-)%s*$ 模式
 --*   - addItem/drawText 文本一律字符串; type() 可用
@@ -349,11 +353,50 @@ function EtherFunPanel:build()
         self.lureStatusY = cy;
     end);
 
+    self:addSpacer(EtherFormPanel.SECTION_GAP);
+
+    -- ================= 模块四: 钓鱼 (2/4 号候选: 完美搏鱼 + 自动收网) =================
+    local fishRowsH = ctrlH * 2 + gap * 2 + EtherTheme.fontHgtSmall;
+    self:addModule("UI_Fun_FishTitle", fishRowsH, function(bx, by, bw)
+        local cy = by;
+
+        self.perfectFishCb = UICheckbox:new(bx, cy, getTranslate("UI_Fun_PerfectFish"),
+            EtherPerfectFish.enabled and true or false, function(v)
+                EtherPerfectFish.setEnabled(v);
+            end);
+        self.perfectFishCb:initialise();
+        self.perfectFishCb:instantiate();
+        self.perfectFishCb.width = bw;
+        self:addChild(self.perfectFishCb);
+        self:_track(self.perfectFishCb, { onlyInGame = true });
+        cy = cy + ctrlH + gap;
+
+        self.autoNetCb = UICheckbox:new(bx, cy, getTranslate("UI_Fun_AutoNet"),
+            EtherAutoFishingNet.enabled and true or false, function(v)
+                EtherAutoFishingNet.setEnabled(v);
+                -- 开启后状态行由实时计数接管; 关闭留一句结果
+                if not v then
+                    self.fishStatus = getTranslate("UI_Fun_AutoNetOff");
+                end
+            end);
+        self.autoNetCb:initialise();
+        self.autoNetCb:instantiate();
+        self.autoNetCb.width = bw;
+        self:addChild(self.autoNetCb);
+        self:_track(self.autoNetCb, { onlyInGame = true });
+        cy = cy + ctrlH + gap;
+
+        -- 状态行锚点 (模块区内部, renderContent 绘制)
+        self.fishStatusX = bx;
+        self.fishStatusY = cy;
+    end);
+
     -- ================= 底部提示 (每功能一条说明各自起行, 用户反馈不再挤成一团) =================
     self:addSpacer(EtherFormPanel.SECTION_GAP);
     local hintW = self:_rowContentW();
     self.hintLines = {};
-    local hintKeys = { "UI_Fun_HintChat", "UI_Fun_HintSkin", "UI_Fun_HintLure", "UI_Fun_HintGather" };
+    local hintKeys = { "UI_Fun_HintChat", "UI_Fun_HintSkin", "UI_Fun_HintLure", "UI_Fun_HintGather",
+        "UI_Fun_HintPerfectFish", "UI_Fun_HintAutoNet" };
     for i = 1, #hintKeys do
         local wrapped = EtherTheme.wrapHint(getTranslate(hintKeys[i]), hintW);
         for j = 1, #wrapped do
@@ -369,18 +412,20 @@ function EtherFunPanel:build()
 end
 
 --*********************************************************
---* 状态行 + 提示绘制 (EtherFormPanel:render 回调, 需自带滚动偏移)
+--* 状态行 + 提示绘制 (EtherFormPanel:render 回调)
+--* 状态行: self:drawText 走 javaObject.DrawText, 内部已叠加 absolute+yScroll
+--*   (UIElement.java: x+getAbsoluteX()+xScroll), 传内容坐标即可, 禁止再手加滚动;
+--* 提示: EtherTheme.drawHintText 走裸 TextManager.DrawString, 需自带滚动偏移。
 --* 状态行归位: 每个模块区画自己的状态 (用户反馈, 不再共享 chat 锚点)
 --*********************************************************
 function EtherFunPanel:renderContent()
-    local ys = self:getYScroll();
     local td = EtherTheme.textDim;
     if self.chatStatus ~= nil and self.chatStatus ~= "" and self.chatStatusX ~= nil then
-        self:drawText(self.chatStatus, self.chatStatusX, self.chatStatusY + ys,
+        self:drawText(self.chatStatus, self.chatStatusX, self.chatStatusY,
             td.r, td.g, td.b, 1, UIFont.Small);
     end
     if self.skinStatus ~= nil and self.skinStatus ~= "" and self.skinStatusX ~= nil then
-        self:drawText(self.skinStatus, self.skinStatusX, self.skinStatusY + ys,
+        self:drawText(self.skinStatus, self.skinStatusX, self.skinStatusY,
             td.r, td.g, td.b, 1, UIFont.Small);
     end
     if self.lureStatusX ~= nil then
@@ -392,7 +437,23 @@ function EtherFunPanel:renderContent()
             text = self.lureStatus;
         end
         if text ~= nil and text ~= "" then
-            self:drawText(text, self.lureStatusX, self.lureStatusY + ys,
+            self:drawText(text, self.lureStatusX, self.lureStatusY,
+                td.r, td.g, td.b, 1, UIFont.Small);
+        end
+    end
+    if self.fishStatusX ~= nil then
+        -- 自动收网开启时显示实时轮次; 关闭后显示最近一次结果
+        local text = nil;
+        if EtherAutoFishingNet.enabled then
+            text = tr("UI_Fun_AutoNetActive", { count = tostring(EtherAutoFishingNet.cycles) });
+            if EtherAutoFishingNet.noNet then
+                text = text .. " " .. getTranslate("UI_Fun_AutoNetNoNet");
+            end
+        elseif self.fishStatus ~= nil then
+            text = self.fishStatus;
+        end
+        if text ~= nil and text ~= "" then
+            self:drawText(text, self.fishStatusX, self.fishStatusY,
                 td.r, td.g, td.b, 1, UIFont.Small);
         end
     end

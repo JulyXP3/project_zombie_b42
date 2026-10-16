@@ -70,6 +70,7 @@ import se.krka.kahlua.converter.KahluaConverterManager;
 import se.krka.kahlua.integration.annotations.LuaMethod;
 import se.krka.kahlua.j2se.J2SEPlatform;
 import se.krka.kahlua.vm.KahluaTable;
+import se.krka.kahlua.vm.KahluaTableIterator;
 import se.krka.kahlua.vm.Platform;
 import zombie.Lua.LuaManager;
 import zombie.SandboxOptions;
@@ -78,9 +79,11 @@ import zombie.characters.BodyDamage.BodyPart;
 import zombie.characters.CharacterStat;
 import zombie.characters.IsoPlayer;
 import zombie.characters.IsoZombie;
+import zombie.characters.animals.IsoAnimal;
 import zombie.core.Color;
 import zombie.core.Core;
 import zombie.core.PerformanceSettings;
+import zombie.core.Translator;
 import zombie.core.skinnedmodel.visual.ItemVisual;
 import zombie.core.textures.Texture;
 import zombie.inventory.InventoryItem;
@@ -91,9 +94,12 @@ import zombie.iso.IsoWorld;
 import zombie.iso.LightingJNI;
 import zombie.network.GameClient;
 import zombie.network.GameServer;
+import zombie.network.IsoObjectID;
 import zombie.network.PacketTypes;
 import zombie.network.packets.INetworkPacket;
 import zombie.network.ZomboidNetData;
+import zombie.popman.animal.AnimalInstanceManager;
+import zombie.scripting.objects.VehicleScript;
 import zombie.vehicles.BaseVehicle;
 
 public class CoreAPI {
@@ -105,6 +111,7 @@ public class CoreAPI {
     public Color vehiclesUIColor;
     public Color zombiesUIColor;
     public Color playersUIColor;
+    public Color animalsUIColor;
     public boolean isPlayerInSafeTeleported;
     public boolean isMultiHitZombies = true;
     public boolean isExtraDamage;
@@ -170,6 +177,12 @@ public class CoreAPI {
     public boolean isVisualDrawPlayerInfo;
     public boolean isVisualDrawLineToVehicle;
     public boolean isVisualDrawLineToPlayers;
+    // 二百二十六 动物 ESP: 标记开关 / 雷达连线开关 / 物种筛选 (空串=全部, 存物种 id)
+    public boolean isVisualsAnimalsEnable;
+    public boolean isVisualDrawLineToAnimals;
+    public String animalSpeciesFilter = "";
+    // 二百三十四 牲畜拖车 ESP: 追踪动物拖车 (部件 TrailerAnimalFood 判定; 颜色复用载具 ESP 色)
+    public boolean isVisualsTrailersEnable;
     public boolean isVisualEnable360Vision = true;
     public boolean isMapDrawLocalPlayer = true;
     public boolean isMapDrawAllPlayers;
@@ -285,6 +298,10 @@ public class CoreAPI {
             {"minimapPosX", "k75"}, {"minimapPosY", "k76"},
             {"mainPanelPosX", "k79"}, {"mainPanelPosY", "k80"},
             {"isShootThroughWindow", "k81"},
+            {"isVisualsAnimalsEnable", "k82"},
+            {"isVisualDrawLineToAnimals", "k83"},
+            {"animalSpeciesFilter", "k84"},
+            {"isVisualsTrailersEnable", "k85"},
         };
         for (String[] e : m) {
             CONFIG_KEY_CODES.put(e[0], e[1]);
@@ -310,6 +327,7 @@ public class CoreAPI {
         var3.setProperty("vehiclesUIColor", ColorUtils.colorToString(this.vehiclesUIColor));
         var3.setProperty("zombiesUIColor", ColorUtils.colorToString(this.zombiesUIColor));
         var3.setProperty("playersUIColor", ColorUtils.colorToString(this.playersUIColor));
+        var3.setProperty("animalsUIColor", ColorUtils.colorToString(this.animalsUIColor));
         var3.setProperty("isPlayerInSafeTeleported", Boolean.toString(this.isPlayerInSafeTeleported));
         var3.setProperty("isMultiHitZombies", Boolean.toString(this.isMultiHitZombies));
         var3.setProperty("isExtraDamage", Boolean.toString(this.isExtraDamage));
@@ -367,6 +385,10 @@ public class CoreAPI {
         var3.setProperty("isVisualDrawPlayerInfo", Boolean.toString(this.isVisualDrawPlayerInfo));
         var3.setProperty("isVisualDrawLineToVehicle", Boolean.toString(this.isVisualDrawLineToVehicle));
         var3.setProperty("isVisualDrawLineToPlayers", Boolean.toString(this.isVisualDrawLineToPlayers));
+        var3.setProperty("isVisualsAnimalsEnable", Boolean.toString(this.isVisualsAnimalsEnable));
+        var3.setProperty("isVisualDrawLineToAnimals", Boolean.toString(this.isVisualDrawLineToAnimals));
+        var3.setProperty("isVisualsTrailersEnable", Boolean.toString(this.isVisualsTrailersEnable));
+        var3.setProperty("animalSpeciesFilter", this.animalSpeciesFilter == null ? "" : this.animalSpeciesFilter);
         var3.setProperty("isVisualEnable360Vision", Boolean.toString(this.isVisualEnable360Vision));
         var3.setProperty("isMapDrawLocalPlayer", Boolean.toString(this.isMapDrawLocalPlayer));
         var3.setProperty("isMapDrawAllPlayers", Boolean.toString(this.isMapDrawAllPlayers));
@@ -433,6 +455,7 @@ public class CoreAPI {
         this.vehiclesUIColor = ConfigUtils.getColorFromConfig(var3, "vehiclesUIColor", new Color(150, 150, 200));
         this.zombiesUIColor = ConfigUtils.getColorFromConfig(var3, "zombiesUIColor", new Color(255, 150, 100));
         this.playersUIColor = ConfigUtils.getColorFromConfig(var3, "playersUIColor", new Color(255, 50, 100));
+        this.animalsUIColor = ConfigUtils.getColorFromConfig(var3, "animalsUIColor", new Color(140, 230, 140));
         this.isPlayerInSafeTeleported = ConfigUtils.getBooleanFromConfig(var3, "isPlayerInSafeTeleported", false);
         this.isMultiHitZombies = ConfigUtils.getBooleanFromConfig(var3, "isMultiHitZombies", true);
         this.isExtraDamage = ConfigUtils.getBooleanFromConfig(var3, "isExtraDamage", false);
@@ -490,6 +513,10 @@ public class CoreAPI {
         this.isVisualDrawPlayerInfo = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawPlayerInfo", false);
         this.isVisualDrawLineToVehicle = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToVehicle", false);
         this.isVisualDrawLineToPlayers = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToPlayers", false);
+        this.isVisualsAnimalsEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsAnimalsEnable", false);
+        this.isVisualDrawLineToAnimals = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToAnimals", false);
+        this.isVisualsTrailersEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsTrailersEnable", false);
+        this.animalSpeciesFilter = ConfigUtils.getStringFromConfig(var3, "animalSpeciesFilter", "");
         this.isVisualEnable360Vision = ConfigUtils.getBooleanFromConfig(var3, "isVisualEnable360Vision", true);
         this.isMapDrawLocalPlayer = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawLocalPlayer", true);
         this.isMapDrawAllPlayers = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawAllPlayers", false);
@@ -542,6 +569,7 @@ public class CoreAPI {
             this.vehiclesUIColor = new Color(150, 150, 200);
             this.zombiesUIColor = new Color(255, 150, 100);
             this.playersUIColor = new Color(255, 50, 100);
+            this.animalsUIColor = new Color(140, 230, 140);
             this.saveConfig("startup");
         }
         Properties var1 = new Properties();
@@ -1167,6 +1195,8 @@ public class CoreAPI {
             this.updatePlayersVisuals();
             this.updateVehiclesVisuals();
             this.updateZombiesVisuals();
+            this.updateAnimalsVisuals();
+            this.updateTrailersVisuals();
             this.updateUltraPlayerVision();
         }
         catch (Exception exception) {
@@ -1267,6 +1297,247 @@ public class CoreAPI {
                 }
             }
         }
+    }
+
+    // ===================== 动物 ESP (二百二十六) =====================
+    // 数据面: AnimalInstanceManager 全局表 (MP 下为本机已同步动物, SP 下加载区内全量)。
+    // 物种分组懒加载一次 (读游戏全局 AnimalDefinitions.stages, 同游戏自身读法) + 静态兜底。
+
+    /** 静态兜底: 本 build 实测 10 物种 × 阶段 type 串 (仅动态读失败时启用, 面板永远有选项)。 */
+    private static final String[][] ANIMAL_SPECIES_FALLBACK = {
+        {"chicken", "chick", "cockerel", "hen"},
+        {"cow", "cowcalf", "cow", "bull"},
+        {"deer", "fawn", "doe", "buck"},
+        {"mouse", "mousepups", "mousefemale", "mouse"},
+        {"pig", "piglet", "sow", "boar"},
+        {"rabbit", "rabkitten", "rabdoe", "rabbuck"},
+        {"raccoon", "raccoonkit", "raccoonsow", "raccoonboar"},
+        {"rat", "ratbaby", "ratfemale", "rat"},
+        {"sheep", "lamb", "ewe", "ram"},
+        {"turkey", "turkeypoult", "turkeyhen", "gobblers"},
+    };
+
+    /** 物种显示名词条 (全量字面量); 未登记的物种 (客户端 mod) 显示原始 id 兜底。 */
+    private static final String[][] ANIMAL_SPECIES_I18N = {
+        {"chicken", "UI_AnimalSpecies_chicken"},
+        {"cow", "UI_AnimalSpecies_cow"},
+        {"deer", "UI_AnimalSpecies_deer"},
+        {"mouse", "UI_AnimalSpecies_mouse"},
+        {"pig", "UI_AnimalSpecies_pig"},
+        {"rabbit", "UI_AnimalSpecies_rabbit"},
+        {"raccoon", "UI_AnimalSpecies_raccoon"},
+        {"rat", "UI_AnimalSpecies_rat"},
+        {"sheep", "UI_AnimalSpecies_sheep"},
+        {"turkey", "UI_AnimalSpecies_turkey"},
+    };
+
+    private static java.util.LinkedHashMap<String, java.util.ArrayList<String>> animalSpeciesGroups;
+    private static java.util.HashMap<String, String> animalTypeToSpecies;
+
+    /** 物种→阶段 type 串 分组 (懒加载一次 + 会话缓存)。 */
+    public static java.util.Map<String, java.util.ArrayList<String>> getAnimalSpeciesGroups() {
+        if (animalSpeciesGroups == null) {
+            java.util.LinkedHashMap<String, java.util.ArrayList<String>> dyn = CoreAPI.loadAnimalSpeciesFromGame();
+            if (dyn == null || dyn.isEmpty()) {
+                dyn = new java.util.LinkedHashMap<String, java.util.ArrayList<String>>();
+                for (String[] e : ANIMAL_SPECIES_FALLBACK) {
+                    java.util.ArrayList<String> types = new java.util.ArrayList<String>();
+                    for (int i = 1; i < e.length; ++i) {
+                        types.add(e[i]);
+                    }
+                    dyn.put(e[0], types);
+                }
+            }
+            java.util.HashMap<String, String> rev = new java.util.HashMap<String, String>();
+            for (java.util.Map.Entry<String, java.util.ArrayList<String>> en : dyn.entrySet()) {
+                for (String t : en.getValue()) {
+                    rev.put(t, en.getKey());
+                }
+            }
+            animalTypeToSpecies = rev;
+            animalSpeciesGroups = dyn;
+        }
+        return animalSpeciesGroups;
+    }
+
+    /** 物种 id 列表 (字母序, 供下拉框)。 */
+    public static java.util.ArrayList<String> getAnimalSpeciesIds() {
+        java.util.ArrayList<String> ids = new java.util.ArrayList<String>(CoreAPI.getAnimalSpeciesGroups().keySet());
+        java.util.Collections.sort(ids);
+        return ids;
+    }
+
+    /** 物种显示名 (自加词条; 未登记物种回退原始 id)。 */
+    public static String getAnimalSpeciesDisplayName(String speciesId) {
+        if (speciesId != null) {
+            for (String[] e : ANIMAL_SPECIES_I18N) {
+                if (e[0].equals(speciesId)) {
+                    return CoreMain.getInstance().LuaTranslator.getTranslate(e[1]);
+                }
+            }
+        }
+        return speciesId == null ? "" : speciesId;
+    }
+
+    /** 读游戏全局 AnimalDefinitions.stages (结构: [物种].stages[typeKey]); 失败返回 null。 */
+    private static java.util.LinkedHashMap<String, java.util.ArrayList<String>> loadAnimalSpeciesFromGame() {
+        try {
+            KahluaTable env = LuaManager.env;
+            if (env == null) {
+                return null;
+            }
+            Object defsObj = env.rawget("AnimalDefinitions");
+            if (!(defsObj instanceof KahluaTable)) {
+                return null;
+            }
+            Object stagesObj = ((KahluaTable)defsObj).rawget("stages");
+            if (!(stagesObj instanceof KahluaTable)) {
+                return null;
+            }
+            java.util.LinkedHashMap<String, java.util.ArrayList<String>> out = new java.util.LinkedHashMap<String, java.util.ArrayList<String>>();
+            KahluaTableIterator it = ((KahluaTable)stagesObj).iterator();
+            while (it.advance()) {
+                Object key = it.getKey();
+                Object val = it.getValue();
+                if (key == null || !(val instanceof KahluaTable)) {
+                    continue;
+                }
+                Object subObj = ((KahluaTable)val).rawget("stages");
+                if (!(subObj instanceof KahluaTable)) {
+                    continue;
+                }
+                java.util.ArrayList<String> types = new java.util.ArrayList<String>();
+                KahluaTableIterator it2 = ((KahluaTable)subObj).iterator();
+                while (it2.advance()) {
+                    if (it2.getKey() != null) {
+                        types.add(String.valueOf(it2.getKey()));
+                    }
+                }
+                if (!types.isEmpty()) {
+                    out.put(String.valueOf(key), types);
+                }
+            }
+            return out.isEmpty() ? null : out;
+        }
+        catch (Throwable throwable) {
+            return null;
+        }
+    }
+
+    /** 动物 type 串 → 物种 id (未登记 type 返回 null)。 */
+    private static String speciesIdOfType(String type) {
+        if (type == null) {
+            return null;
+        }
+        CoreAPI.getAnimalSpeciesGroups();
+        return animalTypeToSpecies == null ? null : animalTypeToSpecies.get(type);
+    }
+
+    private void updateAnimalsVisuals() {
+        IsoPlayer var1;
+        if (this.isVisualsEnable && (this.isVisualsAnimalsEnable || this.isVisualDrawLineToAnimals) && (var1 = IsoPlayer.getInstance()) != null) {
+            IsoObjectID<IsoAnimal> var2 = AnimalInstanceManager.getInstance().getAnimals();
+            if (var2 != null) {
+                float var3 = PlayerUtils.getScreenPositionX(var1);
+                float var4 = PlayerUtils.getScreenPositionY(var1);
+                float var5 = this.animalsUIColor.a;
+                float var6 = this.animalsUIColor.r;
+                float var7 = this.animalsUIColor.g;
+                float var8 = this.animalsUIColor.b;
+                float scale = Rendering.espTextScale();
+                String filter = this.animalSpeciesFilter;
+                boolean hasFilter = filter != null && !filter.isEmpty();
+                for (IsoAnimal var9 : var2) {
+                    if (var9 == null) continue;
+                    String speciesId = CoreAPI.speciesIdOfType(var9.getAnimalType());
+                    if (hasFilter && !filter.equals(speciesId)) continue;
+                    float var10 = PlayerUtils.getScreenPositionX(var9);
+                    float var11 = PlayerUtils.getScreenPositionY(var9);
+                    float dist = PlayerUtils.getDistanceBetweenPlayers(var1, var9);
+                    if (this.isVisualsAnimalsEnable) {
+                        // 二百二十八: 标签只留名字/种类 (距离不再进标签, 用户实测要求 — 距离看线上近端数字即可)
+                        Rendering.drawEspTextCenter(this.animalLabel(var9, speciesId), scale, var10, var11 - 10.0f, var6, var7, var8, var5);
+                    }
+                    if (!this.isVisualDrawLineToAnimals || !(dist < 150.0f)) continue;
+                    int var12 = (int)dist;
+                    int var13 = Math.max(30, Math.min(150, var12));
+                    float var14 = (float)Math.sqrt(Math.pow(var10 - var3, 2.0) + Math.pow(var11 - var4, 2.0));
+                    float var15 = (float)var13 / var14;
+                    float var16 = var3 + var15 * (var10 - var3);
+                    float var17 = var4 + 60.0f + var15 * (var11 - var4);
+                    Rendering.drawThinLine(var10, var11, var3, var4 + 60.0f, var6, var7, var8, 0.8f);
+                    // 二百二十七 实测修正: 距离数字始终随线标注 (原"标记开启时省去"被用户实测否决 —
+                    // 标记开启后近端数字消失, 远处动物的标签又落在屏外, 完全看不到距离)
+                    Rendering.drawEspTextCenter(String.valueOf(var12), scale, var16, var17, var6, var7, var8, var5);
+                }
+            }
+        }
+    }
+
+    /** 动物标签: 有自定义名时「自定义名 > 物种名」, 否则物种名 (未知物种回退 type 串)。 */
+    private String animalLabel(IsoAnimal animal, String speciesId) {
+        String species = speciesId != null ? CoreAPI.getAnimalSpeciesDisplayName(speciesId) : animal.getAnimalType();
+        if (species == null) {
+            species = "";
+        }
+        String custom = animal.getCustomName();
+        if (custom == null || custom.trim().isEmpty()) {
+            return species;
+        }
+        return custom + " > " + species;
+    }
+
+    // ===================== 牲畜拖车 ESP (二百三十四) =====================
+    // 数据面: IsoCell.vehicles (客户端本地集合, 游戏渲染同源, 零发包); 识别 = 部件
+    // TrailerAnimalFood (牲畜/马匹拖车共用, 模组同类自动覆盖); 颜色复用载具 ESP 色 (用户拍板)。
+
+    private void updateTrailersVisuals() {
+        IsoPlayer var1;
+        if (this.isVisualsEnable && this.isVisualsTrailersEnable && (var1 = IsoPlayer.getInstance()) != null) {
+            Set<BaseVehicle> var2 = IsoWorld.instance.getCell().getVehicles();
+            if (var2 != null && !var2.isEmpty()) {
+                float var3 = PlayerUtils.getScreenPositionX(var1);
+                float var4 = PlayerUtils.getScreenPositionY(var1);
+                float var5 = this.vehiclesUIColor.a;
+                float var6 = this.vehiclesUIColor.r;
+                float var7 = this.vehiclesUIColor.g;
+                float var8 = this.vehiclesUIColor.b;
+                float scale = Rendering.espTextScale();
+                for (BaseVehicle var9 : var2) {
+                    if (var9 == null || var9.getPartById("TrailerAnimalFood") == null) continue;
+                    float var10 = VehicleUtils.getScreenPositionX(var9);
+                    float var11 = VehicleUtils.getScreenPositionY(var9);
+                    float dist = PlayerUtils.getDistanceBetweenPlayerAndVehicle(var1, var9);
+                    Rendering.drawEspTextCenter(this.vehicleDisplayName(var9), scale, var10, var11 - 10.0f, var6, var7, var8, var5);
+                    if (!(dist < 150.0f)) continue;
+                    int var12 = (int)dist;
+                    int var13 = Math.max(30, Math.min(150, var12));
+                    float var14 = (float)Math.sqrt(Math.pow(var10 - var3, 2.0) + Math.pow(var11 - var4, 2.0));
+                    float var15 = (float)var13 / var14;
+                    float var16 = var3 + var15 * (var10 - var3);
+                    float var17 = var4 + 60.0f + var15 * (var11 - var4);
+                    Rendering.drawThinLine(var10, var11, var3, var4 + 60.0f, var6, var7, var8, 0.8f);
+                    Rendering.drawEspTextCenter(String.valueOf(var12), scale, var16, var17, var6, var7, var8, var5);
+                }
+            }
+        }
+    }
+
+    /** 拖车标签: 游戏同款车辆显示名 (IGUI_VehicleName+模型名, ISVehicleMenu 同法; 空则脚本名兜底)。 */
+    private String vehicleDisplayName(BaseVehicle vehicle) {
+        VehicleScript script = vehicle.getScript();
+        String carName = script != null ? script.getCarModelName() : null;
+        if (carName == null && script != null) {
+            carName = script.getName();
+        }
+        if (carName == null) {
+            carName = vehicle.getScriptName();
+        }
+        if (carName == null) {
+            return "";
+        }
+        String name = Translator.getTextOrNull("IGUI_VehicleName" + carName);
+        return name == null || name.isEmpty() ? carName : name;
     }
 
     private void updatePlayersVisuals() {
