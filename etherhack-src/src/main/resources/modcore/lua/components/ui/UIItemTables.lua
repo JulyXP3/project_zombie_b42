@@ -239,7 +239,7 @@ function UIItemTables:createChildren()
     local listH = blockY - 44 - listY;
     if listH < 40 then listH = 40; end
 
-    self.datas = ISScrollingListBox:new(PAD, listY, boxW, listH);
+    self.datas = EtherFastList:new(PAD, listY, boxW, listH);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH

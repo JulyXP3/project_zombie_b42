@@ -231,7 +231,7 @@ function EtherBuildPanel:createChildren()
     local listH = g2y - 16 - listY;
     if listH < 30 then listH = 30; end
 
-    self.datas = ISScrollingListBox:new(innerX, listY, innerW, listH);
+    self.datas = EtherFastList:new(innerX, listY, innerW, listH);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH

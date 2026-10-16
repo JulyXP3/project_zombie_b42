@@ -62,7 +62,7 @@ function EtherSettingsPanel:build()
     local listH = 170;
     local hdrH = EtherFormPanel.LIST_HEADER_H;
     self:addModule("UI_Settings_ConfigTitle", listH + hdrH, function(bx, by, bw)
-        self.configs = ISScrollingListBox:new(bx, by + hdrH, bw, listH);
+        self.configs = EtherFastList:new(bx, by + hdrH, bw, listH);
         self.configs:initialise();
         self.configs:instantiate();
         self.configs.itemheight = EtherTheme.listItemH;

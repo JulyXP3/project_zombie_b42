@@ -544,7 +544,7 @@ function EtherLootRollPanel:createChildren()
     -- 这里只兜住页面整体装不下的退化情形 (内容仍然齐全, 只是列表变矮)。
     if listH < 1 then listH = 1; end
 
-    self.datas = ISScrollingListBox:new(innerX, listY, innerW, listH);
+    self.datas = EtherFastList:new(innerX, listY, innerW, listH);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH

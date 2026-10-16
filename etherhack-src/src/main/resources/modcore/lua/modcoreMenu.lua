@@ -22,6 +22,7 @@ local etherModules = {
     "modcore/lua/components/ui/UICheckbox.lua",
     "modcore/lua/components/ui/UIButton.lua",
     "modcore/lua/components/ui/UISlider.lua",
+    "modcore/lua/components/ui/EtherFastList.lua",
     "modcore/lua/components/ui/UIMechanics.lua",
     "modcore/lua/components/ui/UIModalAddXP.lua",
     "modcore/lua/components/ui/UIMovableMiniMap.lua",

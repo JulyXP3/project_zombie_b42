@@ -154,7 +154,7 @@ function UISkillTable:createChildren()
         return PAD + c * (btnW + GAP), btnY + r * (ctrlH + GAP);
     end
 
-    self.datas = ISScrollingListBox:new(0, 0, self.width, listH);
+    self.datas = EtherFastList:new(0, 0, self.width, listH);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH

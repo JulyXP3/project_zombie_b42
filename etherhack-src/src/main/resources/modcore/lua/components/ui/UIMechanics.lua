@@ -22,7 +22,7 @@ function UIMechanics:createChildren()
 	self.closeButton:setImage(EtherTheme.getCloseTexture());
 	self:addChild(self.closeButton);
 
-    self.datas = ISScrollingListBox:new(10, 130, self.width - 20, self.height - 200);
+    self.datas = EtherFastList:new(10, 130, self.width - 20, self.height - 200);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH

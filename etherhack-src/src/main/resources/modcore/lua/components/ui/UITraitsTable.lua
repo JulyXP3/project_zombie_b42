@@ -111,7 +111,7 @@ function UITraitsTable:createChildren()
     local listH = btnY - GAP;
     if listH < 60 then listH = 60; end
 
-    self.datas = ISScrollingListBox:new(0, 0, self.width, listH);
+    self.datas = EtherFastList:new(0, 0, self.width, listH);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH

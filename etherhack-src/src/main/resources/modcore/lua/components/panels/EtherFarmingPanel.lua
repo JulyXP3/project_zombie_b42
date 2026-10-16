@@ -512,7 +512,7 @@ function EtherFarmingPanel:build()
         function(bx, by, bw)
             local ix = bx + EtherFormPanel.BOX_PAD_X;
             local iW = bw - EtherFormPanel.BOX_PAD_X * 2;
-            local list = ISScrollingListBox:new(ix, by + searchRowH + 6, iW, LIST_H);
+            local list = EtherFastList:new(ix, by + searchRowH + 6, iW, LIST_H);
             list:initialise();
             list:instantiate();
             list.itemheight = EtherTheme.listItemH;

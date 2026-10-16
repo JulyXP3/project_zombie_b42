@@ -398,7 +398,7 @@ function EtherExchangePanel:createChildren()
     -- 上列表: 目标物品 (标题 + 列表, 分组盒)
     local tgtTitle = getTranslate("UI_Exchange_TargetList");
     self:_text(innerX, topY + 2, tgtTitle, EtherTheme.text, UIFont.Small);
-    self.datas = ISScrollingListBox:new(PAD, topY + titleH, boxW, tgtH - titleH);
+    self.datas = EtherFastList:new(PAD, topY + titleH, boxW, tgtH - titleH);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH
@@ -447,7 +447,7 @@ function EtherExchangePanel:createChildren()
     local sacY = midBtnY + ctrlH + GAP;
     local sacTitle = getTranslate("UI_Exchange_SacrificeList");
     self:_text(innerX, sacY + 2, sacTitle, EtherTheme.text, UIFont.Small);
-    self.sacDatas = ISScrollingListBox:new(PAD, sacY + titleH, boxW, sacH - titleH);
+    self.sacDatas = EtherFastList:new(PAD, sacY + titleH, boxW, sacH - titleH);
     self.sacDatas:initialise();
     self.sacDatas:instantiate();
     self.sacDatas.itemheight = EtherTheme.listItemH

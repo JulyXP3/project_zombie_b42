@@ -397,7 +397,7 @@ function EtherTrapSpawn:createChildren()
     if listH < 80 and listH > 0 then listH = 80; end
     if listY + listH > actY - GAP then listH = math.max(0, (actY - GAP) - listY); end
 
-    self.datas = ISScrollingListBox:new(PAD, listY, boxW, listH);
+    self.datas = EtherFastList:new(PAD, listY, boxW, listH);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH

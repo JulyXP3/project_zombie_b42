@@ -254,7 +254,7 @@ function EtherPlayerEditor:buildVhsModule()
         -- 字体必须显式降到 Small: 游戏 ISScrollingListBox:new 默认 UIFont.Large
         -- (行高 ≈40px, 用户实测"行太大"); boost 页列表也有此隐患 (只压 itemheight
         -- 不换 font, Large 字在 Small 行高里被挤裁)。
-        local list = ISScrollingListBox:new(ix, by + filterH + 4, iW, listH);
+        local list = EtherFastList:new(ix, by + filterH + 4, iW, listH);
         list:initialise();
         list:instantiate();
         list.font = UIFont.Small;

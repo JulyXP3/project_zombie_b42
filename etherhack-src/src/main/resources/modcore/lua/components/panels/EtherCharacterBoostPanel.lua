@@ -176,7 +176,7 @@ function EtherCharacterBoostPanel:build()
             self:addWidget(entry);
 
             local listY = cy + EtherTheme.entryH + 4;
-            local list = ISScrollingListBox:new(ix, listY, iW, LIST_H);
+            local list = EtherFastList:new(ix, listY, iW, LIST_H);
             list:initialise();
             list:instantiate();
             -- 游戏 new 默认 font=UIFont.Large (行高≈40px); 行高压到 Small 后

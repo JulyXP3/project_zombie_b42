@@ -394,7 +394,7 @@ function EtherCombatPanel:build()
         self:addWidget(idEntry);
 
         -- 枪械清单 (VHS教学列表同款: 显式 Small 字体, 主题化行渲染)
-        local list = ISScrollingListBox:new(ix, cy + filterH + 4, iW, listH);
+        local list = EtherFastList:new(ix, cy + filterH + 4, iW, listH);
         list:initialise();
         list:instantiate();
         list.font = UIFont.Small;

@@ -328,7 +328,7 @@ function EtherRadarPanel:createChildren()
     local listH = (actY - GAP) - listY;
     if listH < 80 then listH = 80; end
 
-    self.datas = ISScrollingListBox:new(PAD, listY, boxW, listH);
+    self.datas = EtherFastList:new(PAD, listY, boxW, listH);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH

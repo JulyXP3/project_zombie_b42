@@ -51,7 +51,7 @@ function UIHealth:createChildren()
 	self.closeButton:setImage(EtherTheme.getCloseTexture());
 	self:addChild(self.closeButton);
 
-    self.datas = ISScrollingListBox:new(10, 80, self.width - 20, self.height - 210);
+    self.datas = EtherFastList:new(10, 80, self.width - 20, self.height - 210);
     self.datas:initialise();
     self.datas:instantiate();
     self.datas.itemheight = EtherTheme.listItemH
