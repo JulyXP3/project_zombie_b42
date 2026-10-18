@@ -126,7 +126,7 @@ function UIButtonsPanel:addButton(iconPath, labelKey, panelTag)
     local id = #self.tiles + 1;
     table.insert(self.tiles, {
         id = id,
-        iconTexture = getExtraTexture(iconPath),
+        iconTexture = resolveTexture(iconPath),
         labelKey = labelKey,
         panelTag = panelTag,
         y = TOP + (id - 1) * TILE_H,

@@ -37,8 +37,6 @@ public class LuaBridge {
         // L1 (ReportSanitizer) 必须最先加载: 它要捕获 sendClientCommand 的
         // 原始函数引用 — 任何后续 mod 加载前就位 (方案 §3-L1)
         LuaLoader.load("modcore/lua/fixes/ReportSanitizer.lua");
-        // 自证探针: 复刻蓝队检测原语本地自测 (只 print 本地日志, 无网络)
-        LuaLoader.load("modcore/lua/fixes/SelfProbe.lua");
         // L3: fileless 加载, 不走 RunLua/虚拟 FS — getLoadedLua 枚举不到
         LuaLoader.load("modcore/lua/fixes/ISChatFix.lua");
         LuaLoader.load("modcore/lua/fixes/ServerSyncBlocker.lua");
@@ -47,6 +45,10 @@ public class LuaBridge {
         LuaLoader.load("modcore/lua/fixes/ExtraInfoMask.lua");
         // 主入口: 内部 etherModules 列表经 loadModuleScript 全走 LuaLoader
         LuaLoader.load("modcore/lua/modcoreMenu.lua");
+        // 自证探针: 复刻蓝队检测原语本地自测 (只 print 本地日志, 无网络)。必须放在
+        // modcoreMenu **之后** (二百四十二): 功能自检要查 EtherPick 模块全局, 提前
+        // 加载则加载期 E2-pick 必红 (模块尚未创建), 只有进游戏批次才转绿。
+        LuaLoader.load("modcore/lua/fixes/SelfProbe.lua");
         env.rawset(ENV_MARKER, Boolean.TRUE);
         PrivateGlobals.endCapture();
     }

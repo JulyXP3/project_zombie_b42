@@ -63,11 +63,13 @@ val generateLuaSymbols by tasks.registering {
 }
 
 tasks.named<ProcessResources>("processResources") {
-    dependsOn(generateLuaSymbols)
-    from(generateLuaPrefix) {
+    dependsOn(generateLuaSymbols, generateLuaPrefix)
+    from(file("build/generated/modcore/symbols.txt")) {
         into("modcore")
     }
-    from(file("build/generated/modcore/symbols.txt")) {
+    // (二百四十二) 必须用 file(...) 源: generateLuaPrefix 未声明 outputs, from(task)
+    // 拷贝 0 个文件 — 曾致 lua-prefix.properties 从未进 L4b 载荷 (前缀退化 q0)。
+    from(file("build/generated/modcore/lua-prefix.properties")) {
         into("modcore")
     }
 }

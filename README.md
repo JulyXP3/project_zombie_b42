@@ -23,7 +23,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Combat
 
-- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (auto-refill; the refill count is set on the Loot page) / No jamming
+- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (auto-refill; the refill count is set on the Loot page) / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
 - **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; the vanilla damage falloff across targets is removed, so every zombie takes full damage — combine with CritMax / One-Shot Kill)
 - **Temp Weapon**: locally spawn a firearm and swap it into your hands (searchable full firearm list + swap/restore)
 
@@ -51,7 +51,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### ESP
 
-- Master switch + four modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed), zombie info (overhead HP readout, zombie radar), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision — every zombie/vehicle/player forced visible)
+- Master switch + five modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed), zombie info (overhead HP readout, zombie radar), animal info (show animal names, animal radar with distance lines within 150 tiles, species filter, track livestock trailers), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision — every zombie/vehicle/player forced visible)
 
 ### Map
 
@@ -89,6 +89,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 - **Impersonate chat**: pick a channel (server-wide / say 30 tiles) and a target name, then send (the impersonated player does not see it)
 - **Zombie bait & gather**: a toggle continuously attracts nearby zombies toward you; one click pulls available zombies into a ring around you (in multiplayer, gather only affects zombies already targeting you)
 - **Zombie skin**: rotten face / heavily decayed / slightly decayed / restore skin
+- **Fishing**: Perfect Fight (while fighting a fish your line never snaps or slips off and reeling is much faster — hold the reel button to bring it in quickly) / Auto Net Harvest (place a fishing net in water then enable it; while you stay nearby it keeps harvesting automatically — full bait, 15 hours' worth of catches per cycle, the net never breaks — and also grants fishing XP; turning it off stops it)
 
 ### Create Char
 

@@ -11,6 +11,9 @@
 --*      UIFont/UIElement/UIManager 等是游戏原生类, 扫了全是误报)
 --*   3. getLoadedLuaCount()+getLoadedLua(i) 枚举 → 应无 modcore 条目
 --*      (L3 fileless; 签名与 KWRR 同款: count + 按索引取)
+--*   4. isPrivateGlobal 私有清单可用性 (L1)
+--*   5. EtherHammerX/PASE 证据探针复刻 (strict 签名 + 20 函数名 + 12 表名
+--*      + 全局名/value.Type 片段扫描) → 上报面应为空
 --**********************************************************
 
 -- KWRR checkmodcore 硬编码符号表 (OverrideClient.lua:118-215)
@@ -109,6 +112,90 @@ local function probe()
         end
     else
         print("[SelfProbe] WARN-L1: isPrivateGlobal not exposed");
+    end
+
+    -- 5. EtherHammerX/PASE 证据探针复刻 (2026-10-18 二百四十): 原探针
+    --    (EtherHammerX_B42_Evidence 客户端) 只在服务端 challenge 后才扫描上报,
+    --    本地复刻其全部 4 类判定, 验证"上报面为空"。名单须与探针原文一致。
+    local EX_STRICT = "PienZContextMenu";
+    local EX_FUNCS = {
+        "getAntiCheat8Status", "getAntiCheat12Status", "getExtraTexture",
+        "hackAdminAccess", "isDisableFakeInfectionLevel", "isDisableInfectionLevel",
+        "isDisableWetness", "isEnableUnlimitedCarry", "isOptimalWeight",
+        "isOptimalCalories", "isPlayerInSafeTeleported", "learnAllRecipes",
+        "requireExtra", "safePlayerTeleport", "toggleEnableUnlimitedCarry",
+        "toggleOptimalWeight", "toggleOptimalCalories", "toggleDisableFakeInfectionLevel",
+        "toggleDisableInfectionLevel", "toggleDisableWetness",
+    };
+    local EX_TABLES = {
+        "EtherMain", "EtherAdminMenu", "EtherDebugMenu", "EtherEditWorldObjects",
+        "EtherCharacterPanel", "EtherExploitPanel", "EtherInfoPanel",
+        "EtherItemCreator", "EtherMapPanel", "EtherPlayerEditor",
+        "EtherSettingsPanel", "EtherVisualsPanel",
+    };
+    local EX_FRAGMENTS = { "pztrainer", "animatedlauncher", "etherhack",
+        "unlockvizion", "bytebuddy", "javassist" };
+
+    if type(rawget(_G, EX_STRICT)) == "table" then
+        print("[SelfProbe] FAIL-EX: strict signature present: table:" .. EX_STRICT);
+    else
+        print("[SelfProbe] OK-EX: strict signature absent (" .. EX_STRICT .. ")");
+    end
+
+    local exFnHits = {};
+    for i = 1, #EX_FUNCS do
+        if type(rawget(_G, EX_FUNCS[i])) == "function" then
+            table.insert(exFnHits, EX_FUNCS[i]);
+        end
+    end
+    if #exFnHits > 0 then
+        print("[SelfProbe] FAIL-EX: exact function names present: "
+            .. table.concat(exFnHits, ", "));
+    else
+        print("[SelfProbe] OK-EX: " .. #EX_FUNCS .. "/" .. #EX_FUNCS
+            .. " exact function names absent");
+    end
+
+    local exTableHits = {};
+    for i = 1, #EX_TABLES do
+        if type(rawget(_G, EX_TABLES[i])) == "table" then
+            table.insert(exTableHits, EX_TABLES[i]);
+        end
+    end
+    if #exTableHits > 0 then
+        print("[SelfProbe] FAIL-EX: exact table names present: "
+            .. table.concat(exTableHits, ", "));
+    else
+        print("[SelfProbe] OK-EX: " .. #EX_TABLES .. "/" .. #EX_TABLES
+            .. " exact table names absent");
+    end
+
+    local exFragHits = {};
+    for k, v in pairs(_G) do
+        if type(k) == "string" then
+            local lk = string.lower(k);
+            for i = 1, #EX_FRAGMENTS do
+                if string.find(lk, EX_FRAGMENTS[i], 1, true) ~= nil then
+                    table.insert(exFragHits, "global:" .. k .. ":" .. EX_FRAGMENTS[i]);
+                    break;
+                end
+            end
+        end
+        if type(v) == "table" and type(v.Type) == "string" then
+            local lt = string.lower(v.Type);
+            for i = 1, #EX_FRAGMENTS do
+                if string.find(lt, EX_FRAGMENTS[i], 1, true) ~= nil then
+                    table.insert(exFragHits, "type:" .. v.Type .. ":" .. EX_FRAGMENTS[i]);
+                    break;
+                end
+            end
+        end
+        if #exFragHits >= 16 then break; end
+    end
+    if #exFragHits > 0 then
+        print("[SelfProbe] FAIL-EX: fragment scan hits: " .. table.concat(exFragHits, ", "));
+    else
+        print("[SelfProbe] OK-EX: fragment scan clean (global names + Type)");
     end
 end
 

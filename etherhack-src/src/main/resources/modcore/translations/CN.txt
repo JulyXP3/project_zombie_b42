@@ -397,7 +397,7 @@
     UI_TakeSpawn_Hint = "加速: 缩短动作时长 (关掉则按原版速度, 约 10 秒/份)",
     UI_RadioXp_NoAnchor = "周围没有可用的收音机/电视, 背包里也没有收音机",
     UI_RadioXp_ButtonOne = "升级所选技能",
-    UI_RadioXp_ButtonAll = "全技能升级",
+    UI_RadioXp_ButtonAll = "全技能升级(有风险)",
     UI_RadioXp_Hint = "多人: 需附近(10格内)有开着且音量调到5以上的收音机/电视/车载收音机。没有时点升级, 会自动把背包里的设备摆出来(需开启), 放好后回来再点升级。每技能30秒冷却, XP上限默认3级(随服务器配置而定)",
     UI_RadioXp_Done = "已发送: 经验注入完成(到服务器技能上限)",
     UI_RadioXp_Cooldown = "冷却中, 30 秒后再试",

@@ -220,7 +220,7 @@ end
 local function lazyTex(cache, k, path)
     local v = cache[k];
     if v == nil then
-        v = getExtraTexture(path);
+        v = resolveTexture(path);
         if v == nil then v = false; end
         cache[k] = v;
     end

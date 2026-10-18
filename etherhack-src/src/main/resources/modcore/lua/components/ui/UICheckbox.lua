@@ -80,8 +80,8 @@ function UICheckbox:new (x, y, title, isChecked, onChecked)
 	self.__index = self
 	uiTableData.x = x;
 	uiTableData.y = y;
-	uiTableData.checkedTexture = getExtraTexture("modcore/media/ui/checkbox_checked.png");
-	uiTableData.uncheckedTexture = getExtraTexture("modcore/media/ui/checkbox_unchecked.png");
+	uiTableData.checkedTexture = resolveTexture("modcore/media/ui/checkbox_checked.png");
+	uiTableData.uncheckedTexture = resolveTexture("modcore/media/ui/checkbox_unchecked.png");
 	uiTableData.textureWidth = 18;
 	uiTableData.textureHeight = 18;
 	uiTableData.marginTexture = 10;

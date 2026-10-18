@@ -397,7 +397,7 @@
     UI_TakeSpawn_Hint = "Accelerate: shortens the action (turn it off for vanilla speed, about 10 s per item)",
     UI_RadioXp_NoAnchor = "No usable radio/TV nearby and no radio in your inventory",
     UI_RadioXp_ButtonOne = "Upgrade Selected",
-    UI_RadioXp_ButtonAll = "Upgrade All Skills",
+    UI_RadioXp_ButtonAll = "Upgrade All Skills (Risky)",
     UI_RadioXp_Hint = "Multiplayer: requires a powered-on radio/TV/car radio nearby (within 10 tiles) with volume turned up to 5 or higher. With none available, clicking upgrade automatically sets a device down from your inventory (turn it on after placing) - place it and click upgrade again. 30s cooldown per skill, XP capped at level 3 by default (depends on server config)",
     UI_RadioXp_Done = "Sent: XP injected (up to the server's cap)",
     UI_RadioXp_Cooldown = "On cooldown, try again in 30 seconds",

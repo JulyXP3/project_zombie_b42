@@ -349,7 +349,7 @@ public class LuaMethods {
         }
     }
 
-    @LuaMethod(name="isPlayerInSafeTeleported", global=true)
+    @LuaMethod(name="isTeleportSafe", global=true)
     public static boolean isPlayerInSafeTeleported() {
         return CoreMain.getInstance().CoreAPI.isPlayerInSafeTeleported;
     }
@@ -1465,53 +1465,53 @@ public class LuaMethods {
         return CoreMain.getInstance().CoreAPI.isDisableUnhappynessLevel;
     }
 
-    @LuaMethod(name="toggleDisableWetness", global=true)
+    @LuaMethod(name="toggleNoWetness", global=true)
     public static void toggleDisableWetness(boolean value) {
         CoreMain.getInstance().CoreAPI.isDisableWetness = value;
     }
 
-    @LuaMethod(name="isDisableWetness", global=true)
+    @LuaMethod(name="isNoWetness", global=true)
     public static boolean isDisableWetness() {
         return CoreMain.getInstance().CoreAPI.isDisableWetness;
     }
 
-    @LuaMethod(name="toggleDisableInfectionLevel", global=true)
+    @LuaMethod(name="toggleNoZombieInfection", global=true)
     public static void toggleDisableInfectionLevel(boolean value) {
         CoreMain.getInstance().CoreAPI.isDisableInfectionLevel = value;
     }
 
-    @LuaMethod(name="isDisableInfectionLevel", global=true)
+    @LuaMethod(name="isNoZombieInfection", global=true)
     public static boolean isDisableInfectionLevel() {
         return CoreMain.getInstance().CoreAPI.isDisableInfectionLevel;
     }
 
-    @LuaMethod(name="toggleDisableFakeInfectionLevel", global=true)
+    @LuaMethod(name="toggleNoFakeInfection", global=true)
     public static void toggleDisableFakeInfectionLevel(boolean var0) {
         CoreMain.getInstance().CoreAPI.isDisableFakeInfectionLevel = var0;
         saveConfig("startup");
     }
 
-    @LuaMethod(name="isDisableFakeInfectionLevel", global=true)
+    @LuaMethod(name="isNoFakeInfection", global=true)
     public static boolean isDisableFakeInfectionLevel() {
         return CoreMain.getInstance().CoreAPI.isDisableFakeInfectionLevel;
     }
 
-    @LuaMethod(name="toggleOptimalCalories", global=true)
+    @LuaMethod(name="toggleCalorieLock", global=true)
     public static void toggleOptimalCalories(boolean value) {
         CoreMain.getInstance().CoreAPI.isOptimalCalories = value;
     }
 
-    @LuaMethod(name="isOptimalCalories", global=true)
+    @LuaMethod(name="isCalorieLock", global=true)
     public static boolean isOptimalCalories() {
         return CoreMain.getInstance().CoreAPI.isOptimalCalories;
     }
 
-    @LuaMethod(name="toggleOptimalWeight", global=true)
+    @LuaMethod(name="toggleWeightLock", global=true)
     public static void toggleOptimalWeight(boolean value) {
         CoreMain.getInstance().CoreAPI.isOptimalWeight = value;
     }
 
-    @LuaMethod(name="isOptimalWeight", global=true)
+    @LuaMethod(name="isWeightLock", global=true)
     public static boolean isOptimalWeight() {
         return CoreMain.getInstance().CoreAPI.isOptimalWeight;
     }
@@ -1868,7 +1868,7 @@ public class LuaMethods {
     /*
      * Enabled aggressive exception aggregation
      */
-    @LuaMethod(name="getExtraTexture", global=true)
+    @LuaMethod(name="resolveTexture", global=true)
     public static Texture getExtraTexture(String path) {
         try {
             if (!path.endsWith(".png")) {
