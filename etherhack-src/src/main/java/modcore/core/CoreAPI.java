@@ -621,6 +621,8 @@ public class CoreAPI {
         this.exposer.exposeRecipes();
         this.exposer.exposeModScan();
         this.exposer.exposeRenderingAPI();
+        // 探鱼雷达取数桥 (2026-10-18, 两阶段 fishRadarScanBegin/Finish)
+        this.exposer.exposeFishRadar();
         this.exposer.exposeAutoDrive();
         PrivateGlobals.endCapture();
     }
@@ -1892,6 +1894,23 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, RenderingAPI.class, method, name);
                 Logger.printLog("Exposed RenderingAPI method: " + name);
+            }
+        }
+
+        /**
+         * 探鱼雷达 (2026-10-18): FishRadarAPI 的 @LuaMethod(global=true) 全量暴露
+         * (反射循环与 exposeRenderingAPI 同款; 必须在 loadAPI 的 PrivateGlobals 捕获窗内)。
+         */
+        public void exposeFishRadar() {
+            for (Method method : FishRadarAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, FishRadarAPI.class, method, name);
+                Logger.printLog("Exposed FishRadarAPI method: " + name);
             }
         }
 

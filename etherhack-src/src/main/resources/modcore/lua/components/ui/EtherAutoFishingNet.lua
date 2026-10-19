@@ -20,7 +20,7 @@
 --* 边界: 玩家自己在钓鱼 (Fishing.ManagerInstances 有实例) 时不插队,
 --* 避免两套动作相互打断; 动作卡在队列超过 RETRY_MS 视为失效重排;
 --* 其余异常 pcall 兜底并自动关闭 (TrapPOC 同款纪律)。
---* 详见 analysis/钓鱼作弊功能研判(2-4已实施-已实测-5已撤下留档).md。
+--* 详见 analysis/钓鱼作弊功能研判(1-2-4已实施-已实测-5已撤下留档).md。
 --*********************************************************
 EtherAutoFishingNet = EtherAutoFishingNet or {}
 

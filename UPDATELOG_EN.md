@@ -4,6 +4,7 @@
 
 - Added: a "Fishing" section on the Fun page - "Perfect Fight" toggle: while fighting a fish your line never snaps or slips off and reeling is much faster; once a fish is hooked, hold the reel button to bring it in quickly.
 - Added: a "Fishing" section on the Fun page - "Auto Net Harvest" toggle: place a fishing net in water then enable it; while you stay nearby it keeps harvesting automatically (full bait, 15 hours' worth of catches per cycle, the net never breaks) and also grants fishing XP; turning it off stops it.
+- Added: a "Fish Radar" toggle in the "Fishing" section on the Fun page - while on, it outlines underwater fish schools and chum spots within 60 tiles; cyan highlighted tiles = bite speed (brighter = faster); red circle = fish present (bigger circle, more fish); orange circle = depleted or spooked school; brown circle = your chum spot.
 - Improved: the Loot page no longer stutters when opened or while typing in its search boxes (its item list sorting and filtering are much faster).
 - Fixed: a continuous framerate drop while the Loot page (and other large list pages) stayed open.
 - Added: a "Shoot through closed windows (in vehicle)" toggle on the Combat tab - with a firearm in hand, you can attack zombies outside while seated in a vehicle even with the window fully closed (firearms only; melee and shoving are unaffected).

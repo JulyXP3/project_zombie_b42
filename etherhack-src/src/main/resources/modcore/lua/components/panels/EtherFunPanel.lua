@@ -29,9 +29,9 @@ require "ISUI/ISPanel"
 --* 开吸引转所有权。状态行画在各模块区内部 (用户反馈: 不共享一处)。
 --* 详见 analysis/僵尸吸引与尸群聚集(已实施).md。
 --*
---* 钓鱼两件套 (2/4 号候选, 各独立开关): 完美搏鱼 / 自动收网 ——
+--* 钓鱼三件套 (1/2/4 号候选, 各独立开关): 探鱼雷达 / 完美搏鱼 / 自动收网 ——
 --* 机制与实现见各模块文件头 (EtherPerfectFish / EtherAutoFishingNet);
---* 详见 analysis/钓鱼作弊功能研判(2-4已实施-已实测-5已撤下留档).md。
+--* 详见 analysis/钓鱼作弊功能研判(1-2-4已实施-已实测-5已撤下留档).md。
 --*
 --* Kahlua 陷阱备忘 (check_kahlua_compat.lua 禁则):
 --*   - 无 string.trim: 手写 ^%s*(.-)%s*$ 模式
@@ -355,8 +355,8 @@ function EtherFunPanel:build()
 
     self:addSpacer(EtherFormPanel.SECTION_GAP);
 
-    -- ================= 模块四: 钓鱼 (2/4 号候选: 完美搏鱼 + 自动收网) =================
-    local fishRowsH = ctrlH * 2 + gap * 2 + EtherTheme.fontHgtSmall;
+    -- ================= 模块四: 钓鱼 (1/2/4 号候选: 探鱼雷达 + 完美搏鱼 + 自动收网) =================
+    local fishRowsH = ctrlH * 3 + gap * 3 + EtherTheme.fontHgtSmall * 2;
     self:addModule("UI_Fun_FishTitle", fishRowsH, function(bx, by, bw)
         local cy = by;
 
@@ -386,9 +386,25 @@ function EtherFunPanel:build()
         self:_track(self.autoNetCb, { onlyInGame = true });
         cy = cy + ctrlH + gap;
 
-        -- 状态行锚点 (模块区内部, renderContent 绘制)
+        self.radarCb = UICheckbox:new(bx, cy, getTranslate("UI_Fun_FishRadar"),
+            EtherFishRadar.enabled and true or false, function(v)
+                EtherFishRadar.setEnabled(v);
+                -- 开启后状态行由实时结果接管; 关闭留一句 Off
+                if not v then
+                    self.radarStatus = getTranslate("UI_Fun_FishRadarOff");
+                end
+            end);
+        self.radarCb:initialise();
+        self.radarCb:instantiate();
+        self.radarCb.width = bw;
+        self:addChild(self.radarCb);
+        self:_track(self.radarCb, { onlyInGame = true });
+        cy = cy + ctrlH + gap;
+
+        -- 状态行锚点 (模块区内部, renderContent 绘制; 两行: 收网/雷达各一)
         self.fishStatusX = bx;
         self.fishStatusY = cy;
+        self.radarStatusY = cy + EtherTheme.fontHgtSmall;
     end);
 
     -- ================= 底部提示 (每功能一条说明各自起行, 用户反馈不再挤成一团) =================
@@ -396,7 +412,7 @@ function EtherFunPanel:build()
     local hintW = self:_rowContentW();
     self.hintLines = {};
     local hintKeys = { "UI_Fun_HintChat", "UI_Fun_HintSkin", "UI_Fun_HintLure", "UI_Fun_HintGather",
-        "UI_Fun_HintPerfectFish", "UI_Fun_HintAutoNet" };
+        "UI_Fun_HintPerfectFish", "UI_Fun_HintAutoNet", "UI_Fun_HintFishRadar" };
     for i = 1, #hintKeys do
         local wrapped = EtherTheme.wrapHint(getTranslate(hintKeys[i]), hintW);
         for j = 1, #wrapped do
@@ -454,6 +470,19 @@ function EtherFunPanel:renderContent()
         end
         if text ~= nil and text ~= "" then
             self:drawText(text, self.fishStatusX, self.fishStatusY,
+                td.r, td.g, td.b, 1, UIFont.Small);
+        end
+    end
+    if self.radarStatusY ~= nil then
+        -- 探鱼雷达开启时显示最近鱼点距离/咬钩档; 关闭后显示 Off
+        local text = nil;
+        if EtherFishRadar.enabled then
+            text = EtherFishRadar.status or getTranslate("UI_Fun_FishRadarNone");
+        elseif self.radarStatus ~= nil then
+            text = self.radarStatus;
+        end
+        if text ~= nil and text ~= "" then
+            self:drawText(text, self.fishStatusX, self.radarStatusY,
                 td.r, td.g, td.b, 1, UIFont.Small);
         end
     end

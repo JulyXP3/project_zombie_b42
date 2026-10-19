@@ -18,7 +18,7 @@
 --*    isPickupBobber (dist < 0.6) 到达即进 PickupFish 收鱼。
 --*
 --* 实测注: 关闭开关瞬间即回原版 (两条 vanilla 函数原样回放)。
---* 详见 analysis/钓鱼作弊功能研判(2-4已实施-已实测-5已撤下留档).md。
+--* 详见 analysis/钓鱼作弊功能研判(1-2-4已实施-已实测-5已撤下留档).md。
 --*********************************************************
 EtherPerfectFish = EtherPerfectFish or {}
 

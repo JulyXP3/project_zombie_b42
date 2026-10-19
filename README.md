@@ -89,7 +89,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 - **Impersonate chat**: pick a channel (server-wide / say 30 tiles) and a target name, then send (the impersonated player does not see it)
 - **Zombie bait & gather**: a toggle continuously attracts nearby zombies toward you; one click pulls available zombies into a ring around you (in multiplayer, gather only affects zombies already targeting you)
 - **Zombie skin**: rotten face / heavily decayed / slightly decayed / restore skin
-- **Fishing**: Perfect Fight (while fighting a fish your line never snaps or slips off and reeling is much faster — hold the reel button to bring it in quickly) / Auto Net Harvest (place a fishing net in water then enable it; while you stay nearby it keeps harvesting automatically — full bait, 15 hours' worth of catches per cycle, the net never breaks — and also grants fishing XP; turning it off stops it)
+- **Fishing**: Perfect Fight (while fighting a fish your line never snaps or slips off and reeling is much faster — hold the reel button to bring it in quickly) / Auto Net Harvest (place a fishing net in water then enable it; while you stay nearby it keeps harvesting automatically — full bait, 15 hours' worth of catches per cycle, the net never breaks — and also grants fishing XP; turning it off stops it) / Fish Radar (outlines underwater fish schools and chum spots within 60 tiles; cyan highlighted tiles = bite speed (brighter = faster); red circle = fish present (bigger circle, more fish); orange circle = depleted or spooked school; brown circle = your chum spot)
 
 ### Create Char
 

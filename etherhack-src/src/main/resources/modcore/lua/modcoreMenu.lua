@@ -37,6 +37,7 @@ local etherModules = {
     "modcore/lua/components/ui/ZombieLure.lua",
     "modcore/lua/components/ui/EtherPerfectFish.lua",
     "modcore/lua/components/ui/EtherAutoFishingNet.lua",
+    "modcore/lua/components/ui/EtherFishRadar.lua",
     "modcore/lua/components/ui/EtherTakeSpawn.lua",
     "modcore/lua/components/ui/EtherBoxPoison.lua",
     "modcore/lua/components/ui/EtherBuildSpawn.lua",

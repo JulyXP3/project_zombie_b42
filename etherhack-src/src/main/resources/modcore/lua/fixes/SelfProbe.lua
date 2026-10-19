@@ -225,6 +225,9 @@ local OUR_APIS = {
                               and type(vehicleNativeDestReady) == "function" and type(vehicleNativeVerify) == "function"
                               and type(vehicleNativeRollback) == "function" and type(vehicleNativePhysicsZ) == "function"
                               and type(vehicleNativeUpright) == "function" end },
+    { "F1-fishradar", function() return type(fishRadarScanBegin) == "function" and type(fishRadarScanFinish) == "function"
+                                  and type(etherDrawIsoCircles) == "function" and type(etherDrawIsoCells) == "function"
+                                  and EtherFishRadar ~= nil end },
 };
 
 local VANILLA_DEPS = {
