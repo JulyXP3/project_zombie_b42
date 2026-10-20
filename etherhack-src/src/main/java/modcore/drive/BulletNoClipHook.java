@@ -8,7 +8,8 @@
  * ① 世界碰撞豁免: onCalcPhysics — IsoChunk.calcPhysics 头部钩子, 激活期只保留
  *    Floor 形状; refreshChunks — 状态切换时重传已加载 chunk 物理 (即时生效)。
  * ② 战损豁免: onVehicleHitChrDamage — 车辆撞击角色自伤钳 0 (伤害报告不发出,
- *    服务端零痕迹); onZombieVehicleDamage — 僵尸被撞伤害 500 (碰着即死, 原版
+ *    服务端零痕迹); onZombieVehicleDamage — 僵尸被撞伤害 99 (碰着即死; 僵尸血量
+ *    1.8-3.8, 而 vanilla AntiCheatHitDamage 只拒 >100 → 99 既必杀又留 1 点余量;
  *    击杀/计数/布娃娃/同步全保留; instanceof IsoZombie 门控, 玩家被撞不受影响)。
  * ③ 冲量豁免: onHitPedestrianImpulse — 撞击减速冲量关 (尸群顶不停车, 优先到达)。
  *
@@ -38,7 +39,7 @@ public final class BulletNoClipHook {
 
     private static final int PHYSICS_SHAPE_FLOOR = 6; // PhysicsShapes.Floor 序号 (javap 亲验)
     private static final int MAX_LEVELS = 8;
-    private static final float ZOMBIE_HIT_DAMAGE = 500.0f; // 僵尸被撞伤害 (血量个位数, 首触即死)
+    private static final float ZOMBIE_HIT_DAMAGE = 99.0f; // 僵尸被撞伤害 (血量 1.8-3.8 必死; 低于 AntiCheatHitDamage 的 >100 阈值, 留 1 点余量)
 
     private BulletNoClipHook() {
     }
@@ -123,7 +124,7 @@ public final class BulletNoClipHook {
 
     /**
      * calculateDamageFromVehicleImpact / RunOver 共用头部钩子 (角色被撞伤害)。
-     * 激活期且目标是僵尸 → 500 (首触即死); 其余 (玩家/动物/未激活) → NaN =
+     * 激活期且目标是僵尸 → 99 (首触即死; 低于 AntiCheatHitDamage 阈值); 其余 (玩家/动物/未激活) → NaN =
      * 放行原版 (注入体的哨兵值)。
      */
     public static float onZombieVehicleDamage(IsoGameCharacter chr, float impactSpeed) {

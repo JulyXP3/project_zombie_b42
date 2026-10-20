@@ -16,8 +16,10 @@ import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.JumpInsnNode;
 import org.objectweb.asm.tree.LabelNode;
 import org.objectweb.asm.tree.LdcInsnNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
+import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public final class CarKillInjector {
@@ -35,6 +37,7 @@ public final class CarKillInjector {
         retransform(inst, "zombie.characters.IsoGameCharacter");
         retransform(inst, "zombie.vehicles.BaseVehicle");
         retransform(inst, "zombie.input.GameKeyboard");
+        retransform(inst, "zombie.inventory.InventoryItem");
     }
 
     private static void retransform(Instrumentation inst, String name) {
@@ -98,6 +101,8 @@ public final class CarKillInjector {
                         return rewrite(bytes, this::injectVehicle);
                     case "zombie/input/GameKeyboard":
                         return rewrite(bytes, this::injectKeyboard);
+                    case "zombie/inventory/InventoryItem":
+                        return rewrite(bytes, this::injectAmmoConsume);
                     default:
                         return null;
                 }
@@ -289,6 +294,46 @@ public final class CarKillInjector {
                 }
             }
             require(found, "GameKeyboard.update ()V");
+        }
+
+        private void injectAmmoConsume(ClassNode node) {
+            boolean found = false;
+            for (MethodNode method : node.methods) {
+                if ("setCurrentAmmoCount".equals(method.name) && "(I)V".equals(method.desc)) {
+                    found = true;
+                    InsnList hook = new InsnList();
+                    LabelNode notConsuming = new LabelNode();
+
+                    // if (!(this instanceof HandWeapon)) goto notConsuming
+                    hook.add(new VarInsnNode(25, 0));
+                    hook.add(new TypeInsnNode(193, "zombie/inventory/types/HandWeapon"));
+                    hook.add(new JumpInsnNode(153, notConsuming));
+
+                    // oldAmmo = this.currentAmmoCount
+                    hook.add(new VarInsnNode(25, 0));
+                    hook.add(new FieldInsnNode(180, "zombie/inventory/InventoryItem", "currentAmmoCount", "I"));
+                    hook.add(new VarInsnNode(54, 2));
+
+                    // push this, newAmmo, oldAmmo, call CarKillHook.onAmmoConsume(Lzombie/inventory/InventoryItem;II)Z
+                    hook.add(new VarInsnNode(25, 0));
+                    hook.add(new VarInsnNode(21, 1));
+                    hook.add(new VarInsnNode(21, 2));
+                    hook.add(new MethodInsnNode(184, "carkill/CarKillHook", "onAmmoConsume", "(Lzombie/inventory/InventoryItem;II)Z", false));
+
+                    // if (!hookResult) goto notConsuming
+                    hook.add(new JumpInsnNode(153, notConsuming)); // IFEQ
+
+                    // 50%: skip method body (ammo not consumed)
+                    hook.add(new InsnNode(177)); // RETURN
+
+                    // notConsuming:
+                    hook.add(notConsuming);
+
+                    method.instructions.insert(hook);
+                    break;
+                }
+            }
+            require(found, "InventoryItem.setCurrentAmmoCount (I)V");
         }
 
         private void injectZombieDamage(MethodNode method) {

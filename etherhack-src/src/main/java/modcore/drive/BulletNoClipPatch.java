@@ -108,7 +108,7 @@ public final class BulletNoClipPatch {
         require(injected, "BaseVehicle.calculateDamageWithCharacter");
     }
 
-    /** ③/④ 僵尸被撞伤害 → 激活期 500 (首触即死); 玩家/动物/未激活放行原版。 */
+    /** ③/④ 僵尸被撞伤害 → 激活期 99 (首触即死; 低于 vanilla AntiCheatHitDamage 阈值); 玩家/动物/未激活放行原版。 */
     private static void installZombieDamageBoost() {
         String[] methods = {"calculateDamageFromVehicleImpact", "calculateDamageFromVehicleRunOver"};
         for (String name : methods) {

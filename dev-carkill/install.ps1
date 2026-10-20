@@ -75,4 +75,4 @@ if (-not $gameDir) { throw 'Project Zomboid install directory not found' }
 foreach ($name in @('ProjectZomboid64.json', 'ProjectZomboid64.bat', 'ProjectZomboid64ShowConsole.bat')) {
     Add-Agent (Join-Path $gameDir $name) $targetJar
 }
-Write-Host '[CarKill] Installed. Fully quit and relaunch the game, then press \ to toggle.'
+Write-Host '[CarKill] Installed. Fully quit and relaunch the game, then press \ for car kill, = for ammo save.'

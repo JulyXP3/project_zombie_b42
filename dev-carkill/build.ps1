@@ -7,7 +7,7 @@ $work = 'build'
 $classes = Join-Path $work 'classes'
 $dist = 'dist'
 $jar = Join-Path $dist 'car_kill.jar'
-$gameJar = Join-Path $PSScriptRoot '..\etherhack-src\lib\zombie.jar'
+$gameJar = Join-Path $PSScriptRoot '..\etherhack-src\lib\projectzomboid.jar'
 
 if (-not (Test-Path $gameJar)) {
     throw "missing compile dependency: $gameJar"

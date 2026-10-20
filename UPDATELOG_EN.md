@@ -2,6 +2,9 @@
 
 ## [3.2.6] - Current
 
+- Fixed: an occasional background error when players joined or left a multiplayer server.
+- Improved: vehicle instant-kill tuning - still one-hit kills, with a lower chance of tripping strict server checks.
+
 - Added: a "Fishing" section on the Fun page - "Perfect Fight" toggle: while fighting a fish your line never snaps or slips off and reeling is much faster; once a fish is hooked, hold the reel button to bring it in quickly.
 - Added: a "Fishing" section on the Fun page - "Auto Net Harvest" toggle: place a fishing net in water then enable it; while you stay nearby it keeps harvesting automatically (full bait, 15 hours' worth of catches per cycle, the net never breaks) and also grants fishing XP; turning it off stops it.
 - Added: a "Fish Radar" toggle in the "Fishing" section on the Fun page - while on, it outlines underwater fish schools and chum spots within 60 tiles; cyan highlighted tiles = bite speed (brighter = faster); red circle = fish present (bigger circle, more fish); orange circle = depleted or spooked school; brown circle = your chum spot.

@@ -44,6 +44,10 @@ public final class TransformCheck {
                     "update", "()V",
                     "carkill/CarKillHook", "onKeyboardUpdate", "()V");
             assertAbsent(transform(jar, "zombie/input/GameKeyboard.class"), 220);
+            check(transform(jar, "zombie/inventory/InventoryItem.class"),
+                    "setCurrentAmmoCount", "(I)V",
+                    "carkill/CarKillHook", "onAmmoConsume",
+                    "(Lzombie/inventory/InventoryItem;II)Z");
         }
         checkHookSemantics();
         if (failures != 0) {
@@ -125,6 +129,9 @@ public final class TransformCheck {
         }
         if (CarKillHook.onHitPedestrianImpulse(null, null) || CarKillHook.onVelocityMultiplier(null)) {
             fail("disabled impulse or velocity hook must pass through");
+        }
+        if (CarKillHook.onAmmoConsume(null, 15, 10) || CarKillHook.onAmmoConsume(null, 9, 10)) {
+            fail("ammo hook must pass refills and non-firearm items");
         }
         CarKillHook.toggle();
         if (!CarKillHook.isEnabled()) {

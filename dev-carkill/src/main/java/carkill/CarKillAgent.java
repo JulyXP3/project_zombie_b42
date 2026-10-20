@@ -40,7 +40,7 @@ public final class CarKillAgent {
         } finally {
             vm.detach();
         }
-        System.out.println("[CarKill] Agent loaded. Press \\ in game to toggle.");
+        System.out.println("[CarKill] Agent loaded. Press \\ for car kill, = for ammo save.");
     }
 
     private static String findPZ() {

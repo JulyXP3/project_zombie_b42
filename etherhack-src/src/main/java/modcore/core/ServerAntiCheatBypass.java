@@ -334,7 +334,9 @@ public class ServerAntiCheatBypass {
     public static boolean hookTimeoutRemotePlayers(GameClient client) {
         try {
             long now = System.currentTimeMillis();
-            for (IsoPlayer player : client.getPlayers()) {
+            // 快照遍历: receivePlayerTimeout 会从 client.getPlayers() 的 live 列表移除玩家,
+            // 直接 for-each 会 ConcurrentModificationException; 原版用 playersTemp 同款快照。
+            for (IsoPlayer player : new java.util.ArrayList<>(client.getPlayers())) {
                 if (player == null || player.isLocalPlayer()) {
                     continue;
                 }
