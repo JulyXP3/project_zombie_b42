@@ -153,17 +153,32 @@ function EtherTempWeapon.isTempGun(gun)
 end
 
 -- 状态行文本: 未替换 / 已替换: <武器名> (弹药 <n>/<max>)
+-- 二百七十七 (L6): 按源值记忆化 — 武器/弹药没变就复用上帧串 (原每帧 tr 模板+format+拼接)
+EtherTempWeapon.statusCache = {};
 function EtherTempWeapon.statusLine()
     local st = EtherTempWeapon.state;
     if not st.active or st.gun == nil then
         return tr("UI_TempWeapon_StatusIdle");
     end
     local gun = st.gun;
-    local ammo = "";
+    local curAmmo, maxAmmo;
     if gun.getCurrentAmmoCount ~= nil and gun.getMaxAmmo ~= nil then
-        ammo = string.format(" [%d/%d]", gun:getCurrentAmmoCount(), gun:getMaxAmmo());
+        curAmmo = gun:getCurrentAmmoCount();
+        maxAmmo = gun:getMaxAmmo();
     end
-    return tr("UI_TempWeapon_StatusActiveFmt", { weapon = gun:getDisplayName() }) .. ammo;
+    local cache = EtherTempWeapon.statusCache;
+    if cache.gun == gun and cache.cur == curAmmo and cache.max == maxAmmo then
+        return cache.str;
+    end
+    local ammo = "";
+    if curAmmo ~= nil then
+        ammo = string.format(" [%d/%d]", curAmmo, maxAmmo);
+    end
+    cache.gun = gun;
+    cache.cur = curAmmo;
+    cache.max = maxAmmo;
+    cache.str = tr("UI_TempWeapon_StatusActiveFmt", { weapon = gun:getDisplayName() }) .. ammo;
+    return cache.str;
 end
 
 --*********************************************************

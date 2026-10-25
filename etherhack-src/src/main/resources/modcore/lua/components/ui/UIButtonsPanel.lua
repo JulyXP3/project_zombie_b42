@@ -54,8 +54,13 @@ function UIButtonsPanel:prerender()
         local label = tr(t.labelKey);
         -- 长翻译 (俄语) 超宽时按 hintScale 缩放绘制 (drawHintText 的 DrawString
         -- 通道, 08-29 已实机验证), 保证任何语言都不溢出磁贴背景框
+        -- 二百七十七 (L7): 标签宽按串缓存 — label 变了才重测 (原每磁贴每帧 MeasureStringX)
+        if t.mcLabelFor ~= label then
+            t.mcLabelW = getTextManager():MeasureStringX(UIFont.Small, label);
+            t.mcLabelFor = label;
+        end
         local maxTextW = (self.width - BOX_M) - tx - 6;
-        if maxTextW > 40 and getTextManager():MeasureStringX(UIFont.Small, label) > maxTextW then
+        if maxTextW > 40 and t.mcLabelW > maxTextW then
             local th = EtherTheme.fontHgtHint;
             EtherTheme.drawHintText(self, label, tx, ty + (TILE_H - th) / 2, tc);
         else

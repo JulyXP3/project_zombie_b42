@@ -370,6 +370,12 @@ function UIItemTables:initList(module)
     -- getDisplayName(), N log N 次 Java 跨界 (全物品库数千条 ≈ 数万次) 是
     -- 物品页点开卡顿的主因; 原 displayCategoryNames/Map 收集后无人使用, 一并删除
     table.sort(self.datas.items, function(a,b) return not string.sort(a.text, b.text); end);
+    -- 二百七十五 (L4): 预取小写字段 (名称直接 lower 已存 text 零跨界, ID 过一次跨界) —
+    -- 逐键过滤改纯 Lua 匹配, 全库零 Java 跨界 (原每键每条 2 次跨界 + 2 次 lower, 打字卡顿主源)
+    for _, e in ipairs(self.datas.items) do
+        e.lname = string.lower(e.text);
+        e.lfid = string.lower(e.item:getName());
+    end
 end
 
 --*********************************************************
@@ -382,22 +388,20 @@ end
 --*********************************************************
 --* Фильтр по названию
 --*********************************************************
-function UIItemTables:filterName(widget, scriptItem)
-    local txtToCheck = string.lower(scriptItem:getDisplayName())
-    local filterTxt = string.lower(widget:getInternalText())
+function UIItemTables:filterName(widget, entry)
     -- 纯子串匹配 (plain): 物品名普遍含 ( ) : . 等字符, 走 Lua 模式会把括号当捕获组,
     -- 完整名称过滤匹配不到自身 -> 只能用短词过滤 -> 追踪按钮连带追踪同系列其它物品
     -- (原版 ISItemsListTable 同款缺陷, 此处有意偏离: 物品搜索要的是字面量不是模式)
-    return string.find(txtToCheck, filterTxt, 1, true) ~= nil
+    -- 二百七十五 (L4): 条目小写 lname 建表预取 + 过滤词小写每键预取 (widget.mcFilterLower)
+    return string.find(entry.lname, widget.mcFilterLower, 1, true) ~= nil
 end
 
 --*********************************************************
 --* Фильтр по ID
 --*********************************************************
-function UIItemTables:filterType(widget, scriptItem)
-    local txtToCheck = string.lower(scriptItem:getName())
-    local filterTxt = string.lower(widget:getInternalText())
-    return string.find(txtToCheck, filterTxt, 1, true) ~= nil
+function UIItemTables:filterType(widget, entry)
+    -- 二百七十五 (L4): 同 filterName — 条目 lfid 建表预取, 过滤词每键预取
+    return string.find(entry.lfid, widget.mcFilterLower, 1, true) ~= nil
 end
 
 --*********************************************************
@@ -407,11 +411,15 @@ function UIItemTables.onFilterChange(widget)
     local datas = widget.parent.datas;
     if not datas.fullList then datas.fullList = datas.items; end
     widget.parent.totalResult = 0;
+    -- 二百七十五 (L4): 过滤词小写每键提一次 (原在过滤器内逐条重复 lower)
+    for _, fw in ipairs(widget.parent.filterWidgets) do
+        fw.mcFilterLower = string.lower(fw:getInternalText() or "");
+    end
     datas:clear();
     for i,v in ipairs(datas.fullList) do -- check every items
         local add = true;
-        for j,widget in ipairs(widget.parent.filterWidgets) do -- check every filters
-            if not widget.itemsListFilter(self, widget, v.item) then
+        for j,fw in ipairs(widget.parent.filterWidgets) do -- check every filters
+            if not fw.itemsListFilter(self, fw, v) then
                 add = false
                 break
             end
@@ -442,16 +450,8 @@ function UIItemTables:drawDatas(y, item, alt)
     local iconSize = fontHeightSmall;
     self:drawText(item.text, 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
 
-    local icon = item.item:getIcon()
-    if item.item:getIconsForTexture() and not item.item:getIconsForTexture():isEmpty() then
-        icon = item.item:getIconsForTexture():get(0)
-    end
-    if icon then
-        local texture = getTexture("Item_" .. icon)
-        if texture then
-            self:drawTextureScaledAspect2(texture, 4, y + (self.itemheight - iconSize) / 2, iconSize, iconSize, 1, 1, 1, 1);
-        end
-    end
+    -- 二百七十五 (L3): 图标走 EtherTheme 缓存 (零逐帧桥调用/拼接/查表), 五页共用一份
+    EtherTheme.drawItemIcon(self, item.item, y, iconSize);
 
     return y + self.itemheight;
 end

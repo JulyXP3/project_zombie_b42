@@ -2,6 +2,13 @@
 
 ## [3.2.6] - Current
 
+- Added: a new "Open-Box Spawn" mode for item spawning on the Loot page - pick the target items and quantity, then perform a single vanilla craft action on a carrier item from your bag to obtain them.
+- Improved: installer size reduced from about 67MB to about 1.5MB.
+- Improved: uninstalling now removes every leftover file in both the game folder and your user folder; your settings are kept encrypted on uninstall and restored automatically on the next install.
+- Improved: smoother opening and typing across many panels - medical, mechanics, item search, item lists, the minimap and in-game overlays all do far less background work; typing in item search no longer stutters.
+- Fixed: the exchange panel's failure message not showing in its warning color.
+- Improved: the trap-spawn panel's status text now follows the interface language (EN/CN/RU).
+
 - Fixed: an occasional background error when players joined or left a multiplayer server.
 - Improved: vehicle instant-kill tuning - still one-hit kills, with a lower chance of tripping strict server checks.
 

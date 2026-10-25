@@ -81,7 +81,14 @@ repositories {
 dependencies {
     implementation("org.ow2.asm:asm:9.10.1")
     implementation("org.ow2.asm:asm-tree:9.10.1")
-    implementation(files("lib/projectzomboid.jar"))
+    // 二百六十八 (E1 瘦身): 游戏 jar 只作编译依赖 — 安装期原版类从游戏目录的
+    // ProjectZomboid.jar 磁盘读取 (Patch.loadClassNode: setProjectZomboidJarPath,
+    // 由 GamePatcher.patchGame 传入 cwd 的游戏 jar), 安装器自身 classpath 用不到它。
+    // 旧 implementation 会让 fat jar 解包整份游戏 (66.8MB/26418 条目, 其中 sqlite
+    // 原生库 192 条目), 即 2026-09-10 定案"体积即特征"只修了载荷漏掉的安装器本体。
+    // 代价: 若 cwd 无游戏 jar 且无 zombie/ 类目录 (游戏无法运行的场景), 类读取兜底
+    // 失败 → 安装器以非 0 退出码如实报错, 不会静默装坏。
+    compileOnly(files("lib/projectzomboid.jar"))
 }
 
 tasks.named<Jar>("jar") {

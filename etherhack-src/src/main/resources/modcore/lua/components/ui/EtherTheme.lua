@@ -651,3 +651,32 @@ end
 EtherTheme.rowH       = 50   -- 列表/表单项统一行高
 EtherTheme.btnH       = 24   -- 按钮高度
 EtherTheme.labelPadY  = 3    -- label 相对行顶的 Y 偏移
+
+--*********************************************************
+--* 物品图标纹理 (二百七十五 L3/L8): 按 ScriptItem 缓存 + 负缓存 —
+--* 图标终身不变, 首次解析后零桥调用零拼接零 getTexture 查表。
+--* 原为五个列表页 (战利品/兑换/物品表/雷达/陷阱) 每行每帧重复全套。
+--*********************************************************
+EtherTheme.itemTexCache = {};
+function EtherTheme.itemTexture(scriptItem)
+    if scriptItem == nil then return nil; end
+    local cached = EtherTheme.itemTexCache[scriptItem];
+    if cached ~= nil then return cached or nil; end   -- false = 负缓存 (无图标)
+    local icon = scriptItem:getIcon();
+    if type(icon) ~= "string" then icon = nil; end
+    if not icon and scriptItem:getIconsForTexture() and not scriptItem:getIconsForTexture():isEmpty() then
+        icon = scriptItem:getIconsForTexture():get(0);
+        if type(icon) ~= "string" then icon = nil; end
+    end
+    local texture = icon and getTexture("Item_" .. icon) or nil;
+    EtherTheme.itemTexCache[scriptItem] = texture or false;
+    return texture;
+end
+
+--- 共用图标格绘制: 五个列表页同款 (图标 + 右侧名称由调用方绘制)
+function EtherTheme.drawItemIcon(ui, scriptItem, y, iconSize)
+    local texture = EtherTheme.itemTexture(scriptItem);
+    if texture then
+        ui:drawTextureScaledAspect2(texture, 4, y + (ui.itemheight - iconSize) / 2, iconSize, iconSize, 1, 1, 1, 1);
+    end
+end

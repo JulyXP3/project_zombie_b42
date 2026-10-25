@@ -40,6 +40,7 @@ public class LuaTranslator {
             props.setProperty("language", var1);
             try (FileOutputStream out = new FileOutputStream(languageFile)) {
                 props.store(out, (String)null);
+                modcore.utils.ConfigStash.saveSnapshot(CoreAPI.configDir(), true);   // 二百七十三: 落盘即暂存
             }
         }
         catch (IOException e) {

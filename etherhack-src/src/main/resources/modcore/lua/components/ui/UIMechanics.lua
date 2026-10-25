@@ -134,9 +134,34 @@ function UIMechanics:drawDatas(y, item, alt)
 
     EtherTheme.drawRowUnderlay(self, y, self.selected == item.index, alt, self.itemheight)
     EtherTheme.drawColumnLines(self, y, self.itemheight)
-  
-    local condition = item.item:getCondition() / 100
-    local textPartColor = {r = 1 - condition, g = condition, b = 0, a = 1}
+
+    -- 二百七十五 (L2): 行数据 500ms 节拍缓存 — 部件名直接用条目预存 text (loadParts
+    -- 已翻译好), 状态数值/类别译文/颜色缓存到条目, 每帧只剩 drawText (原为逐行逐帧
+    -- 拼键查翻译 + 多次重复桥调用 + 每行颜色表分配)
+    local now = getTimestampMs();
+    local c = item.mcCache;
+    if c == nil or now - c.t > 500 then
+        local condition = item.item:getCondition();
+        local condRatio = condition / 100;
+        local id = item.item:getId();
+        local amount;
+        if id == "Battery" then
+            amount = tostring(math.floor(item.item:getInventoryItem():getUsedDelta() * 100)) .. "%";
+        elseif id == "GasTank" then
+            amount = tostring(math.floor(item.item:getContainerContentAmount() / item.item:getContainerCapacity() * 100)) .. "%";
+        else
+            amount = "-";
+        end
+        local category = item.item:getCategory() or "Other";
+        c = {
+            t = now,
+            r = 1 - condRatio, g = condRatio,
+            condText = tostring(condition) .. "%",
+            amount = amount,
+            catText = getText("IGUI_VehiclePartCat" .. category),
+        };
+        item.mcCache = c;
+    end
 
     local clipX = self.columns[1].size
     local clipX2 = self.columns[2].size
@@ -146,24 +171,15 @@ function UIMechanics:drawDatas(y, item, alt)
     -- Устанавливаем маску для первого столбца
     self:suspendStencil()
     self:setStencilRect(clipX, clipY, clipX2 - clipX, clipY2 - clipY)
-    self:drawText(getText("IGUI_VehiclePart" .. item.item:getId()), 5, y + 4, textPartColor.r, textPartColor.g, textPartColor.b, textPartColor.a, UIFont.Small);
+    self:drawText(item.text, 5, y + 4, c.r, c.g, 0, 1, UIFont.Small);
     -- Удаляем маску
     self:clearStencilRect()
     self:resumeStencil()
 
 
-    local category = item.item:getCategory() or "Other";
-    local amount = math.ceil(item.item:getContainerContentAmount())
-    if item.item:getId() == "Battery"  then
-		amount = tostring((math.floor(item.item:getInventoryItem():getUsedDelta() * 100))).."%"
-	elseif item.item:getId() == "GasTank" then
-		amount = tostring((math.floor(item.item:getContainerContentAmount() / item.item:getContainerCapacity() * 100))).."%"
-    else
-        amount = "-"
-    end
-    self:drawText(tostring(item.item:getCondition()).."%", self.columns[2].size + 10, y + 4, textPartColor.r, textPartColor.g, textPartColor.b, textPartColor.a, UIFont.Small);
-    self:drawText(amount, self.columns[3].size + 10, y + 4, textPartColor.r, textPartColor.g, textPartColor.b, textPartColor.a, UIFont.Small);
-    self:drawText(getText("IGUI_VehiclePartCat" ..category), self.columns[4].size + 10, y + 4, textPartColor.r, textPartColor.g, textPartColor.b, textPartColor.a, UIFont.Small);
+    self:drawText(c.condText, self.columns[2].size + 10, y + 4, c.r, c.g, 0, 1, UIFont.Small);
+    self:drawText(c.amount, self.columns[3].size + 10, y + 4, c.r, c.g, 0, 1, UIFont.Small);
+    self:drawText(c.catText, self.columns[4].size + 10, y + 4, c.r, c.g, 0, 1, UIFont.Small);
 
     return y + self.itemheight;
 end
@@ -188,24 +204,31 @@ function UIMechanics:render()
 	
     self:drawTexture(self.resizeimage, self.width-10, self.height - 10, 1, 1, 1, 1);
 
-    if (self.localPlayer:getNearVehicle() == nil) then 
+    if (self.localPlayer:getNearVehicle() == nil) then
         self.datas:setVisible(false);
-        self:drawTextCentre(getTranslate("UI_Mechanics_NoVehicle"), self.width / 2, self.height / 2, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
-        
+        self:drawTextCentre(tr("UI_Mechanics_NoVehicle"), self.width / 2, self.height / 2, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
+
     else
         local vehicle = self.localPlayer:getNearVehicle();
         self.datas:setVisible(true);
 
-        local name = getText("IGUI_VehicleName" .. vehicle:getScript():getName());
-        if string.match(vehicle:getScript():getName(), "Burnt") then
-            local unburnt = string.gsub(vehicle:getScript():getName(), "Burnt", "")
-            if getTextOrNull("IGUI_VehicleName" .. unburnt) then
-                name = getText("IGUI_VehicleName" .. unburnt)
+        -- 二百七十五 (L2): 车辆显示名按脚本名缓存 (换车/烧毁变体自动失效重建;
+        -- 原为每帧 translator 查表 + match + gsub)
+        local scriptName = vehicle:getScript():getName();
+        if self.mcVehName == nil or self.mcVehScript ~= scriptName then
+            local name = getText("IGUI_VehicleName" .. scriptName);
+            if string.match(scriptName, "Burnt") then
+                local unburnt = string.gsub(scriptName, "Burnt", "");
+                if getTextOrNull("IGUI_VehicleName" .. unburnt) then
+                    name = getText("IGUI_VehicleName" .. unburnt)
+                end
+                name = getText("IGUI_VehicleNameBurntCar", name);
             end
-            name = getText("IGUI_VehicleNameBurntCar", name);
-	    end
+            self.mcVehName = name;
+            self.mcVehScript = scriptName;
+        end
 
-        self:drawTextCentre( name, self.width / 2, 20, 1.0, 1.0, 1.0, 1.0, UIFont.Medium);
+        self:drawTextCentre( self.mcVehName, self.width / 2, 20, 1.0, 1.0, 1.0, 1.0, UIFont.Medium);
         -- 分隔符与单位交给 UI_Fmt_* 翻译模板, 不在 Lua 里拼 ": " / "%" / " hp";
         -- label 仍取 vanilla IGUI_ 官方词条, 避免重复翻译已有文案。
         self:drawTextCentre(tr("UI_Fmt_LabelPercent", {

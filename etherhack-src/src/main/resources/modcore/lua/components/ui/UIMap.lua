@@ -25,11 +25,16 @@ end
 
 --- P2: 地图标注用的翻译串 (按语言缓存, 避免每帧每标签查表)
 function UIMap.mapTagStrings()
-    local lang = getLanguage();
-    if UIMap.tagCacheLang ~= lang then
-        UIMap.tagCacheLang = lang;
-        UIMap.tagInvisible = getTranslate("UI_Map_InvisibleTag");
-        UIMap.tagLastKnown = getTranslate("UI_Map_LastKnown");
+    -- 二百七十七 (L5): getLanguage 桥调用 5s 一查 (原每帧; 语言切换最多 5s 后生效)
+    local nowMs = getTimestampMs();
+    if UIMap.tagTs == nil or nowMs - UIMap.tagTs > 5000 then
+        UIMap.tagTs = nowMs;
+        local lang = getLanguage();
+        if UIMap.tagCacheLang ~= lang then
+            UIMap.tagCacheLang = lang;
+            UIMap.tagInvisible = getTranslate("UI_Map_InvisibleTag");
+            UIMap.tagLastKnown = getTranslate("UI_Map_LastKnown");
+        end
     end
     return UIMap.tagInvisible, UIMap.tagLastKnown;
 end
@@ -157,8 +162,15 @@ function UIMap:render()
 				self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.vehicleColor.a, self.vehicleColor.r, self.vehicleColor.g, self.vehicleColor.b);
 				self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
 				if worldScale > 5 then
-				self:drawTextCentre(vehicle:getScriptName(), x + 1, y + 6, 0.0, 0.0, 0.0, 1.0, UIFont.Small);
-				self:drawTextCentre(vehicle:getScriptName(), x, y + 5, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
+				-- 二百七十七 (L5): 载具名按车缓存 (脚本名终身不变; 原每车每帧 2 次桥调用)
+				if UIMap.vehLabelCache == nil then UIMap.vehLabelCache = {}; end
+				local lbl = UIMap.vehLabelCache[vehicle];
+				if lbl == nil then
+					lbl = vehicle:getScriptName();
+					UIMap.vehLabelCache[vehicle] = lbl;
+				end
+				self:drawTextCentre(lbl, x + 1, y + 6, 0.0, 0.0, 0.0, 1.0, UIFont.Small);
+				self:drawTextCentre(lbl, x, y + 5, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
 			end
 			end
 		end
@@ -168,7 +180,14 @@ function UIMap:render()
 	if UIMap.drawAllPlayers then
 		if UIMap.invisibleSeen == nil then UIMap.invisibleSeen = {}; end   -- E1: onlineID -> 最后已知位置
 		if UIMap.labelCache == nil then UIMap.labelCache = {}; end         -- P2: onlineID -> 缓存标签
-		local currentIds = {};
+		-- 二百七十七 (L5): currentIds 复用表缓冲 (原每帧新分配)
+		local currentIds = UIMap.currentIdsBuf;
+		if currentIds == nil then
+			currentIds = {};
+			UIMap.currentIdsBuf = currentIds;
+		else
+			for k in pairs(currentIds) do currentIds[k] = nil; end
+		end
 		local nowMs = getTimestampMs();
 		local tagInv, tagLast = UIMap.mapTagStrings();                     -- P2: 翻译串按语言缓存
 		local players = getOnlinePlayers()
@@ -243,7 +262,12 @@ function UIMap:render()
 					self:drawRect(x - size, y - size, size * 2 - 1, size * 2 - 1, self.playerColor.a, self.playerColor.r, self.playerColor.g, self.playerColor.b);
 					self:drawRectBorder(x - size, y - size, size * 2, size * 2, 1, 0, 0, 0);
 					if worldScale > 1 then
-						local lbl = rec.name .. " " .. tagInv .. tagLast;
+						-- 二百七十七 (L5): 粘性标记串按 (name, 标签引用) 缓存 — 原每标记每帧拼接
+						local lbl = rec.mcLbl;
+						if lbl == nil or rec.mcName ~= rec.name or rec.mcInv ~= tagInv or rec.mcLast ~= tagLast then
+							lbl = rec.name .. " " .. tagInv .. tagLast;
+							rec.mcLbl, rec.mcName, rec.mcInv, rec.mcLast = lbl, rec.name, tagInv, tagLast;
+						end
 						self:drawTextCentre(lbl, x + 1, y + 6, 0.0, 0.0, 0.0, 1.0, UIFont.Small);
 						self:drawTextCentre(lbl, x, y + 5, 1.0, 1.0, 1.0, 1.0, UIFont.Small);
 					end
@@ -825,14 +849,20 @@ local function vehTeleportAbort(reason, detail)
     end
 end
 
+-- 二百七十七 (L12): 空闲期停稳跟踪的 100ms 门限提到桥调用之前 — 原每 tick 白做
+-- getPlayer/getVehicle 两次跨界 (16 个常驻 OnTick 中唯一空闲期有实质开销的)
+local vehStillGateMs = 0;
 local function onVehTeleportTick()
     local now = getTimestampMs();
     local task = vehTeleportTask;
     if task == nil or not task.gateOpen then
         -- 停稳跟踪 (见 vehTrackStill): 空闲时常驻, 起跳门未开时也要继续跟 —— 否则"刚上车就点
         -- 传送"时静止计时从未开始, 门会一直空等到 VEH_STILL_WAIT_MS 才误判成 moving 中止。
-        local watched = getPlayer();
-        if watched ~= nil then vehTrackStill(now, watched:getVehicle()); end
+        if now - vehStillGateMs >= 100 then
+            vehStillGateMs = now;
+            local watched = getPlayer();
+            if watched ~= nil then vehTrackStill(now, watched:getVehicle()); end
+        end
     end
     if task == nil then return; end
     local player = getPlayer();

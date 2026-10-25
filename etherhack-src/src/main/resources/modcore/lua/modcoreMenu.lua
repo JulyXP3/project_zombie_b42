@@ -2,8 +2,9 @@ require "ISUI/ISPanel"
 
 --*********************************************************
 --* Server Sync Protection (prevents server from overwriting local changes)
---* 注: ISChatFix / ServerSyncBlocker 不再 require, 由 EtherLuaManager 用 RunLua 直接加载
---* (PZ vanilla require loader 找不到 modcore/lua 下的文件)
+--* 注: 5 个 fixes 不走本清单 require, 由 Java 侧 LuaBridge 用 LuaLoader 直接加载
+--* (fileless, PZ vanilla require loader 找不到 modcore/lua 下的文件):
+--* ReportSanitizer / ISChatFix / ServerSyncBlocker / ExtraInfoMask / SelfProbe
 --*********************************************************
 
 --*********************************************************

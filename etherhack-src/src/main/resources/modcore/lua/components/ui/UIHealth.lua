@@ -217,43 +217,45 @@ function UIHealth:drawDatas(y, item, alt)
     local clipY = math.max(0, y + self:getYScroll())
     local clipY2 = math.min(self.height, y + self:getYScroll() + self.itemheight)
 
-    local textPartColor = {r = 1, g = 1, b = 1, a = 1}
-    local partHealth = round(item.item:getHealth())
-
-    textPartColor = {r = 1 - partHealth / 100, g = partHealth / 100, b = 0, a = 1}
-
-    local isBandaged = item.item:bandaged()
-    local isDamaged= item.item:haveBullet() or item.item:isInfectedWound() or item.item:stitched() or item.item:haveGlass()
-    or item.item:getBurnTime() > 0 or item.item:getSplintFactor() > 0 or (item.item:getFractureTime() > 0 and item.item:getSplintFactor() == 0)
-    or item.item:bleeding() or item.item:getStiffness() > 5 or item.item:getAdditionalPain() > 10 or item.item:bitten() or item.item:deepWounded()
-    or item.item:isCut() or item.item:scratched() or item.item:getGarlicFactor() > 0 or item.item:getComfreyFactor() > 0 or item.item:getComfreyFactor() > 0;
+    -- 二百七十五 (L1): 行状态 500ms 节拍缓存 — 伤口判定 (17 项桥调用)/健康色/百分比
+    -- 文本缓存到条目, 每帧只剩 drawText; 部位名用条目预存 text (loadBodyParts 已翻译,
+    -- 原为逐行逐帧 getType+查表); Yes 列走 tr() 无参缓存 (原为裸 getTranslate 逐帧查表)
+    local now = getTimestampMs();
+    local c = item.mcCache;
+    if c == nil or now - c.t > 500 then
+        local partHealth = round(item.item:getHealth());
+        local isDamaged = item.item:haveBullet() or item.item:isInfectedWound() or item.item:stitched() or item.item:haveGlass()
+        or item.item:getBurnTime() > 0 or item.item:getSplintFactor() > 0 or (item.item:getFractureTime() > 0 and item.item:getSplintFactor() == 0)
+        or item.item:bleeding() or item.item:getStiffness() > 5 or item.item:getAdditionalPain() > 10 or item.item:bitten() or item.item:deepWounded()
+        or item.item:isCut() or item.item:scratched() or item.item:getGarlicFactor() > 0 or item.item:getComfreyFactor() > 0;
+        c = {
+            t = now,
+            r = 1 - partHealth / 100, g = partHealth / 100,
+            hpPct = tostring(partHealth) .. "%",
+            bandaged = item.item:bandaged(),
+            damaged = isDamaged,
+        };
+        item.mcCache = c;
+    end
 
     -- Устанавливаем маску для первого столбца
     self:suspendStencil()
     self:setStencilRect(clipX, clipY, clipX2 - clipX, clipY2 - clipY)
-    local name = BodyPartType.getDisplayName(item.item:getType())
-    self:drawText(name, 5, y + 4, textPartColor.r, textPartColor.g, textPartColor.b, textPartColor.a, UIFont.Small);
+    self:drawText(item.text, 5, y + 4, c.r, c.g, 0, 1, UIFont.Small);
     -- Удаляем маску
     self:clearStencilRect()
     self:resumeStencil()
 
-    if isBandaged then
-        isBandaged = getTranslate("UI_Medic_YesTitle")
+    if c.bandaged then
         self:drawRect(self.columns[3].size, y, self.columns[4].size - self.columns[3].size, self.itemheight, 0.3, 0.5, 1.0, 0.5);
-    else
-        isBandaged = "-"
+    end
+    if c.damaged then
+        self:drawRect(self.columns[4].size, y, self.columns[4].size - self.columns[3].size, self.itemheight, 0.3, 1.0, 0.5, 0.5);
     end
 
-    if isDamaged then
-        isDamaged = getTranslate("UI_Medic_YesTitle")
-        self:drawRect(self.columns[4].size, y, self.columns[4].size - self.columns[3].size, self.itemheight, 0.3, 1.0, 0.5, 0.5);
-    else
-        isDamaged = "-"
-    end
-    
-    self:drawText(tostring(partHealth).."%", self.columns[2].size + 10, y + 4, textPartColor.r, textPartColor.g, textPartColor.b, textPartColor.a, UIFont.Small);
-    self:drawText(tostring(isBandaged), self.columns[3].size + 10, y + 4, 1, 1, 1, 1, UIFont.Small);
-    self:drawText(tostring(isDamaged), self.columns[4].size + 10, y + 4, 1, 1, 1, 1, UIFont.Small);
+    self:drawText(c.hpPct, self.columns[2].size + 10, y + 4, c.r, c.g, 0, 1, UIFont.Small);
+    self:drawText(c.bandaged and tr("UI_Medic_YesTitle") or "-", self.columns[3].size + 10, y + 4, 1, 1, 1, 1, UIFont.Small);
+    self:drawText(c.damaged and tr("UI_Medic_YesTitle") or "-", self.columns[4].size + 10, y + 4, 1, 1, 1, 1, UIFont.Small);
 
     return y + self.itemheight;
 end
@@ -279,7 +281,13 @@ function UIHealth:render()
 	local player = self.localPlayer;
 
     self:drawTexture(self.resizeimage, self.width-10, self.height - 10, 1, 1, 1, 1);
-    self:drawText(tr("UI_Medic_TotalHealth", { value = tostring(round(player:getBodyDamage():getHealth())) }), 10, 30, 1, 1, 1, 1, UIFont.Small);
+    -- 二百七十五 (L1): 总血量串按值缓存 — 值秒级才变, 不逐帧参数化 tr+拼接
+    local hp = round(player:getBodyDamage():getHealth());
+    if self.mcTotalHp ~= hp then
+        self.mcTotalHp = hp;
+        self.mcTotalStr = tr("UI_Medic_TotalHealth", { value = tostring(hp) });
+    end
+    self:drawText(self.mcTotalStr, 10, 30, 1, 1, 1, 1, UIFont.Small);
 end
 
 --************************************************************************--
@@ -309,7 +317,8 @@ function UIHealth:loadBodyParts()
 
     for i=1,bodyParts:size() do
         local bodyPart = bodyParts:get(i-1)
-        self.datas:addItem("Body Part", bodyPart)
+        -- 二百七十五 (L1): 部位名在 addItem 时翻译一次 (原为行绘制逐帧查表)
+        self.datas:addItem(BodyPartType.getDisplayName(bodyPart:getType()), bodyPart)
     end
 
     self.datas.selected = self.lastSelectedIndex;

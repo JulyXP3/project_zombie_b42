@@ -1,21 +1,19 @@
-/*
- * Decompiled with CFR 0.152.
- */
 package modcore.utils;
 
 import modcore.utils.Logger;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 public class FieldCache {
-    private static final Map<String, Field> fieldCache = new HashMap<String, Field>();
-    private static final Map<String, Method> methodCache = new HashMap<String, Method>();
-    private static final Set<String> warnedFieldKeys = new HashSet<String>();
-    private static final Set<String> warnedMethodKeys = new HashSet<String>();
+    // 二百七十七 (J7): ConcurrentHashMap 加固 — 当前消费者全在主线程暂无实害,
+    // 但反射缓存的字段/方法可能随未来网络线程调用被并发命中, 直接换成并发容器。
+    private static final Map<String, Field> fieldCache = new ConcurrentHashMap<String, Field>();
+    private static final Map<String, Method> methodCache = new ConcurrentHashMap<String, Method>();
+    private static final Set<String> warnedFieldKeys = ConcurrentHashMap.newKeySet();
+    private static final Set<String> warnedMethodKeys = ConcurrentHashMap.newKeySet();
 
     public static Field getField(Class<?> clazz, String fieldName) {
         String key = clazz.getName() + "." + fieldName;
@@ -214,6 +212,9 @@ public class FieldCache {
     public static void clearCache() {
         fieldCache.clear();
         methodCache.clear();
+        // 二百七十七 (J7): 连告警去重集一起清 — 漏清会让清空后的缺失字段永久静默
+        warnedFieldKeys.clear();
+        warnedMethodKeys.clear();
         Logger.print("[FieldCache] Cache cleared");
     }
 

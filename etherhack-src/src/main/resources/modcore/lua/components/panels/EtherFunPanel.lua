@@ -448,7 +448,13 @@ function EtherFunPanel:renderContent()
         -- 吸引开启时显示实时计数; 关闭后显示最近一次操作结果 (开关/聚集)
         local text = nil;
         if ZombieLure.enabled then
-            text = tr("UI_Fun_LureActive", { count = tostring(ZombieLure.fired) });
+            -- 二百七十七 (L6): 计数没变复用上帧串 (原每帧 tr 模板)
+            local c = self.mcLureCache;
+            if c == nil or c.count ~= ZombieLure.fired then
+                c = { count = ZombieLure.fired, str = tr("UI_Fun_LureActive", { count = tostring(ZombieLure.fired) }) };
+                self.mcLureCache = c;
+            end
+            text = c.str;
         elseif self.lureStatus ~= nil then
             text = self.lureStatus;
         end
@@ -461,10 +467,17 @@ function EtherFunPanel:renderContent()
         -- 自动收网开启时显示实时轮次; 关闭后显示最近一次结果
         local text = nil;
         if EtherAutoFishingNet.enabled then
-            text = tr("UI_Fun_AutoNetActive", { count = tostring(EtherAutoFishingNet.cycles) });
-            if EtherAutoFishingNet.noNet then
-                text = text .. " " .. getTranslate("UI_Fun_AutoNetNoNet");
+            -- 二百七十七 (L6): 轮次/无网状态没变复用上帧串 (原每帧 tr 模板 + 拼接)
+            local c = self.mcFishCache;
+            if c == nil or c.count ~= EtherAutoFishingNet.cycles or c.noNet ~= EtherAutoFishingNet.noNet then
+                local str = tr("UI_Fun_AutoNetActive", { count = tostring(EtherAutoFishingNet.cycles) });
+                if EtherAutoFishingNet.noNet then
+                    str = str .. " " .. tr("UI_Fun_AutoNetNoNet");
+                end
+                c = { count = EtherAutoFishingNet.cycles, noNet = EtherAutoFishingNet.noNet, str = str };
+                self.mcFishCache = c;
             end
+            text = c.str;
         elseif self.fishStatus ~= nil then
             text = self.fishStatus;
         end
@@ -477,7 +490,7 @@ function EtherFunPanel:renderContent()
         -- 探鱼雷达开启时显示最近鱼点距离/咬钩档; 关闭后显示 Off
         local text = nil;
         if EtherFishRadar.enabled then
-            text = EtherFishRadar.status or getTranslate("UI_Fun_FishRadarNone");
+            text = EtherFishRadar.status or tr("UI_Fun_FishRadarNone");
         elseif self.radarStatus ~= nil then
             text = self.radarStatus;
         end

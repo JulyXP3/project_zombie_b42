@@ -61,6 +61,16 @@ end
 --*********************************************************
 --* render: 动态状态行
 --*********************************************************
+-- 二百七十七 (L6): 状态串按 (分支, 变元) 记忆化 — 排队/完成两分支的 tr 模板不再逐帧
+function EtherExchangePanel:mcStatusStr(branch, arg, key)
+    local c = self.mcStatusCache;
+    if c == nil or c.branch ~= branch or c.arg ~= arg then
+        c = { branch = branch, arg = arg, str = tr(key, { name = arg }) };
+        self.mcStatusCache = c;
+    end
+    return c.str;
+end
+
 function EtherExchangePanel:render()
     ISPanel.render(self);
     self:clearStencilRect();
@@ -75,12 +85,14 @@ function EtherExchangePanel:render()
     local status;
     local td = EtherTheme.textDim;
     if EtherExchange.active ~= nil then
-        status = tr("UI_Exchange_Queued", { name = EtherExchange.active.fullType });
+        status = self:mcStatusStr(1, EtherExchange.active.fullType, "UI_Exchange_Queued");
     elseif EtherExchange.doneInfo ~= nil then
-        status = tr("UI_Exchange_Done", { name = EtherExchange.doneInfo.fullType });
+        status = self:mcStatusStr(2, EtherExchange.doneInfo.fullType, "UI_Exchange_Done");
     elseif self.failMsg ~= nil and getTimestampMs() - self.failT < 5000 then
         status = self.failMsg;
-        td = EtherTheme.textWarn or EtherTheme.textDim;
+        -- 二百七十七 (L10): 改用实际存在的 statusRed — 原引用不存在的 textWarn,
+        -- or 兜底导致失败提示恒灰色 (真 bug)
+        td = EtherTheme.statusRed;
     else
         status = "";
     end
@@ -213,18 +225,9 @@ local function drawRow(self, y, item, alt, showWeight)
     end
     self:drawText(label, 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
 
-    local icon = item.item:getIcon()
-    if type(icon) ~= "string" then icon = nil; end
-    if not icon and item.item:getIconsForTexture() and not item.item:getIconsForTexture():isEmpty() then
-        icon = item.item:getIconsForTexture():get(0)
-        if type(icon) ~= "string" then icon = nil; end
-    end
-    if icon then
-        local texture = getTexture("Item_" .. icon)
-        if texture then
-            self:drawTextureScaledAspect2(texture, 4, y + (self.itemheight - iconSize) / 2, iconSize, iconSize, 1, 1, 1, 1);
-        end
-    end
+    -- 二百七十五 (L3): 图标走 EtherTheme 缓存 (零逐帧桥调用/拼接/查表, 五页共用一份;
+    -- 原 Exchange 特有的 icon 类型加固已并入共用实现)
+    EtherTheme.drawItemIcon(self, item.item, y, iconSize);
 
     return y + self.itemheight;
 end

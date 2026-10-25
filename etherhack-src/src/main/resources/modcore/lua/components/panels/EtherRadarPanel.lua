@@ -136,16 +136,8 @@ function EtherRadarPanel:drawDatas(y, item, alt)
     local iconSize = fontHeightSmall;
     self:drawText(item.text, 25, y + 4, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 0.9, self.font);
 
-    local icon = item.item:getIcon()
-    if item.item:getIconsForTexture() and not item.item:getIconsForTexture():isEmpty() then
-        icon = item.item:getIconsForTexture():get(0)
-    end
-    if icon then
-        local texture = getTexture("Item_" .. icon)
-        if texture then
-            self:drawTextureScaledAspect2(texture, 4, y + (self.itemheight - iconSize) / 2, iconSize, iconSize, 1, 1, 1, 1);
-        end
-    end
+    -- 二百七十五 (L3): 图标走 EtherTheme 缓存 (零逐帧桥调用/拼接/查表), 五页共用一份
+    EtherTheme.drawItemIcon(self, item.item, y, iconSize);
 
     return y + self.itemheight;
 end

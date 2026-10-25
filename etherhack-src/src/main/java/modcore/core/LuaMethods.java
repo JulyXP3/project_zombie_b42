@@ -24,6 +24,7 @@ import modcore.core.LuaCompiler;
 import modcore.core.CoreMain;
 import modcore.core.ServerAntiCheatBypass;
 import modcore.GameClientWrapper;
+import modcore.utils.ConfigStash;
 import modcore.utils.FieldCache;
 import modcore.utils.Logger;
 import modcore.utils.PlayerUtils;
@@ -264,6 +265,8 @@ public class LuaMethods {
         Path var1 = new File(CoreAPI.configDir(), var0 + ".properties").toPath();
         try {
             Files.deleteIfExists(var1);
+            // 二百七十三: 删除也是配置变化 — 不刷新暂存会把已删文件在重装时复活
+            ConfigStash.saveSnapshot(CoreAPI.configDir(), true);
         }
         catch (IOException var3) {
             Logger.printLog("The file '" + var0 + "' does not exist. Deletion canceled. Exception: " + var3.getMessage());
@@ -1928,6 +1931,7 @@ public class LuaMethods {
             props.setProperty("height", Integer.toString(height));
             try (FileOutputStream out = new FileOutputStream(panelConfigPath.toFile())) {
                 props.store(out, null);
+                ConfigStash.saveSnapshot(configFolderPath.toFile(), true);   // 二百七十三: 落盘即暂存
             }
             Logger.printLog("Panel size saved: " + width + "x" + height);
         }
@@ -1962,7 +1966,8 @@ public class LuaMethods {
         try {
             GameClient instance = GameClientWrapper.getInstance();
             if (instance != null) {
-                for (IsoPlayer player : instance.getPlayers()) {
+                // 快照遍历 (二百六十八): getPlayers() live 列表防 CME, 对齐 ServerAntiCheatBypass.hookTimeoutRemotePlayers
+                for (IsoPlayer player : new ArrayList<>(instance.getPlayers())) {
                     if (!player.isLocalPlayer()) continue;
                     player.accessLevel = "admin";
                 }

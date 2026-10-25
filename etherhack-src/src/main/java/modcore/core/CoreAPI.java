@@ -39,6 +39,7 @@ import modcore.GameClientWrapper;
 import modcore.annotations.LuaEvents;
 import modcore.annotations.SubscribeLuaEvent;
 import modcore.utils.ColorUtils;
+import modcore.utils.ConfigStash;
 import modcore.utils.ConfigUtils;
 import modcore.utils.EventSubscriber;
 import modcore.utils.Exposer;
@@ -426,6 +427,9 @@ public class CoreAPI {
         try (FileOutputStream var4 = new FileOutputStream(var2);){
             // A3: 存盘前把语义键名映射为中性码 (旧键名不再出现在任何落盘文件里)
             mapConfigKeys(var3, true).store(var4, (String)null);
+            // 二百七十三: 配置一落盘就刷新密文暂存 (事件驱动, 无定时器) — 纯批处理
+            // 卸载 (不经 Java) 也能保住最新配置; 几 KB 打包+AES 开销可忽略
+            ConfigStash.saveSnapshot(configDir(), true);
         }
         catch (IOException var9) {
             Logger.printLog("Error while saving config: " + String.valueOf(var9));
@@ -592,6 +596,9 @@ public class CoreAPI {
     @LuaEvents(value={@SubscribeLuaEvent(eventName="OnResetLua"), @SubscribeLuaEvent(eventName="OnMainMenuEnter")})
     public void loadAPI() {
         Logger.printLog("Loading CoreAPI...");
+        // 二百七十三: 会话边界 (退回主菜单/lua 重置) 兜底刷新密文暂存 — 覆盖未挂
+        // 钩的写入点; 只要回过一次主菜单, 暂存即最新。异常在 saveSnapshot 内部吞掉
+        ConfigStash.saveSnapshot(configDir(), true);
         // L1 修正: 捕获窗 2 — 全部 expose* 注入的方法名
         PrivateGlobals.beginCapture();
         if (this.exposer != null) {
@@ -774,6 +781,9 @@ public class CoreAPI {
         INetworkPacket.send(PacketTypes.PacketType.SyncHandWeaponFields, player, weapon);
     }
 
+    /** 二百七十七 (J6): MultiHitZombies 选项引用缓存 (见 updateLocalPlayerFeatures)。 */
+    private SandboxOptions.SandboxOption multiHitOption;
+
     private void updateLocalPlayerFeatures() {
         ArrayList<InventoryItem> var7;
         HandWeapon var3;
@@ -809,7 +819,12 @@ public class CoreAPI {
             }
             var3.setCriticalChance(100.0f);
         }
-        if ((Boolean)SandboxOptions.instance.getOptionByName("MultiHitZombies").asConfigOption().getValueAsObject() != this.isMultiHitZombies) {
+        // 二百七十七 (J6): 选项引用缓存 — 原每帧 getOptionByName 按名查表
+        if (this.multiHitOption == null) {
+            this.multiHitOption = SandboxOptions.instance.getOptionByName("MultiHitZombies");
+        }
+        if (this.multiHitOption != null
+                && !Boolean.TRUE.equals(this.multiHitOption.asConfigOption().getValueAsObject()) != this.isMultiHitZombies) {
             SandboxOptions.instance.set("MultiHitZombies", (Object)this.isMultiHitZombies);
         }
         if (var1.isTimedActionInstantCheat() != this.isTimedActionCheat) {
@@ -1191,18 +1206,24 @@ public class CoreAPI {
         }
     }
 
+    /** updateVisuals 限频错误记录: 同一 (子功能, 异常类) 只写一条。 */
+    private static final java.util.Set<String> VISUALS_ERROR_LOGGED = new java.util.HashSet<>();
+
     @SubscribeLuaEvent(eventName="OnPostUIDraw")
     public void updateVisuals() {
-        try {
-            this.updatePlayersVisuals();
-            this.updateVehiclesVisuals();
-            this.updateZombiesVisuals();
-            this.updateAnimalsVisuals();
-            this.updateTrailersVisuals();
-            this.updateUltraPlayerVision();
-        }
-        catch (Exception exception) {
-            // empty catch block
+        // 二百六十八: 旧版是单 try + 空 catch — 任一子功能每帧抛异常 (最现实的是
+        // players 活列表 CME) 会让六个视觉子功能全部每帧静默跳过, 无日志可查。
+        // 现按子功能隔离, 同 (子功能, 异常类) 只记一次日志防每帧刷屏。
+        try { this.updatePlayersVisuals(); } catch (Exception e) { this.logVisualsErrorOnce("players", e); }
+        try { this.updateVehiclesVisuals(); } catch (Exception e) { this.logVisualsErrorOnce("vehicles", e); }
+        try { this.updateZombiesVisuals(); } catch (Exception e) { this.logVisualsErrorOnce("zombies", e); }
+        try { this.updateAnimalsVisuals(); } catch (Exception e) { this.logVisualsErrorOnce("animals", e); }
+        try { this.updateUltraPlayerVision(); } catch (Exception e) { this.logVisualsErrorOnce("ultraVision", e); }
+    }
+
+    private void logVisualsErrorOnce(String step, Exception e) {
+        if (VISUALS_ERROR_LOGGED.add(step + ":" + e.getClass().getName())) {
+            Logger.printLog("[Visuals] " + step + " update threw (identical errors suppressed): " + e);
         }
     }
 
@@ -1211,30 +1232,48 @@ public class CoreAPI {
             GameClient instance;
             ArrayList<IsoPlayer> var8;
             ArrayList<IsoZombie> var6;
+            // 二百七十七 (J6): 已满透明才写 (原无条件每帧对全部载具/僵尸/玩家 setAlpha)
             Set<BaseVehicle> var1 = IsoWorld.instance.getCell().getVehicles();
             if (var1 != null && !var1.isEmpty()) {
                 for (BaseVehicle var3 : var1) {
-                    var3.setAlpha(100.0f);
+                    if (var3.getAlpha() < 100.0f) {
+                        var3.setAlpha(100.0f);
+                    }
                 }
             }
             if ((var6 = IsoWorld.instance.getCell().getZombieList()) != null && !var6.isEmpty()) {
                 for (IsoZombie var4 : var6) {
-                    var4.setAlpha(100.0f);
+                    if (var4.getAlpha() < 100.0f) {
+                        var4.setAlpha(100.0f);
+                    }
                 }
             }
-            ArrayList arrayList = var8 = (instance = GameClientWrapper.getInstance()) != null ? instance.getPlayers() : null;
+            // 快照遍历 (同 updatePlayersVisuals, 二百六十八): live 列表防网络线程并发移除
+            ArrayList arrayList = var8 = (instance = GameClientWrapper.getInstance()) != null ? new ArrayList<>(instance.getPlayers()) : null;
             if (var8 != null && !var8.isEmpty()) {
                 for (IsoPlayer var5 : var8) {
                     if (var5.isLocalPlayer()) continue;
-                    var5.setAlpha(100.0f);
+                    if (var5.getAlpha() < 100.0f) {
+                        var5.setAlpha(100.0f);
+                    }
                 }
             }
         }
     }
 
+    // 二百七十五 (J4/J5): ESP 文本值变化才重建 (WeakHashMap 随实体回收 — 帧内恒定的
+    // 字符串不再每实体每帧拼接分配) + 拖车/载具合并单趟遍历 (原两趟全量 + 每车部件线性扫)
+    private static final java.util.Map<BaseVehicle, Object[]> VEHICLE_STAT_TEXT = new java.util.WeakHashMap<>();
+    private static final java.util.Map<BaseVehicle, Object[]> VEHICLE_NAME_TEXT = new java.util.WeakHashMap<>();
+    private static final java.util.Map<BaseVehicle, Boolean> VEHICLE_HAS_TRAILER_PART = new java.util.WeakHashMap<>();
+    private static final java.util.Map<IsoZombie, Object[]> ZOMBIE_HP_TEXT = new java.util.WeakHashMap<>();
+    private static final java.util.Map<IsoAnimal, Object[]> ANIMAL_LABEL_TEXT = new java.util.WeakHashMap<>();
+
     private void updateVehiclesVisuals() {
         IsoPlayer var1;
-        if (this.isVisualsEnable && (this.isVisualsVehiclesEnable || this.isVisualDrawLineToVehicle) && (var1 = IsoPlayer.getInstance()) != null) {
+        // J5 (二百七十五): 拖车 ESP 并入同一趟循环 (原 updateTrailersVisuals 对同一
+        // getVehicles() 再全量遍历一遍); 各分支按自身开关独立判定, 单开关开启时行为不变
+        if (this.isVisualsEnable && (this.isVisualsVehiclesEnable || this.isVisualDrawLineToVehicle || this.isVisualsTrailersEnable) && (var1 = IsoPlayer.getInstance()) != null) {
             Set<BaseVehicle> var2 = IsoWorld.instance.getCell().getVehicles();
             float var3 = PlayerUtils.getScreenPositionX(var1);
             float var4 = PlayerUtils.getScreenPositionY(var1);
@@ -1252,8 +1291,28 @@ public class CoreAPI {
                     float var11 = VehicleUtils.getScreenPositionX(var10);
                     float var12 = VehicleUtils.getScreenPositionY(var10);
                     if (this.isVisualsVehiclesEnable) {
-                        Rendering.drawEspTextCenter(vehiclePowerLabel + var10.getEnginePower() / 10.0f, scale, var11, var12, var6, var7, var8, var5);
-                        Rendering.drawEspTextCenter(vehicleSpeedLabel + var10.getMaxSpeed(), scale, var11, var12 + (float)lineH, var6, var7, var8, var5);
+                        // J4: 功率/极速文本值变化才重建 (引擎可换装、极速为可写字段, 不能盲缓存;
+                        // cached[4] 保留标签引用 — 切语言后标签串变了即失效重建)
+                        float power = var10.getEnginePower();
+                        float maxSpeed = var10.getMaxSpeed();
+                        Object[] statCached = VEHICLE_STAT_TEXT.get(var10);
+                        if (statCached == null || (Float)statCached[0] != power || (Float)statCached[2] != maxSpeed || statCached[4] != vehiclePowerLabel) {
+                            statCached = new Object[]{power, vehiclePowerLabel + power / 10.0f, maxSpeed, vehicleSpeedLabel + maxSpeed, vehiclePowerLabel};
+                            VEHICLE_STAT_TEXT.put(var10, statCached);
+                        }
+                        Rendering.drawEspTextCenter((String)statCached[1], scale, var11, var12, var6, var7, var8, var5);
+                        Rendering.drawEspTextCenter((String)statCached[3], scale, var11, var12 + (float)lineH, var6, var7, var8, var5);
+                    }
+                    if (this.isVisualsTrailersEnable && var10 != null && this.hasTrailerPart(var10)) {
+                        // 二百三十四 拖车 ESP: 标签始终画; 连线+近端距离数字 <150 才画 (二百二十七 实测口径)
+                        Rendering.drawEspTextCenter(this.vehicleDisplayName(var10), scale, var11, var12 - 10.0f, var6, var7, var8, var5);
+                        float tdist = PlayerUtils.getDistanceBetweenPlayerAndVehicle(var1, var10);
+                        if (tdist < 150.0f) {
+                            int tvar12 = (int)tdist;
+                            float tratio = (float)Math.max(30, Math.min(150, tvar12)) / (float)Math.sqrt(Math.pow(var11 - var3, 2.0) + Math.pow(var12 - var4, 2.0));
+                            Rendering.drawThinLine(var11, var12, var3, var4 + 60.0f, var6, var7, var8, 0.8f);
+                            Rendering.drawEspTextCenter(String.valueOf(tvar12), scale, var3 + tratio * (var11 - var3), var4 + 60.0f + tratio * (var12 - var4), var6, var7, var8, var5);
+                        }
                     }
                     if (!this.isVisualDrawLineToVehicle) continue;
                     int var13 = (int)PlayerUtils.getDistanceBetweenPlayerAndVehicle(var1, var10);
@@ -1267,6 +1326,16 @@ public class CoreAPI {
                 }
             }
         }
+    }
+
+    /** J5: 拖车部件判定缓存 — TrailerAnimalFood 是脚本部件 (车辆创建后不变), getPartById 是游戏侧线性扫。 */
+    private boolean hasTrailerPart(BaseVehicle vehicle) {
+        Boolean cached = VEHICLE_HAS_TRAILER_PART.get(vehicle);
+        if (cached == null) {
+            cached = vehicle.getPartById("TrailerAnimalFood") != null;
+            VEHICLE_HAS_TRAILER_PART.put(vehicle, cached);
+        }
+        return cached;
     }
 
     private void updateZombiesVisuals() {
@@ -1285,7 +1354,14 @@ public class CoreAPI {
                     float var10 = ZombieUtils.getScreenPositionX(var9);
                     float var11 = ZombieUtils.getScreenPositionY(var9);
                     if (this.isVisualsZombiesEnable) {
-                        Rendering.drawEspTextCenter("HP: " + (int)(var9.getHealth() * 100.0f), scale, var10, var11 - 10.0f, var6, var7, var8, var5);
+                        // J4 (二百七十五): HP 文本值变化才重建 — 血量稳定期不再每只每帧拼接分配
+                        int hp = (int)(var9.getHealth() * 100.0f);
+                        Object[] hpCached = ZOMBIE_HP_TEXT.get(var9);
+                        if (hpCached == null || (Integer)hpCached[0] != hp) {
+                            hpCached = new Object[]{hp, "HP: " + hp};
+                            ZOMBIE_HP_TEXT.put(var9, hpCached);
+                        }
+                        Rendering.drawEspTextCenter((String)hpCached[1], scale, var10, var11 - 10.0f, var6, var7, var8, var5);
                     }
                     if (!this.isVisualDrawLineToZombies || !(PlayerUtils.getDistanceBetweenPlayerAndZombie(var1, var9) < 150.0f)) continue;
                     int var12 = (int)PlayerUtils.getDistanceBetweenPlayerAndZombie(var1, var9);
@@ -1476,56 +1552,35 @@ public class CoreAPI {
         }
     }
 
-    /** 动物标签: 有自定义名时「自定义名 > 物种名」, 否则物种名 (未知物种回退 type 串)。 */
+    /** 动物标签: 有自定义名时「自定义名 > 物种名」, 否则物种名 (未知物种回退 type 串)。
+     *  J4 (二百七十五): 按动物缓存 — 自定义名没变就复用上帧串 (translator 查表+拼接不再逐帧)。 */
     private String animalLabel(IsoAnimal animal, String speciesId) {
+        String custom = animal.getCustomName();
+        Object[] cached = ANIMAL_LABEL_TEXT.get(animal);
+        if (cached != null && Objects.equals(custom, cached[0])) {
+            return (String)cached[1];
+        }
         String species = speciesId != null ? CoreAPI.getAnimalSpeciesDisplayName(speciesId) : animal.getAnimalType();
         if (species == null) {
             species = "";
         }
-        String custom = animal.getCustomName();
+        String label;
         if (custom == null || custom.trim().isEmpty()) {
-            return species;
+            label = species;
         }
-        return custom + " > " + species;
+        else {
+            label = custom + " > " + species;
+        }
+        ANIMAL_LABEL_TEXT.put(animal, new Object[]{custom, label});
+        return label;
     }
 
-    // ===================== 牲畜拖车 ESP (二百三十四) =====================
+    // ===================== 牲畜拖车 ESP (二百三十四; J5 并入 updateVehiclesVisuals 单趟) =====================
     // 数据面: IsoCell.vehicles (客户端本地集合, 游戏渲染同源, 零发包); 识别 = 部件
-    // TrailerAnimalFood (牲畜/马匹拖车共用, 模组同类自动覆盖); 颜色复用载具 ESP 色 (用户拍板)。
+    // TrailerAnimalFood (牲畜/马匹拖车共用, modder 同类自动覆盖); 颜色复用载具 ESP 色 (用户拍板)。
 
-    private void updateTrailersVisuals() {
-        IsoPlayer var1;
-        if (this.isVisualsEnable && this.isVisualsTrailersEnable && (var1 = IsoPlayer.getInstance()) != null) {
-            Set<BaseVehicle> var2 = IsoWorld.instance.getCell().getVehicles();
-            if (var2 != null && !var2.isEmpty()) {
-                float var3 = PlayerUtils.getScreenPositionX(var1);
-                float var4 = PlayerUtils.getScreenPositionY(var1);
-                float var5 = this.vehiclesUIColor.a;
-                float var6 = this.vehiclesUIColor.r;
-                float var7 = this.vehiclesUIColor.g;
-                float var8 = this.vehiclesUIColor.b;
-                float scale = Rendering.espTextScale();
-                for (BaseVehicle var9 : var2) {
-                    if (var9 == null || var9.getPartById("TrailerAnimalFood") == null) continue;
-                    float var10 = VehicleUtils.getScreenPositionX(var9);
-                    float var11 = VehicleUtils.getScreenPositionY(var9);
-                    float dist = PlayerUtils.getDistanceBetweenPlayerAndVehicle(var1, var9);
-                    Rendering.drawEspTextCenter(this.vehicleDisplayName(var9), scale, var10, var11 - 10.0f, var6, var7, var8, var5);
-                    if (!(dist < 150.0f)) continue;
-                    int var12 = (int)dist;
-                    int var13 = Math.max(30, Math.min(150, var12));
-                    float var14 = (float)Math.sqrt(Math.pow(var10 - var3, 2.0) + Math.pow(var11 - var4, 2.0));
-                    float var15 = (float)var13 / var14;
-                    float var16 = var3 + var15 * (var10 - var3);
-                    float var17 = var4 + 60.0f + var15 * (var11 - var4);
-                    Rendering.drawThinLine(var10, var11, var3, var4 + 60.0f, var6, var7, var8, 0.8f);
-                    Rendering.drawEspTextCenter(String.valueOf(var12), scale, var16, var17, var6, var7, var8, var5);
-                }
-            }
-        }
-    }
-
-    /** 拖车标签: 游戏同款车辆显示名 (IGUI_VehicleName+模型名, ISVehicleMenu 同法; 空则脚本名兜底)。 */
+    /** 拖车标签: 游戏同款车辆显示名 (IGUI_VehicleName+模型名, ISVehicleMenu 同法; 空则脚本名兜底)。
+     *  J4 (二百七十五): 按 carName 缓存 (脚本名不变即复用, 拼键+translator 查表不再逐帧)。 */
     private String vehicleDisplayName(BaseVehicle vehicle) {
         VehicleScript script = vehicle.getScript();
         String carName = script != null ? script.getCarModelName() : null;
@@ -1538,15 +1593,23 @@ public class CoreAPI {
         if (carName == null) {
             return "";
         }
+        Object[] cached = VEHICLE_NAME_TEXT.get(vehicle);
+        if (cached != null && carName.equals(cached[0])) {
+            return (String)cached[1];
+        }
         String name = Translator.getTextOrNull("IGUI_VehicleName" + carName);
-        return name == null || name.isEmpty() ? carName : name;
+        String result = name == null || name.isEmpty() ? carName : name;
+        VEHICLE_NAME_TEXT.put(vehicle, new Object[]{carName, result});
+        return result;
     }
 
     private void updatePlayersVisuals() {
         IsoPlayer var1;
         if (this.isVisualsEnable && (this.isVisualDrawPlayerNickname || this.isVisualDrawPlayerInfo || this.isVisualDrawLineToPlayers) && (var1 = IsoPlayer.getInstance()) != null) {
             GameClient instance = GameClientWrapper.getInstance();
-            ArrayList<IsoPlayer> var2 = instance != null ? instance.getPlayers() : null;
+            // 快照遍历 (二百六十八): getPlayers() 是 live 列表, 网络线程会移除玩家
+            // (二百六十二 receivePlayerTimeout CME 同款), OnPostUIDraw 每帧直接迭代有 CME 风险
+            ArrayList<IsoPlayer> var2 = instance != null ? new ArrayList<>(instance.getPlayers()) : null;
             float var3 = PlayerUtils.getScreenPositionX(var1);
             float var4 = PlayerUtils.getScreenPositionY(var1);
             float var5 = this.playersUIColor.a;
@@ -1576,7 +1639,8 @@ public class CoreAPI {
                         Rendering.drawEspTextCenter(primaryHandLabel + var13, scale, var11, var12 + 70.0f, var6, var7, var8, var5);
                         Rendering.drawEspTextCenter(secondaryHandLabel + var14, scale, var11, var12 + 70.0f + (float)lineH, var6, var7, var8, var5);
                     }
-                    if (var10.isLocalPlayer() || !this.isVisualDrawLineToPlayers || !(PlayerUtils.getDistanceBetweenPlayers(var1, var10) < 150.0f)) continue;
+                    // 二百七十七 (J6): 死条件清除 — 本地玩家在循环开头已 continue, 首个判定恒假
+                    if (!this.isVisualDrawLineToPlayers || !(PlayerUtils.getDistanceBetweenPlayers(var1, var10) < 150.0f)) continue;
                     int var19 = (int)PlayerUtils.getDistanceBetweenPlayers(var10, var1);
                     int var20 = Math.max(30, Math.min(150, var19));
                     float var15 = (float)Math.sqrt(Math.pow(var11 - var3, 2.0) + Math.pow(var12 - var4, 2.0));

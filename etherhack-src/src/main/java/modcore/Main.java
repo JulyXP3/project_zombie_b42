@@ -1,6 +1,3 @@
-/*
- * Decompiled with CFR 0.152.
- */
 package modcore;
 
 import modcore.GamePatcher;
@@ -25,6 +22,8 @@ public class Main {
             }
             case "--uninstall": {
                 gamePatcher.restoreFiles();
+                // 二百七十: 卸载零留痕 — 用户目录 modcore 树 (日志/配置) 最后深清
+                gamePatcher.purgeUserData();
                 break;
             }
             default: {

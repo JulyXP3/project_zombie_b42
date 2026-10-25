@@ -24,10 +24,13 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.attribute.FileAttribute;
+import java.util.ArrayDeque;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.jar.JarFile;
 import java.util.zip.ZipEntry;
@@ -429,6 +432,95 @@ public class Patch {
         }
     }
 
+    /** hierarchyNode 解析失败的类型 (防 ClassReader 兜底反复读盘刷日志)。 */
+    private static final Set<String> hierarchyMiss = new HashSet<String>();
+
+    /**
+     * 二百六十八 (E1 瘦身配套): 安装器 classpath 无游戏类 (compileOnly 构建) 时,
+     * COMPUTE_FRAMES 的帧合并改从游戏 jar 解析继承链 — 复刻 ClassWriter 默认
+     * getCommonSuperClass 算法 (双向 assignable + 接口短路 + 超类链上溯), 数据源
+     * 换成 loadClassNode。返回 null = 解析不了, 调用方退 Object 兜底 (与旧版一致)。
+     */
+    private static String getCommonSuperFromGameJar(String type1, String type2) {
+        if (type1.equals(type2)) {
+            return type1;
+        }
+        if (type1.startsWith("[") || type2.startsWith("[")) {
+            return null;   // 数组合并 (不同数组/数组×对象): 默认算法同样得到 Object, 不猜
+        }
+        if (Patch.isAssignableFromGameJar(type1, type2)) {
+            return type1;
+        }
+        if (Patch.isAssignableFromGameJar(type2, type1)) {
+            return type2;
+        }
+        ClassNode c = Patch.hierarchyNode(type1);
+        ClassNode d = Patch.hierarchyNode(type2);
+        if (c == null || d == null) {
+            return null;
+        }
+        if ((c.access & 0x0200) != 0 || (d.access & 0x0200) != 0) {   // ACC_INTERFACE
+            return "java/lang/Object";
+        }
+        for (int i = 0; i < 50 && c.superName != null; i++) {
+            c = Patch.hierarchyNode(c.superName);
+            if (c == null) {
+                return null;
+            }
+            if (Patch.isAssignableFromGameJar(c.name, type2)) {
+                return c.name;
+            }
+        }
+        return null;
+    }
+
+    /** cur 的超类型闭包 (超类链 + 传递接口) 是否包含 target — 层级等价 Class.isAssignableFrom。 */
+    private static boolean isAssignableFromGameJar(String target, String cur) {
+        if (target.equals(cur)) {
+            return true;
+        }
+        ArrayDeque<String> pending = new ArrayDeque<String>();
+        HashSet<String> seen = new HashSet<String>();
+        pending.add(cur);
+        for (int guard = 0; !pending.isEmpty() && guard < 1000; guard++) {
+            String name = pending.poll();
+            if (!seen.add(name)) {
+                continue;
+            }
+            if (name.equals(target)) {
+                return true;
+            }
+            ClassNode node = Patch.hierarchyNode(name);
+            if (node == null) {
+                continue;
+            }
+            if (node.superName != null) {
+                pending.add(node.superName);
+            }
+            if (node.interfaces != null) {
+                pending.addAll(node.interfaces);
+            }
+        }
+        return false;
+    }
+
+    private static ClassNode hierarchyNode(String internalName) {
+        if (internalName == null || Patch.hierarchyMiss.contains(internalName)) {
+            return null;
+        }
+        ClassNode node = classNodeMap.get(internalName);
+        if (node == null) {
+            node = Patch.loadClassNode(internalName);
+            if (node != null) {
+                classNodeMap.put(internalName, node);
+            }
+            else {
+                Patch.hierarchyMiss.add(internalName);
+            }
+        }
+        return node;
+    }
+
     private static class SafeClassWriter
     extends ClassWriter {
         public SafeClassWriter(int flags) {
@@ -440,6 +532,10 @@ public class Patch {
                 return super.getCommonSuperClass(type1, type2);
             }
             catch (RuntimeException e) {
+                String resolved = Patch.getCommonSuperFromGameJar(type1, type2);
+                if (resolved != null) {
+                    return resolved;
+                }
                 Logger.printLog("Could not resolve common superclass for " + type1 + " and " + type2 + ", using Object");
                 return "java/lang/Object";
             }

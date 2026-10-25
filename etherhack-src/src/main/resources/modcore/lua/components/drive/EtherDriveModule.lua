@@ -37,15 +37,27 @@ local STATE_KEYS = {
     [4] = "UI_DrivePanel_StatusIdle",
 };
 
+-- 二百七十七 (L6): 行 1/行 3 按源值记忆化 — 状态/目标/限速没变就复用上帧串
+-- (原每帧两次 tr 模板 + format ×3 + 拼接 + 颜色表分配)
+local STATUS_LINE_COLOR = { r = 1, g = 1, b = 1, a = 1 };
+local statusCache = { s = nil, act = nil, tx = nil, ty = nil, line1 = nil, lim = nil, cap = nil, line3 = nil };
+
 function StatusRow:render()
     local y = 0;
     -- 行 1: 状态 + 目标坐标
     local stateId = autoDriveGetStateId();
-    local line = tr("UI_DrivePanel_Status") .. ": " .. tr(STATE_KEYS[stateId] or "UI_DrivePanel_StatusIdle");
-    if autoDriveIsActive() then
-        line = line .. string.format("  (%d, %d)", autoDriveGetTargetX(), autoDriveGetTargetY());
+    local act = autoDriveIsActive();
+    local tx = act and autoDriveGetTargetX() or nil;
+    local ty = act and autoDriveGetTargetY() or nil;
+    local c = statusCache;
+    if c.s ~= stateId or c.act ~= act or c.tx ~= tx or c.ty ~= ty then
+        local line = tr("UI_DrivePanel_Status") .. ": " .. tr(STATE_KEYS[stateId] or "UI_DrivePanel_StatusIdle");
+        if act then
+            line = line .. string.format("  (%d, %d)", tx, ty);
+        end
+        c.s, c.act, c.tx, c.ty, c.line1 = stateId, act, tx, ty, line;
     end
-    EtherTheme.drawHintText(self, line, 0, y, { r = 1, g = 1, b = 1, a = 1 }, 1);
+    EtherTheme.drawHintText(self, c.line1, 0, y, STATUS_LINE_COLOR, 1);
     y = y + EtherTheme.fontHgtHint;
     -- 行 2: 最近消息 (锚定结果/取消原因/到达提示); 与状态行同文时隐藏
     -- (驾驶中消息恒为状态键, 原样渲染 = 与行 1 重复 — 实测冗余, 用户拍板去除)
@@ -55,10 +67,13 @@ function StatusRow:render()
         y = y + EtherTheme.fontHgtHint;
     end
     -- 行 3: 速度体系提示 (服务端限速 → 硬顶, 登录同步可读, 研判 §四.3)
-    local limitText = string.format("%.0f", autoDriveGetSpeedLimit());
-    local capText = string.format("%.0f", autoDriveGetHardCap());
-    EtherTheme.drawHintText(self, tr("UI_DrivePanel_HintLimit", { limit = limitText, cap = capText }),
-        0, y, EtherTheme.textDim, 1);
+    local limit = autoDriveGetSpeedLimit();
+    local cap = autoDriveGetHardCap();
+    if c.lim ~= limit or c.cap ~= cap then
+        c.lim, c.cap = limit, cap;
+        c.line3 = tr("UI_DrivePanel_HintLimit", { limit = string.format("%.0f", limit), cap = string.format("%.0f", cap) });
+    end
+    EtherTheme.drawHintText(self, c.line3, 0, y, EtherTheme.textDim, 1);
 end
 
 StatusRow.onMouseDown = UIRowBox.onMouseDown;

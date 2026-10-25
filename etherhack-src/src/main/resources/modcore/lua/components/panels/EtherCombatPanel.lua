@@ -16,33 +16,9 @@ require "ISUI/ISPanel"
 EtherCombatPanel = EtherFormPanel:derive("EtherCombatPanel");
 
 --*********************************************************
---* 模块内说明行 (角色页 ModuleHint 同款; derive 名不得与角色页重复)
+--* 模块内说明行: 二百七十五 (L8) 下沉 EtherFormPanel 共用 ModuleHint
+--* (原为本页私有逐字节拷贝), 本页直接引用全局, 不再本地定义。
 --*********************************************************
-local ModuleHint = ISPanel:derive("EtherCombatHint");
-
-function ModuleHint:render()
-    for i = 1, #self.lines do
-        EtherTheme.drawHintText(self, self.lines[i], 0, (i - 1) * EtherTheme.fontHgtHint,
-            EtherTheme.textDim, 0.9);
-    end
-end
-
-ModuleHint.onMouseDown = UIRowBox.onMouseDown;
-ModuleHint.onMouseUp = UIRowBox.onMouseUp;
-ModuleHint.onMouseMove = UIRowBox.onMouseMove;
-
-function ModuleHint:new(x, y, w, text)
-    local lines = EtherTheme.wrapHint(text, w - 8);
-    local o = ISPanel:new(x, y, w, #lines * EtherTheme.fontHgtHint + 2);
-    setmetatable(o, self);
-    self.__index = self;
-    o.background = false;
-    o.backgroundColor = { r = 0, g = 0, b = 0, a = 0 };
-    o.borderColor = { r = 0, g = 0, b = 0, a = 0 };
-    o.moveWithMouse = false;
-    o.lines = lines;
-    return o;
-end
 
 --*********************************************************
 --* 动态状态行 (每帧渲染拉取 EtherTempWeapon 状态)
@@ -70,81 +46,11 @@ function TempStatusRow:new(x, y, w, h)
 end
 
 --*********************************************************
---* 复选框网格预排/摆放 (角色页同款拷贝)
+--* 复选框网格预排/摆放: 二百七十五 (L8) 下沉 EtherFormPanel.planGrid/placeGrid
+--* (原为战斗/角色两页逐行相同拷贝), 本地别名保持调用点不变。
 --*********************************************************
-local function planGrid(items, innerW)
-    local tm = getTextManager();
-    local needW = 0;
-    for i = 1, #items do
-        local w = 18 + 10 + tm:MeasureStringX(UIFont.Small, tr(items[i].key)) + 20;
-        if w > needW then needW = w; end
-    end
-    local cols = math.floor(innerW / math.max(needW, EtherFormPanel.MIN_COL_W));
-    if cols < 1 then cols = 1; end
-    if cols > EtherFormPanel.MAX_COLS then cols = EtherFormPanel.MAX_COLS; end
-    local colW = innerW / cols;
-    local cellW = cols > 1 and (colW - EtherFormPanel.BOX_GAP) or innerW;
-
-    local lineH = EtherTheme.fontHgtSmall + 2;
-    local rows = {};
-    local contentH = 0;
-    local row = { cells = {}, step = 0 };
-    local col = 0;
-    local function flush()
-        if #row.cells > 0 then
-            table.insert(rows, row);
-            contentH = contentH + row.step;
-            row = { cells = {}, step = 0 };
-        end
-    end
-    for i = 1, #items do
-        local title = tr(items[i].key);
-        local availW = cellW - (18 + 10 + 8);
-        local lines = { title };
-        if tm:MeasureStringX(UIFont.Small, title) > availW then
-            lines = EtherTheme.wrapText(title, availW, UIFont.Small);
-        end
-        local step = EtherFormPanel.ROW_STEP;
-        if #lines > 1 then
-            step = #lines * lineH + EtherFormPanel.BOX_PAD_Y * 2 + 4;
-        end
-        if row.step < step then row.step = step; end
-        table.insert(row.cells, { it = items[i], col = col, w = cellW, lines = lines });
-        col = col + 1;
-        if col >= cols then
-            col = 0;
-            flush();
-        end
-    end
-    flush();
-    return rows, contentH, colW;
-end
-
-local function placeGrid(panel, rows, bx, by, colW)
-    local cy = by;
-    for r = 1, #rows do
-        local row = rows[r];
-        for c = 1, #row.cells do
-            local cell = row.cells[c];
-            local it = cell.it;
-            local checked = false;
-            if type(it.get) == "function" then
-                checked = it.get() and true or false;
-            elseif it.get then
-                checked = true;
-            end
-            local cb = UICheckbox:new(bx + cell.col * colW, cy, tr(it.key), checked, it.on);
-            if #cell.lines > 1 then
-                cb.titleLines = cell.lines;
-                cb.height = math.max(18, #cell.lines * (EtherTheme.fontHgtSmall + 2));
-                cb.width = cell.w;
-            end
-            panel:addWidget(cb, it);
-            it.widget = cb;
-        end
-        cy = cy + row.step;
-    end
-end
+local planGrid = EtherFormPanel.planGrid;
+local placeGrid = EtherFormPanel.placeGrid;
 
 --*********************************************************
 --* 数值输入行 (角色页同款布局) + 生效分离扩展 (研判 §五.4):

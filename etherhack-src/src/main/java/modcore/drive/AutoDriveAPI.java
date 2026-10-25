@@ -296,6 +296,7 @@ public final class AutoDriveAPI {
             props.remove("policy2");  // 旧键清出 (两档策略时代)
             try (FileOutputStream out = new FileOutputStream(configFile())) {
                 props.store(out, null);
+                modcore.utils.ConfigStash.saveSnapshot(modcore.core.CoreAPI.configDir(), true);   // 二百七十三: 落盘即暂存
             }
         } catch (IOException e) {
             Logger.printLog("[AutoDrive] config save failed: " + e.getMessage());

@@ -41,10 +41,12 @@ end
 
 -- 分区标题: Small 薄荷居中 (标题在功能分组盒内, 与全局标题语言一致)
 function EtherLootRollPanel:_header(tx, ty, text, w)
+    -- 二百七十七 (L7): 标题宽登记时测一次 — 原 prerender 每帧对 nil 补测 (×3 标题/帧)
     table.insert(self.texts, {
         x = tx, y = ty, text = text,
         header = true,
         w = w,
+        textW = getTextManager():MeasureStringX(UIFont.Small, text),
     });
 end
 
@@ -66,7 +68,7 @@ function EtherLootRollPanel:prerender()
     for i = 1, #self.texts do
         local t = self.texts[i];
         if t.header then
-            EtherTheme.drawSectionTitle(self, t.x, t.y, t.w, t.text, nil, "lines");
+            EtherTheme.drawSectionTitle(self, t.x, t.y, t.w, t.text, t.textW, "lines");
         elseif t.hint then
             EtherTheme.drawHintText(self, t.text, t.x, t.y, t.col);
         else
@@ -195,16 +197,8 @@ function EtherLootRollPanel:drawFishItem(y, item, alt)
     if itemId == nil then itemId = item.item:getName() or "?" end
     self:drawText(itemId, self.columns[2].size + 10, y + 4, th.textDim.r, th.textDim.g, th.textDim.b, a, self.font);
 
-    local icon = item.item:getIcon()
-    if item.item:getIconsForTexture() and not item.item:getIconsForTexture():isEmpty() then
-        icon = item.item:getIconsForTexture():get(0)
-    end
-    if icon then
-        local texture = getTexture("Item_" .. icon)
-        if texture then
-            self:drawTextureScaledAspect2(texture, 4, y + (self.itemheight - iconSize) / 2, iconSize, iconSize, 1, 1, 1, 1);
-        end
-    end
+    -- 二百七十五 (L3): 图标走 EtherTheme 缓存 (零逐帧桥调用/拼接/查表), 五页共用一份
+    EtherTheme.drawItemIcon(self, item.item, y, iconSize);
 
     return y + self.itemheight;
 end

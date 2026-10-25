@@ -61,6 +61,117 @@ function UIRowBox:new(x, y, width, height, chamfer)
 end
 
 --*********************************************************
+--* ModuleHint: 模块说明文字 (折行提示块)。二百七十五 (L8) 下沉 —
+--* 原为 载具/战斗/角色 三页各一份逐字节相同拷贝, 改共享层单一实现。
+--*********************************************************
+ModuleHint = ISPanel:derive("EtherModuleHint");
+
+function ModuleHint:render()
+    for i = 1, #self.lines do
+        EtherTheme.drawHintText(self, self.lines[i], 0, (i - 1) * EtherTheme.fontHgtHint,
+            EtherTheme.textDim, 0.9);
+    end
+end
+
+ModuleHint.onMouseDown = UIRowBox.onMouseDown;
+ModuleHint.onMouseUp = UIRowBox.onMouseUp;
+ModuleHint.onMouseMove = UIRowBox.onMouseMove;
+
+function ModuleHint:new(x, y, w, text)
+    local lines = EtherTheme.wrapHint(text, w - 8);
+    local o = ISPanel:new(x, y, w, #lines * EtherTheme.fontHgtHint + 2);
+    setmetatable(o, self);
+    self.__index = self;
+    o.background = false;
+    o.backgroundColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.borderColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.moveWithMouse = false;
+    o.lines = lines;
+    return o;
+end
+
+--*********************************************************
+--* 复选框网格预排/摆放 (二百七十五 L8 下沉 — 原为 战斗/角色 两页
+--* 逐行相同的拷贝)。面板侧用法: local planGrid = EtherFormPanel.planGrid;
+--* 列数按"组内最宽标签"与模块内宽自适应 (1~3 列); 长标签在列宽内
+--* 折行, 行距取该行最大折行高 (同基类 addCheckboxGroup 规则)。
+--*********************************************************
+function EtherFormPanel.planGrid(items, innerW)
+    local tm = getTextManager();
+    local needW = 0;
+    for i = 1, #items do
+        local w = 18 + 10 + tm:MeasureStringX(UIFont.Small, tr(items[i].key)) + 20;
+        if w > needW then needW = w; end
+    end
+    local cols = math.floor(innerW / math.max(needW, EtherFormPanel.MIN_COL_W));
+    if cols < 1 then cols = 1; end
+    if cols > EtherFormPanel.MAX_COLS then cols = EtherFormPanel.MAX_COLS; end
+    local colW = innerW / cols;
+    local cellW = cols > 1 and (colW - EtherFormPanel.BOX_GAP) or innerW;
+
+    local lineH = EtherTheme.fontHgtSmall + 2;
+    local rows = {};
+    local contentH = 0;
+    local row = { cells = {}, step = 0 };
+    local col = 0;
+    local function flush()
+        if #row.cells > 0 then
+            table.insert(rows, row);
+            contentH = contentH + row.step;
+            row = { cells = {}, step = 0 };
+        end
+    end
+    for i = 1, #items do
+        local title = tr(items[i].key);
+        local availW = cellW - (18 + 10 + 8);
+        local lines = { title };
+        if tm:MeasureStringX(UIFont.Small, title) > availW then
+            lines = EtherTheme.wrapText(title, availW, UIFont.Small);
+        end
+        local step = EtherFormPanel.ROW_STEP;
+        if #lines > 1 then
+            step = #lines * lineH + EtherFormPanel.BOX_PAD_Y * 2 + 4;
+        end
+        if row.step < step then row.step = step; end
+        table.insert(row.cells, { it = items[i], col = col, w = cellW, lines = lines });
+        col = col + 1;
+        if col >= cols then
+            col = 0;
+            flush();
+        end
+    end
+    flush();
+    return rows, contentH, colW;
+end
+
+-- 按预排结果摆放复选框 (与 planGrid 同一份布局, 不再测量)。
+function EtherFormPanel.placeGrid(panel, rows, bx, by, colW)
+    local cy = by;
+    for r = 1, #rows do
+        local row = rows[r];
+        for c = 1, #row.cells do
+            local cell = row.cells[c];
+            local it = cell.it;
+            local checked = false;
+            if type(it.get) == "function" then
+                checked = it.get() and true or false;
+            elseif it.get then
+                checked = true;
+            end
+            local cb = UICheckbox:new(bx + cell.col * colW, cy, tr(it.key), checked, it.on);
+            if #cell.lines > 1 then
+                cb.titleLines = cell.lines;
+                cb.height = math.max(18, #cell.lines * (EtherTheme.fontHgtSmall + 2));
+                cb.width = cell.w;
+            end
+            panel:addWidget(cb, it);
+            it.widget = cb;
+        end
+        cy = cy + row.step;
+    end
+end
+
+--*********************************************************
 --* UISectionHeader: 分区标题 (Small 居中标题, 自带切角标题盒 —
 --* 标题被背景框包裹, 紧贴模块顶部)。标题宽度构建时实测一次
 --* (render 零测量); 做成子控件, 滚动时由 UI 系统统一定位。

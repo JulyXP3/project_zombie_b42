@@ -363,20 +363,30 @@ end
 
 function EtherFarmingPanel:renderContent()
     if self.statusX == nil then return; end
-    local msg, col;
-    if self.flashUntil ~= nil and getTimeInMillis() < self.flashUntil then
-        msg, col = self.flashMsg, EtherTheme.sky;
-    elseif self.crops ~= nil and self.crops > 0 then
-        msg = tr("UI_FarmingPanel_PlantCount", { count = self.crops });
-        if self.bare > 0 then
-            msg = msg .. tr("UI_FarmingPanel_BareSuffix", { count = self.bare });
+    -- 二百七十七 (L6): 状态串按 (分支态, crops, bare, flash 文案) 记忆化 —
+    -- 原每帧最多 3 次 tr 模板 + 拼接 (下方折行缓存只省测量不省模板)
+    local flashing = self.flashUntil ~= nil and getTimeInMillis() < self.flashUntil;
+    local c = self.mcStatusCache;
+    if c == nil or c.flash ~= flashing or c.msg2 ~= self.flashMsg
+        or c.crops ~= self.crops or c.bare ~= self.bare then
+        local msg, col;
+        if flashing then
+            msg, col = self.flashMsg, EtherTheme.sky;
+        elseif self.crops ~= nil and self.crops > 0 then
+            msg = tr("UI_FarmingPanel_PlantCount", { count = self.crops });
+            if self.bare > 0 then
+                msg = msg .. tr("UI_FarmingPanel_BareSuffix", { count = self.bare });
+            end
+            col = EtherTheme.textDim;
+        elseif self.bare ~= nil and self.bare > 0 then
+            msg, col = tr("UI_FarmingPanel_OnlyBare", { count = self.bare }), EtherTheme.textDim;
+        else
+            msg, col = tr("UI_FarmingPanel_NoPlant"), EtherTheme.textDim;
         end
-        col = EtherTheme.textDim;
-    elseif self.bare ~= nil and self.bare > 0 then
-        msg, col = tr("UI_FarmingPanel_OnlyBare", { count = self.bare }), EtherTheme.textDim;
-    else
-        msg, col = tr("UI_FarmingPanel_NoPlant"), EtherTheme.textDim;
+        c = { flash = flashing, msg2 = self.flashMsg, crops = self.crops, bare = self.bare, msg = msg, col = col };
+        self.mcStatusCache = c;
     end
+    local msg, col = c.msg, c.col;
     -- 结果缓存: render 每帧调用, 不能每帧测量折行
     if msg ~= self.statusCacheText or self.statusCacheW ~= self.statusW then
         self.statusLines = EtherTheme.wrapHint(msg, self.statusW);
@@ -484,7 +494,9 @@ function EtherFarmingPanel:build()
         -- 显示名与原版一致 (getText 缺翻译时返回原键串, 回退内部键名)
         local label = getText("Farming_" .. typeOfSeed);
         if label == nil or label == ("Farming_" .. typeOfSeed) then label = typeOfSeed; end
-        table.insert(seeds, { key = typeOfSeed, name = label });
+        -- 二百七十七 (L11): 预取小写字段 — 过滤不再每键对不变 name/key 重复 lower
+        table.insert(seeds, { key = typeOfSeed, name = label,
+            lname = string.lower(label), lkey = string.lower(typeOfSeed) });
     end
     table.sort(seeds, function(a, b) return not string.sort(a.name, b.name); end);
 
@@ -550,9 +562,9 @@ function EtherFarmingPanel:build()
                 list.selected = 0;
                 for i = 1, #seeds do
                     local okName = nameTxt == ""
-                        or string.find(string.lower(seeds[i].name), nameTxt, 1, true) ~= nil;
+                        or string.find(seeds[i].lname, nameTxt, 1, true) ~= nil;
                     local okId = idTxt == ""
-                        or string.find(string.lower(seeds[i].key), idTxt, 1, true) ~= nil;
+                        or string.find(seeds[i].lkey, idTxt, 1, true) ~= nil;
                     if okName and okId then
                         list:addItem(seeds[i].name, seeds[i]);
                     end

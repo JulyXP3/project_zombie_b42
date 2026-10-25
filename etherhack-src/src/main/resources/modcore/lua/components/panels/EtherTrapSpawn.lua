@@ -63,6 +63,15 @@ end
 --*********************************************************
 --* Обработка render (仅动态状态)
 --*********************************************************
+-- 二百七十七 (L9): 相位代号 → 翻译键 (未登记相位回退原始代号)
+local TRAP_PHASE_KEYS = {
+    find_trap = "UI_TrapSpawn_PhaseFindTrap",
+    place     = "UI_TrapSpawn_PhasePlace",
+    inject    = "UI_TrapSpawn_PhaseInject",
+    wait_trap = "UI_TrapSpawn_PhaseWaitTrap",
+    done      = "UI_TrapSpawn_PhaseDone",
+};
+
 function EtherTrapSpawn:render()
     ISPanel.render(self);
     self:clearStencilRect();
@@ -72,9 +81,24 @@ function EtherTrapSpawn:render()
         return
     end
 
-    local status = "idle";
-    if EtherTrapPOC.armed then
-        status = tostring(EtherTrapPOC.target) .. " x" .. tostring(EtherTrapPOC.count) .. " [" .. tostring(EtherTrapPOC.phase) .. "]";
+    -- 二百七十七 (L9/L6): 状态行走三语 (原 "idle"/内部相位代号英文直出 UI), 并按源值记忆化
+    local status;
+    if not EtherTrapPOC.armed then
+        status = tr("UI_TrapSpawn_StatusIdle");
+    else
+        local c = self.mcStatusCache;
+        if c == nil or c.target ~= EtherTrapPOC.target or c.count ~= EtherTrapPOC.count
+            or c.phase ~= EtherTrapPOC.phase then
+            local phaseKey = TRAP_PHASE_KEYS[EtherTrapPOC.phase];
+            local phaseText = phaseKey ~= nil and tr(phaseKey) or tostring(EtherTrapPOC.phase);
+            c = {
+                target = EtherTrapPOC.target, count = EtherTrapPOC.count, phase = EtherTrapPOC.phase,
+                str = tr("UI_TrapSpawn_StatusFmt", { target = tostring(EtherTrapPOC.target),
+                    count = tostring(EtherTrapPOC.count), phase = phaseText }),
+            };
+            self.mcStatusCache = c;
+        end
+        status = c.str;
     end
     if self.statusX ~= nil then
         local td = EtherTheme.textDim;
@@ -118,18 +142,11 @@ function EtherTrapSpawn:drawDatas(y, item, alt)
     EtherTheme.drawRowUnderlay(self, y, self.selected == item.index, alt, self.itemheight)
 
     local iconSize = fontHeightSmall;
-    self:drawText(item.item:getDisplayName(), 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
+    -- 二百七十五 (L3): 名称改用条目预存 text (原为逐行逐帧 getDisplayName 桥调用)
+    self:drawText(item.text, 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
 
-    local icon = item.item:getIcon()
-    if item.item:getIconsForTexture() and not item.item:getIconsForTexture():isEmpty() then
-        icon = item.item:getIconsForTexture():get(0)
-    end
-    if icon then
-        local texture = getTexture("Item_" .. icon)
-        if texture then
-            self:drawTextureScaledAspect2(texture, 4, y + (self.itemheight - iconSize) / 2, iconSize, iconSize, 1, 1, 1, 1);
-        end
-    end
+    -- 二百七十五 (L3): 图标走 EtherTheme 缓存 (零逐帧桥调用/拼接/查表), 五页共用一份
+    EtherTheme.drawItemIcon(self, item.item, y, iconSize);
 
     return y + self.itemheight;
 end

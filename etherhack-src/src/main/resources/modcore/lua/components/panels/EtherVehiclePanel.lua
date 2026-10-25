@@ -31,31 +31,8 @@ EtherVehiclePanel = EtherFormPanel:derive("EtherVehiclePanel");
 --* 模块内说明行 (hint 缩放文字, 与 EtherCharacterPanel 的 ModuleHint 同款):
 --* 做成子控件随滚动统一定位, 不吞鼠标事件。折行在构造时算一次。
 --*********************************************************
-local ModuleHint = ISPanel:derive("EtherVehicleHint");
-
-function ModuleHint:render()
-    for i = 1, #self.lines do
-        EtherTheme.drawHintText(self, self.lines[i], 0, (i - 1) * EtherTheme.fontHgtHint,
-            EtherTheme.textDim, 0.9);
-    end
-end
-
-ModuleHint.onMouseDown = UIRowBox.onMouseDown;
-ModuleHint.onMouseUp = UIRowBox.onMouseUp;
-ModuleHint.onMouseMove = UIRowBox.onMouseMove;
-
-function ModuleHint:new(x, y, w, text)
-    local lines = EtherTheme.wrapHint(text, w - 8);
-    local o = ISPanel:new(x, y, w, #lines * EtherTheme.fontHgtHint + 2);
-    setmetatable(o, self);
-    self.__index = self;
-    o.background = false;
-    o.backgroundColor = { r = 0, g = 0, b = 0, a = 0 };
-    o.borderColor = { r = 0, g = 0, b = 0, a = 0 };
-    o.moveWithMouse = false;
-    o.lines = lines;
-    return o;
-end
+-- 二百七十五 (L8): ModuleHint 下沉至 EtherFormPanel 共用 (原为本页私有逐字节拷贝),
+-- 本页直接引用全局 ModuleHint, 不再本地定义。
 
 --*********************************************************
 --* 当前载具 (玩家所坐的载具, 任意座位)。

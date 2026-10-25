@@ -1441,6 +1441,8 @@ public class GamePatcher {
         // 与已注入体永远同版本, 不会错配 (NoSuchMethodError 实测教训)
         Logger.print("Extracting modcore files to the current directory...");
         this.extractmodcore();
+        // 二百七十一: 还原上次卸载暂存的配置 (只回填缺失文件, 重装刷新天然跳过)
+        this.restoreStashedConfigs();
         Logger.print("Preparation for injection into game file...");
         this.exposePrivateFields();
         this.patchGameWindow();
@@ -1570,8 +1572,114 @@ public class GamePatcher {
                 Logger.print("Nothing to restore for '" + fileName + "'");
             }
         }
+        this.sweepOverrideClasses();
         Logger.print("Files restoration completed!");
         this.uninstallmodcoreFiles();
+    }
+
+    /**
+     * 二百七十 (用户指令"卸载后不能留痕"): 兜底清场 — patchFiles 清单外写盘的类
+     * (exposePrivateFields 暴露类) 历史上已两次漏登记 (二百一十七 IsoPlayer / 本轮
+     * 9 类) 造成卸载残留。清单先行、扫描兜底: 凡 zombie/ 下与游戏 jar 内同路径的
+     * .class (即"覆盖文件"; 原版游戏目录本无散装 zombie 类) 一并删除, 原版类始终
+     * 从 jar 载入。之后回收清空的目录 (原版游戏目录没有 zombie/ 散装树, 空壳目录
+     * 本身也是痕迹; 只删空目录, 有内容的保留)。jar 缺失 (异形目录) 时跳过扫描,
+     * 退回纯清单行为。
+     */
+    private void sweepOverrideClasses() {
+        Path jarPath = Paths.get("ProjectZomboid.jar", new String[0]);
+        Path zombieDir = Paths.get("zombie", new String[0]);
+        if (!Files.exists(jarPath, new LinkOption[0]) || !Files.exists(zombieDir, new LinkOption[0])) {
+            return;
+        }
+        int removed = 0;
+        try (JarFile jar = new JarFile(jarPath.toFile());
+             java.util.stream.Stream<Path> walk = Files.walk(zombieDir)) {
+            java.util.List<Path> classFiles = walk
+                .filter(p -> p.getFileName() != null && p.toString().endsWith(".class"))
+                .collect(java.util.stream.Collectors.toList());
+            for (Path p : classFiles) {
+                String entry = p.toString().replace('\\', '/');
+                if (jar.getEntry(entry) != null && Files.deleteIfExists(p)) {
+                    Logger.print("Sweep: removed override class " + entry);
+                    ++removed;
+                }
+            }
+        }
+        catch (IOException e) {
+            Logger.print("Override sweep warning: " + e.getMessage());
+            return;
+        }
+        Logger.print("Override sweep done: " + removed + " class file(s) removed");
+        try (java.util.stream.Stream<Path> walk = Files.walk(zombieDir)) {
+            walk.sorted(Comparator.reverseOrder()).forEach(p -> {
+                try {
+                    Files.deleteIfExists(p);   // 非空目录抛 DirectoryNotEmptyException, 静默保留
+                }
+                catch (IOException ignored) {
+                }
+            });
+        }
+        catch (IOException e) {
+            Logger.print("Empty-dir prune warning: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 二百七十一/二百七十二 (用户拍板: 配置可保留, modcore 目录不能留): 卸载时配置不陪葬 —
+     * 交给共用实现 modcore.utils.ConfigStash (安装器与运行时同一份; logs 永不暂存;
+     * 暂存失败不阻断删除 — 优先级: 目录不留 > 配置保留)。
+     */
+    private void stashConfigsBeforePurge(Path dataRoot) {
+        Path configDir = dataRoot.resolve("config");
+        if (!Files.isDirectory(configDir, new LinkOption[0])) {
+            return;
+        }
+        int saved = modcore.utils.ConfigStash.saveSnapshot(configDir.toFile(), false);
+        if (saved > 0) {
+            Logger.print("Config stash saved (" + saved + " file(s))");
+        }
+    }
+
+    /**
+     * 二百七十二: 重装时还原暂存配置 — 只回填目标缺失的文件 (重装刷新路径配置
+     * 原地存在, 天然跳过)。还原成功才删暂存 (一次性); 解密/读取失败保留暂存
+     * 待下次安装重试 (二百七十三加固: 瞬时 IO 失败不再是数据丢失边)。
+     */
+    private void restoreStashedConfigs() {
+        if (!Files.exists(modcore.utils.ConfigStash.stashPath(), new LinkOption[0])) {
+            return;
+        }
+        File configDir = Paths.get(System.getProperty("user.home"), "Zomboid", "modcore", "config").toFile();
+        int restored = modcore.utils.ConfigStash.restoreMissing(configDir);
+        if (restored >= 0) {
+            Logger.print("Config stash restored: " + restored + " file(s)");
+            modcore.utils.ConfigStash.discard();
+        }
+        else {
+            Logger.print("Config stash unreadable, kept for retry on next install");
+        }
+    }
+
+    /**
+     * 二百七十 (用户指令"卸载后不能留痕"): 卸载专用深清 — %USERPROFILE%\Zomboid\modcore
+     * 整树 (logs + 配置/k 开关持久化)。只挂在 Main --uninstall 末尾, 重装刷新路径
+     * (restoreFiles → uninstallmodcoreFiles) 不走这里, 用户配置在重装时保留。
+     * 必须最后执行且其后不再用 Logger 写日志 — printLog 会惰性重建 logs/ 目录。
+     * 二百七十一: 删除前先把 config 打包密文暂存到 %LOCALAPPDATA% (见 stashConfigsBeforePurge)。
+     */
+    public void purgeUserData() {
+        Path dataRoot = Paths.get(System.getProperty("user.home"), "Zomboid", "modcore");
+        Logger.print("Purging user data/logs (" + dataRoot + ")...");
+        this.stashConfigsBeforePurge(dataRoot);
+        try {
+            if (Files.exists(dataRoot, new LinkOption[0])) {
+                Files.walk(dataRoot, new FileVisitOption[0]).sorted(Comparator.reverseOrder()).map(Path::toFile).forEach(File::delete);
+            }
+        }
+        catch (IOException e) {
+            System.err.println("[ModCore] Failed to purge user data: " + e.getMessage());
+        }
     }
 
     /**

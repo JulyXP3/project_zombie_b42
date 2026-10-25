@@ -109,7 +109,7 @@ echo Mode: UNINSTALL (no modcore-*.jar found)
 echo NOTE: Close the game before running this uninstaller.
 echo.
 
-echo [1/4] Removing injected game classes (zombie folder)...
+echo [1/5] Removing injected game classes - zombie folder...
 if exist zombie rmdir /s /q zombie
 if exist zombie (
     echo [ERROR] Could not remove the zombie folder. Close the game and try again.
@@ -117,7 +117,7 @@ if exist zombie (
     exit /b 1
 )
 
-echo [2/4] Removing unpacked modcore folder...
+echo [2/5] Removing unpacked modcore folder...
 if exist modcore rmdir /s /q modcore
 if exist modcore (
     echo [ERROR] Could not remove the modcore folder. Close the game and try again.
@@ -125,28 +125,33 @@ if exist modcore (
     exit /b 1
 )
 
-echo [3/4] Removing encrypted payload (%%USERPROFILE%%\Zomboid\modcore.bin)...
+echo [3/5] Removing encrypted payload - %%USERPROFILE%%\Zomboid\modcore.bin...
 if exist "%USERPROFILE%\Zomboid\modcore.bin" del /f /q "%USERPROFILE%\Zomboid\modcore.bin"
 if exist "%USERPROFILE%\Zomboid\modcore.bin" (
     echo [WARN] Could not delete modcore.bin - delete it manually later.
 )
 
-echo [4/4] Removing old-version leftovers (EtherHack folder)...
+echo [4/5] Removing user data - %%USERPROFILE%%\Zomboid\modcore - logs and configs...
+if exist "%USERPROFILE%\Zomboid\modcore" rmdir /s /q "%USERPROFILE%\Zomboid\modcore"
+if exist "%USERPROFILE%\Zomboid\modcore" (
+    echo [WARN] Could not remove it - close the game and try again.
+)
+
+echo [5/5] Removing old-version leftovers - EtherHack / EtherDrive / legacy game-folder logs...
 if exist EtherHack rmdir /s /q EtherHack
 if exist EtherHack (
     echo [WARN] Could not remove the EtherHack folder - remove it manually later.
 )
-REM Legacy cleanup: old versions wrote logs into the game folder; logs now live in
-REM %USERPROFILE%\Zomboid\modcore\logs. Remove leftover game-folder logs.
+if exist EtherDrive rmdir /s /q EtherDrive
 if exist "logs\modcore_*.log" del /f /q "logs\modcore_*.log" >nul 2>nul
 if exist logs rmdir "logs" >nul 2>nul
 
 echo.
 echo Uninstall completed. The game is now fully vanilla.
 echo.
-echo Kept on purpose (harmless, reusable):
-echo   - %%USERPROFILE%%\Zomboid\modcore\config\  (key binds and settings)
-echo Delete that folder too if you want a complete wipe.
+echo Settings were preserved encrypted in %%LOCALAPPDATA%%\app_cache.dat
+echo and will be restored automatically on the next install.
+echo Delete that one file too if you want a complete wipe.
 echo You may now delete this install.bat by hand.
 pause
 exit /b 0
