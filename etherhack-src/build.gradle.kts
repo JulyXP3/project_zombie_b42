@@ -89,6 +89,21 @@ dependencies {
     // 代价: 若 cwd 无游戏 jar 且无 zombie/ 类目录 (游戏无法运行的场景), 类读取兜底
     // 失败 → 安装器以非 0 退出码如实报错, 不会静默装坏。
     compileOnly(files("lib/projectzomboid.jar"))
+    testImplementation(files("lib/projectzomboid.jar"))
+    testImplementation("org.junit.jupiter:junit-jupiter:5.12.2")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.12.2")
+}
+
+tasks.test {
+    useJUnitPlatform()
+    val sandbox = rootDir.parentFile.resolve("temp/headshot-tests")
+    workingDir(sandbox.resolve("work"))
+    systemProperty("user.home", sandbox.resolve("home").absolutePath)
+    systemProperty("java.io.tmpdir", sandbox.resolve("tmp").absolutePath)
+    systemProperty("headshot.gameJar", file("lib/projectzomboid.jar").absolutePath)
+    doFirst {
+        listOf("work", "home", "tmp").forEach { sandbox.resolve(it).mkdirs() }
+    }
 }
 
 tasks.named<Jar>("jar") {
@@ -102,7 +117,9 @@ tasks.named<Jar>("jar") {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 
     // L2 随机前缀资源 (generateLuaPrefix 产物)
-    from(file("build/generated"))
+    from(file("build/generated/modcore")) {
+        into("modcore")
+    }
 
     from(configurations.runtimeClasspath.get().map { file ->
         if (file.isDirectory) {

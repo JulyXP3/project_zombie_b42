@@ -49,13 +49,13 @@ function EtherTakeSpawn.trigger(target, count, accelerate)
         -- 原版 NetTimedActionPacket 需服务端受理才建物, 单机无此通道
         print("[TakeSpawn] multiplayer only (use your own dedicated server)")
         EtherTakeSpawn.message = getTranslate("UI_FishSpawn_MultiplayerOnly")
-        return
+        return false
     end
     if EtherTakeSpawn.busy then
-        return
+        return false
     end
     if target == nil or target == "" then
-        return
+        return false
     end
     count = tonumber(count) or 1
     if count < 1 then count = 1 end
@@ -70,7 +70,7 @@ function EtherTakeSpawn.trigger(target, count, accelerate)
     if type(takeSpawnStart) ~= "function" then
         EtherTakeSpawn.message = getTranslate("UI_TakeSpawn_Unavailable")
         EtherTakeSpawn.busy = false
-        return
+        return false
     end
 
     -- 客户端提速只在动作构造期需要 (maxTime = getDuration() 在 ISTakeBricks.new 里算一次)
@@ -93,4 +93,6 @@ function EtherTakeSpawn.trigger(target, count, accelerate)
         end
     end
     EtherTakeSpawn.busy = false
+    -- 三百零三: 队列据此判断"这次是否成功发出"
+    return ok and ret == true
 end

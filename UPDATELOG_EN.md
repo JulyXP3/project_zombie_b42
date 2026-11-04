@@ -1,6 +1,18 @@
 # Changelog
 
-## [3.2.6] - Current
+## [3.2.7] - Current
+
+- Added: a multi-item spawn list on the Loot page - fishing-rod, corpse and timed spawn let you tick several items, add them to a list where you can change quantities, remove entries or stop, then run them in order (unbox spawn stays single-item).
+
+- Changed: the animal species filter in ESP "Animal info" now supports multiple selection - pick any number of species (with select-all/clear), and the button shows the current state (all / selected count / none).
+
+- Build: version bumped to 3.2.7.
+
+## [3.2.6]
+
+- Renamed: "Crit Max" is now "Increase Critical Chance" to clarify that it raises weapon critical chance rather than guaranteeing critical hits; behavior and saved settings are unchanged.
+
+- Fixed: "Headshot only" no longer affects melee attacks or shoving, including while holding a firearm; it can be toggled independently of "Increase Critical Chance".
 
 - Added: a new "Open-Box Spawn" mode for item spawning on the Loot page - pick the target items and quantity, then perform a single vanilla craft action on a carrier item from your bag to obtain them.
 - Improved: installer size reduced from about 67MB to about 1.5MB.

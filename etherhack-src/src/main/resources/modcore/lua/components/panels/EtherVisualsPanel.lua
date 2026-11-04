@@ -30,6 +30,10 @@ require "ISUI/ISPanel"
 --*
 --* 契约: 沿用既有 toggleX/isX 全局, 名称与签名不变。
 --*
+--* 三百零一 动物种类多选: 原「动物种类」单选下拉改为 状态按钮 + 勾选弹窗
+--*   (全部 / 已选 N 种 / 未选择); 弹窗挂 UIManager, 切页或收起主菜单时自动关闭;
+--*   勾选在本地暂存, 点「确定」一次性写回 (setAnimalSpeciesAll / setAnimalSpeciesFilter)。
+--*
 --* 现况 (2026-09-21 审计核对): 僵尸信息实际只画**一行文字** `HP: <0-100>`
 --*   (`core/CoreAPI.java` updateZombiesVisuals), 上面提到的血条/drawHpBar 已不存在
 --*   (`Rendering` 无任何血条函数, 全库零命中) —— 标签/README 一律按"显示僵尸 HP"表述。
@@ -42,8 +46,8 @@ EtherVisualsPanel = EtherFormPanel:derive("EtherVisualsPanel");
 --* 长标签按模块内容宽折行; 单行紧凑 ROW_STEP, 多行按实际行高 + 盒内边距。
 --*********************************************************
 local function rowStep(item, w)
-    if item.combo then
-        return EtherTheme.entryH + 10;      -- 下拉行: 控件高 + 与下行的间隙
+    if item.species then
+        return EtherTheme.entryH + 10;      -- 多选行: 控件高 + 与下行的间隙
     end
     local title = tr(item.key);
     local availW = w - (18 + 10 + 8);
@@ -84,11 +88,209 @@ local function moduleRow(panel, item, x, y, w)
 end
 
 --*********************************************************
---* 动物模块 (二百二十六) 的物种下拉行:
+--* 动物模块 (二百二十六) 的物种多选行 (三百零一):
+--* 右侧按钮显示当前状态 (全部 / 已选 N 种 / 未选择), 点击弹出勾选窗;
 --* 选项与显示名都来自 Java (物种表炸开自游戏定义, 词条翻译在 Java 侧);
---* 未登记物种显示原始 id。「全部」(data = "") 默认选中。
+--* 未登记物种显示原始 id。
 --*********************************************************
-local function moduleComboRow(panel, item, x, y, w)
+local function speciesSummaryText()
+    if isAnimalSpeciesAll() then
+        return tr("UI_VisualsPanel_AnimalSpecies_All");
+    end
+    local ids = getAnimalSpeciesIds();
+    local n = 0;
+    for i = 0, ids:size() - 1 do
+        if isAnimalSpeciesSelected(ids:get(i)) then n = n + 1; end
+    end
+    if n == 0 then
+        return tr("UI_VisualsPanel_AnimalSpecies_None");
+    end
+    return tr("UI_VisualsPanel_AnimalSpecies_Selected", { n = n });
+end
+
+--*********************************************************
+--* 物种多选弹窗:
+--*   - 独立面板挂 UIManager (不进滚动面板, 不会被裁剪/随内容滚走);
+--*   - 勾选态只存在本地, 点「确定」才一次性写回配置 (只落盘一次);
+--*   - 全部勾选 = 回到「全部」模式; 一种都不勾 + 确定 = 自定义空选择
+--*     (不显示任何动物 — 与「全部」是两回事, Java 侧用独立开关区分)。
+--*********************************************************
+EtherAnimalSpeciesPopup = ISPanel:derive("EtherAnimalSpeciesPopup");
+EtherAnimalSpeciesPopup.instance = nil;
+
+local POPUP_PAD      = 10;
+local POPUP_MIN_W    = 240;
+local POPUP_MAX_ROWS = 8;          -- 超过 8 行启用滚动
+local LIST_TOP_PAD   = 6;          -- 列表首行上内边距 (实测: 贴边太紧, "鸡"顶到框线)
+
+local function speciesRowH()
+    return EtherTheme.fontHgtSmall + 6;
+end
+
+-- 勾选列表容器: 只负责裁剪 + 滚动 (行数超过 POPUP_MAX_ROWS 时才可能滚动)
+local SpeciesListPanel = ISPanel:derive("EtherSpeciesListPanel");
+
+function SpeciesListPanel:prerender()
+    self:setStencilRect(0, 0, self.width, self.height);
+    ISPanel.prerender(self);
+end
+
+function SpeciesListPanel:render()
+    self:clearStencilRect();
+end
+
+function EtherAnimalSpeciesPopup:new(ids, names, onApply)
+    local rowH = speciesRowH();
+    local titleH = EtherTheme.fontHgtSmall + 6;
+    local contentH = ids:size() * rowH + LIST_TOP_PAD * 2;
+    local listH = contentH;
+    local maxListH = POPUP_MAX_ROWS * rowH + LIST_TOP_PAD * 2;
+    if listH > maxListH then listH = maxListH; end
+    if listH < rowH then listH = rowH; end
+
+    -- 宽度: 标题 / 最长物种名 / 两个等宽按钮都要放得下
+    local tm = getTextManager();
+    local w = POPUP_MIN_W;
+    for i = 0, names:size() - 1 do
+        local need = 2 + 18 + 10 + tm:MeasureStringX(UIFont.Small, names:get(i)) + 20 + POPUP_PAD * 2;
+        if need > w then w = need; end
+    end
+    local btnTitles = {
+        tr("UI_VisualsPanel_AnimalSpecies_SelectAll"),
+        tr("UI_VisualsPanel_AnimalSpecies_Clear"),
+        tr("UI_VisualsPanel_AnimalSpecies_Apply"),
+        tr("UI_VisualsPanel_AnimalSpecies_Cancel"),
+    };
+    local needBtn = UIButton.measureGroupWidth(btnTitles) * 2 + POPUP_PAD * 2 + EtherTheme.ctrlGap;
+    if needBtn > w then w = needBtn; end
+
+    local listY = POPUP_PAD + titleH + 4;
+    local h = listY + listH + 8 + EtherTheme.ctrlH + 6 + EtherTheme.ctrlH + POPUP_PAD;
+
+    local o = ISPanel:new(0, 0, w, h);
+    setmetatable(o, self);
+    self.__index = self;
+    o.background = false;
+    o.backgroundColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.borderColor = { r = 0, g = 0, b = 0, a = 0 };
+    o.moveWithMouse = false;
+    o.ids = ids;
+    o.names = names;
+    o.checks = {};
+    o.listY = listY;
+    o.listH = listH;
+    o.contentH = contentH;
+    o.onApply = onApply;
+    return o;
+end
+
+function EtherAnimalSpeciesPopup:createChildren()
+    ISPanel.createChildren(self);
+
+    local rowH = speciesRowH();
+    local listW = self.width - POPUP_PAD * 2;
+    local list = SpeciesListPanel:new(POPUP_PAD, self.listY, listW, self.listH);
+    list:initialise();
+    list:instantiate();
+    self.listPanel = list;
+    self:addChild(list);
+    if self.contentH > self.listH then
+        list:setScrollChildren(true);
+        list:setScrollHeight(self.contentH);
+        list:addScrollBars();
+    end
+
+    for i = 0, self.ids:size() - 1 do
+        local cb = UICheckbox:new(2, LIST_TOP_PAD + i * rowH, self.names:get(i), isAnimalSpeciesSelected(self.ids:get(i)));
+        cb.width = listW - 20;                   -- 命中区域 = 整行 (右侧留出滚动条)
+        cb:initialise();
+        cb:instantiate();
+        list:addChild(cb);
+        self.checks[i + 1] = cb;
+    end
+
+    local btnW = (self.width - POPUP_PAD * 2 - EtherTheme.ctrlGap) / 2;
+    local by1 = self.listY + self.listH + 8;
+    local by2 = by1 + EtherTheme.ctrlH + 6;
+    local allBtn = UIButton:new(POPUP_PAD, by1, btnW, EtherTheme.ctrlH,
+        tr("UI_VisualsPanel_AnimalSpecies_SelectAll"), function() self:setAllChecked(true); end, btnW);
+    local clearBtn = UIButton:new(POPUP_PAD + btnW + EtherTheme.ctrlGap, by1, btnW, EtherTheme.ctrlH,
+        tr("UI_VisualsPanel_AnimalSpecies_Clear"), function() self:setAllChecked(false); end, btnW);
+    local cancelBtn = UIButton:new(POPUP_PAD, by2, btnW, EtherTheme.ctrlH,
+        tr("UI_VisualsPanel_AnimalSpecies_Cancel"), function() self:close(); end, btnW);
+    local applyBtn = UIButton:new(POPUP_PAD + btnW + EtherTheme.ctrlGap, by2, btnW, EtherTheme.ctrlH,
+        tr("UI_VisualsPanel_AnimalSpecies_Apply"), function() self:apply(); end, btnW);
+    self:addChild(allBtn);
+    self:addChild(clearBtn);
+    self:addChild(cancelBtn);
+    self:addChild(applyBtn);
+end
+
+-- 背景/描边/标题必须画在 prerender: PZ 的 UIElement.render 顺序是
+-- 本控件 prerender -> 子控件 render -> 本控件 render, 画在 render 会盖住按钮。
+function EtherAnimalSpeciesPopup:prerender()
+    local bg = EtherTheme.glassBG;
+    self:drawRect(0, 0, self.width, self.height, 0.97, bg.r, bg.g, bg.b);
+    EtherTheme.drawTileBox(self, 0, 0, self.width, self.height, true, 8);
+    local tc = EtherTheme.text;
+    self:drawText(tr("UI_VisualsPanel_AnimalSpecies"), POPUP_PAD, POPUP_PAD - 1,
+        tc.r, tc.g, tc.b, 1.0, UIFont.Small);
+end
+
+function EtherAnimalSpeciesPopup:setAllChecked(checked)
+    for i = 1, #self.checks do
+        self.checks[i]:setCheked(checked);
+    end
+end
+
+function EtherAnimalSpeciesPopup:apply()
+    local parts = {};
+    local allChecked = true;
+    for i = 0, self.ids:size() - 1 do
+        -- 读字段不要调 :isChecked(): UICheckbox:new 把同名字段 isChecked 设在实例上,
+        -- 字段会遮住类方法, cb:isChecked() 实际是"调用布尔值" -> Kahlua 报
+        -- "Object true did not have __call metatable set" (三百零四 实测报错)。
+        if self.checks[i + 1].isChecked then
+            table.insert(parts, self.ids:get(i));
+        else
+            allChecked = false;
+        end
+    end
+    if allChecked and self.ids:size() > 0 then
+        setAnimalSpeciesAll(true);
+    else
+        setAnimalSpeciesFilter(table.concat(parts, ","));
+    end
+    if self.onApply ~= nil then self.onApply(); end
+    self:close();
+end
+
+function EtherAnimalSpeciesPopup:onMouseWheel(del)
+    local list = self.listPanel;
+    if list ~= nil and self.contentH > list.height then
+        list:setYScroll(list:getYScroll() - del * 40);
+        return true;
+    end
+    return false;
+end
+
+-- 主菜单整体隐藏 (菜单键收起/关闭) 时, 挂 UIManager 的弹窗不会随父面板隐藏 -> 自查收敛
+function EtherAnimalSpeciesPopup:update()
+    local main = EtherMain.instance;
+    if main == nil or not main:getIsVisible() then
+        self:close();
+    end
+end
+
+function EtherAnimalSpeciesPopup:close()
+    if EtherAnimalSpeciesPopup.instance == self then
+        EtherAnimalSpeciesPopup.instance = nil;
+    end
+    self:setVisible(false);
+    self:removeFromUIManager();
+end
+
+local function moduleSpeciesRow(panel, item, x, y, w)
     local title = tr(item.key);
     local tm = getTextManager();
     local entryH = EtherTheme.entryH;
@@ -97,41 +299,26 @@ local function moduleComboRow(panel, item, x, y, w)
     panel:addChild(label);
     panel:_track(label, item);
 
-    local ids = getAnimalSpeciesIds();
-    local names = getAnimalSpeciesNames();
-    local allT = tr("UI_VisualsPanel_AnimalSpecies_All");
-    local comboPad = 26;                      -- 右侧箭头 + 内边距
-    local comboW = UIButton.measureWidth(allT) + comboPad;
-    for i = 0, ids:size() - 1 do
-        local ow = UIButton.measureWidth(names:get(i)) + comboPad;
-        if ow > comboW then comboW = ow; end
-    end
-    if comboW < 120 then comboW = 120; end
+    -- 按钮宽按三种状态文案里最宽的算, 状态切换后不跳宽
+    local btnW = UIButton.measureWidth(tr("UI_VisualsPanel_AnimalSpecies_All"));
+    local noneW = UIButton.measureWidth(tr("UI_VisualsPanel_AnimalSpecies_None"));
+    local selW = UIButton.measureWidth(tr("UI_VisualsPanel_AnimalSpecies_Selected", { n = 99 }));
+    if noneW > btnW then btnW = noneW; end
+    if selW > btnW then btnW = selW; end
+    if btnW < 120 then btnW = 120; end
     local labelW = tm:MeasureStringX(UIFont.Small, title);
     local maxW = w - labelW - 12 - EtherFormPanel.BOX_PAD_X;
-    if comboW > maxW then comboW = maxW; end
-    local cx = x + w - comboW - EtherFormPanel.BOX_PAD_X;
-    if cx < x + labelW + 12 then cx = x + labelW + 12; end
+    if maxW < 60 then maxW = 60; end
+    if btnW > maxW then btnW = maxW; end
+    local bx = x + w - btnW - EtherFormPanel.BOX_PAD_X;
+    if bx < x + labelW + 12 then bx = x + labelW + 12; end
 
-    local combo = ISComboBox:new(cx, y, comboW, entryH, panel, function(t, c)
-        local data = c:getSelectedData();
-        if data ~= nil then
-            setAnimalSpeciesFilter(data);
-        end
-    end);
-    combo:addOptionWithData(allT, "");
-    for i = 0, ids:size() - 1 do
-        combo:addOptionWithData(names:get(i), ids:get(i));
-    end
-    local cur = getAnimalSpeciesFilter();
-    if cur == nil then cur = ""; end
-    combo:setSelectedData(cur);
-    -- 存档里是已消失的物种时, 回写为实际选中项 (避免"显示全部但仍在过滤")
-    local sel = combo:getSelectedData();
-    if sel ~= nil and sel ~= cur then
-        setAnimalSpeciesFilter(sel);
-    end
-    panel:addWidget(combo, item);
+    local btn;
+    btn = UIButton:new(bx, y, btnW, entryH, speciesSummaryText(), function()
+        panel:openSpeciesPopup();
+    end, btnW);
+    panel:addWidget(btn, item);
+    panel.speciesBtn = btn;
 end
 
 --*********************************************************
@@ -182,7 +369,7 @@ function EtherVisualsPanel:build()
         {
             title = "UI_VisualsPanel_Group_Animals",
             items = {
-                { key = "UI_VisualsPanel_AnimalSpecies", combo = true },
+                { key = "UI_VisualsPanel_AnimalSpecies", species = true },
                 { key = "UI_VisualsPanel_IsVisualsAnimalsEnable", on = toggleVisualsAnimalsEnable,    get = isVisualsAnimalsEnable },
                 { key = "UI_VisualsPanel_DrawLineToAnimals",      on = toggleVisualDrawLineToAnimals, get = isVisualDrawLineToAnimals },
                 { key = "UI_VisualsPanel_IsVisualsTrailersEnable", on = toggleVisualsTrailersEnable, get = isVisualsTrailersEnable },
@@ -205,14 +392,57 @@ function EtherVisualsPanel:build()
             local cy = by;
             for i = 1, #mod.items do
                 local item = mod.items[i];
-                if item.combo then
-                    moduleComboRow(self, item, bx, cy, bw);
+                if item.species then
+                    moduleSpeciesRow(self, item, bx, cy, bw);
                     cy = cy + rowStep(item, bw);
                 else
                     cy = cy + moduleRow(self, item, bx, cy, bw);
                 end
             end
         end);
+    end
+end
+
+--*********************************************************
+--* 打开/收起物种多选弹窗 (再次点同一按钮 = 收起)。
+--* 位置取点击时的鼠标坐标 (刚点在按钮上): 弹窗左上落在光标处, 放不下就向左/上翻;
+--* 不用控件绝对坐标 —— 面板开了滚动子控件, 滚动后的绝对坐标不可靠。
+--*********************************************************
+function EtherVisualsPanel:openSpeciesPopup()
+    if EtherAnimalSpeciesPopup.instance ~= nil then
+        EtherAnimalSpeciesPopup.instance:close();
+        return;
+    end
+    local popup = EtherAnimalSpeciesPopup:new(getAnimalSpeciesIds(), getAnimalSpeciesNames(), function()
+        if self.speciesBtn ~= nil then
+            self.speciesBtn.title = speciesSummaryText();
+        end
+    end);
+    popup:initialise();
+    popup:instantiate();
+
+    local sw, sh = getCore():getScreenWidth(), getCore():getScreenHeight();
+    local px, py = getMouseX(), getMouseY() + 2;
+    if px + popup.width > sw - 8 then px = sw - popup.width - 8; end
+    if px < 8 then px = 8; end
+    if py + popup.height > sh - 8 then py = py - popup.height - 18; end
+    if py < 8 then py = 8; end
+    popup:setX(px);
+    popup:setY(py);
+
+    popup:addToUIManager();
+    popup:setVisible(true);
+    EtherAnimalSpeciesPopup.instance = popup;
+end
+
+--*********************************************************
+--* 切页时面板被隐藏 (UIButtonsPanel:openPanel), 弹窗挂 UIManager 不会跟着隐藏
+--* -> 面板一隐藏就主动收起, 避免残留在别的页面上。
+--*********************************************************
+function EtherVisualsPanel:setVisible(visible)
+    ISPanel.setVisible(self, visible);
+    if not visible and EtherAnimalSpeciesPopup.instance ~= nil then
+        EtherAnimalSpeciesPopup.instance:close();
     end
 end
 

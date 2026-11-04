@@ -57,6 +57,11 @@ public final class TakeSpawnAPI {
     private static long lastPoisonMs;
     private static boolean armed;
 
+    /** 三百零三 多选队列: 上一次发出的 NetTimedAction (客户端 ActionManager 队列里的对象)。 */
+    private static Object lastAction;
+    private static java.lang.reflect.Field actionsField;
+    private static boolean actionsFieldResolved;
+
     private TakeSpawnAPI() {
     }
 
@@ -87,6 +92,7 @@ public final class TakeSpawnAPI {
         if (accelerate && !arm(p)) {
             throw new RuntimeException("accelerator arm failed");
         }
+        java.util.IdentityHashMap<Object, Boolean> before = snapshotActions();
         try {
             // values = (character, pallet, square, sprite, item, amount)
             // (pallet 传玩家自己 —— 原版 isValid 只要求 isExistInTheWorld)
@@ -98,6 +104,16 @@ public final class TakeSpawnAPI {
             }
             throw new RuntimeException("action create/send failed: " + t);
         }
+        // 三百零三: 记下这次新建的客户端动作 —— 队列据此判断"上一件是否真的结束了"
+        if (actionsField() != null) {
+            lastAction = findNewAction(before);
+            if (lastAction == null) {
+                // sendAction 一致性检查失败时不会进队列 → 这条动作服务端根本收不到
+                restore();
+                throw new RuntimeException("action create failed (packet not registered)");
+            }
+        }
+        // 反射不可用 (未来字段改名) 时不做这个判定: 保持原行为, 让队列用数量增量/超时兜底
         Logger.printLog("[TakeSpawn] ISTakeBricks sent: " + count + "x " + itemType
                 + (accelerate ? " (accelerated)" : ""));
         return true;
@@ -107,6 +123,94 @@ public final class TakeSpawnAPI {
     @LuaMethod(name = "takeSpawnCancel", global = true)
     public static void takeSpawnCancel() {
         restore();
+    }
+
+    /**
+     * 三百零三 队列用: 上一次发出的计时动作是否还在客户端 ActionManager 队列里。
+     * 服务端 Done/Reject 后 ActionManager 会把该动作移除 → false = 这一件已结束。
+     * 反射失败 (字段改名) 时返回 true (未知 = 当作仍在进行), 由队列的超时兜底。
+     */
+    @LuaMethod(name = "takeSpawnActionAlive", global = true)
+    public static boolean takeSpawnActionAlive() {
+        if (lastAction == null) {
+            // 没记到动作: 反射不可用时视为"未知 -> 仍在进行", 由数量增量/超时兜底;
+            // 反射可用却没有动作 = 这次没发出去 (调用方通常会先收到异常)。
+            return actionsField() == null;
+        }
+        java.lang.reflect.Field f = actionsField();
+        if (f == null) {
+            return true;
+        }
+        try {
+            Object q = f.get(null);
+            if (!(q instanceof java.util.Collection)) {
+                return true;
+            }
+            for (Object o : (java.util.Collection<?>)q) {
+                if (o == lastAction) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    // ===== 动作队列快照 (只读) =====
+
+    private static java.lang.reflect.Field actionsField() {
+        if (!actionsFieldResolved) {
+            actionsFieldResolved = true;
+            try {
+                // FieldCache 内部已做 setAccessible + 父类回退 (与 FishingSpawnAPI 同一取法)
+                actionsField = modcore.utils.FieldCache.getField(
+                        zombie.core.ActionManager.class, "actions");
+            } catch (Throwable t) {
+                Logger.printLog("[TakeSpawn] actions field unavailable: " + t);
+                actionsField = null;
+            }
+        }
+        return actionsField;
+    }
+
+    private static java.util.IdentityHashMap<Object, Boolean> snapshotActions() {
+        java.util.IdentityHashMap<Object, Boolean> map = new java.util.IdentityHashMap<Object, Boolean>();
+        java.lang.reflect.Field f = actionsField();
+        if (f == null) {
+            return map;
+        }
+        try {
+            Object q = f.get(null);
+            if (q instanceof java.util.Collection) {
+                for (Object o : (java.util.Collection<?>)q) {
+                    map.put(o, Boolean.TRUE);
+                }
+            }
+        } catch (Throwable t) {
+            // 字段异常 = 拿不到快照 → findNewAction 会返回 null (调用方报失败)
+        }
+        return map;
+    }
+
+    private static Object findNewAction(java.util.IdentityHashMap<Object, Boolean> before) {
+        java.lang.reflect.Field f = actionsField();
+        if (f == null) {
+            return null;
+        }
+        try {
+            Object q = f.get(null);
+            if (q instanceof java.util.Collection) {
+                for (Object o : (java.util.Collection<?>)q) {
+                    if (!before.containsKey(o)) {
+                        return o;
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            return null;
+        }
+        return null;
     }
 
     /** 加速件状态 (面板显示用)。 */

@@ -528,37 +528,100 @@ public class GamePatcher {
     }
 
     private void patchHeadshotOnly() {
-        Logger.print("Patching CombatManager.processHit with headshot-only hook...");
+        Logger.print("Patching CombatManager.processHit shot target body part...");
         try {
-            Patch.injectIntoClass("zombie/CombatManager", "processHit", false, method -> {
-                InsnList hookInstructions = new InsnList();
-                LabelNode continueLabel = new LabelNode();
-                hookInstructions.add(new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
-                hookInstructions.add(new FieldInsnNode(180, "modcore/core/CoreMain", "CoreAPI", "Lmodcore/core/CoreAPI;"));
-                hookInstructions.add(new FieldInsnNode(180, "modcore/core/CoreAPI", "isHeadshotOnly", "Z"));
-                hookInstructions.add(new JumpInsnNode(153, continueLabel));
-                hookInstructions.add(new VarInsnNode(25, 0));
-                hookInstructions.add(new VarInsnNode(25, 1));
-                hookInstructions.add(new VarInsnNode(25, 2));
-                hookInstructions.add(new VarInsnNode(25, 3));
-                hookInstructions.add(new FieldInsnNode(178, "zombie/core/physics/RagdollBodyPart", "BODYPART_HEAD", "Lzombie/core/physics/RagdollBodyPart;"));
-                hookInstructions.add(new VarInsnNode(25, 0));
-                hookInstructions.add(new VarInsnNode(25, 2));
-                hookInstructions.add(new VarInsnNode(25, 3));
-                hookInstructions.add(new MethodInsnNode(182, "zombie/CombatManager", "calculateShotDirection", "(Lzombie/characters/IsoGameCharacter;Lzombie/characters/IsoGameCharacter;)Lzombie/combat/ShotDirection;", false));
-                hookInstructions.add(new MethodInsnNode(182, "zombie/CombatManager", "processTargetedHit", "(Lzombie/inventory/types/HandWeapon;Lzombie/characters/IsoGameCharacter;Lzombie/characters/IsoGameCharacter;Lzombie/core/physics/RagdollBodyPart;Lzombie/combat/ShotDirection;)V", false));
-                hookInstructions.add(new FieldInsnNode(178, "zombie/core/physics/RagdollBodyPart", "BODYPART_HEAD", "Lzombie/core/physics/RagdollBodyPart;"));
-                hookInstructions.add(new MethodInsnNode(182, "zombie/core/physics/RagdollBodyPart", "ordinal", "()I", false));
-                hookInstructions.add(new InsnNode(172));
-                hookInstructions.add(continueLabel);
-                method.instructions.insert(hookInstructions);
-                Logger.print("  [OK] Injected headshot-only hook into CombatManager.processHit()");
-            });
+            Patch.injectIntoClass("zombie/CombatManager", "processHit", false,
+                    GamePatcher::headshotTargetStore,
+                    method -> {
+                        VarInsnNode targetStore = headshotTargetStore(method);
+                        InsnList hook = new InsnList();
+                        // 栈顶是原版选出的部位；SHOT 分支与暴击掷骰已经执行，其他命中不经过这里。
+                        hook.add(new VarInsnNode(25, 1));
+                        hook.add(new VarInsnNode(25, 2));
+                        hook.add(new MethodInsnNode(184, "modcore/core/HeadshotRuntime", "selectTargetBodyPart",
+                                "(ILzombie/inventory/types/HandWeapon;Lzombie/characters/IsoGameCharacter;)I", false));
+                        method.instructions.insertBefore(targetStore, hook);
+                        Logger.print("  [OK] Injected headshot body-part selector inside the shot branch");
+                    },
+                    "modcore/core/HeadshotRuntime", "selectTargetBodyPart");
         }
         catch (Exception e) {
             Logger.print("Warning: Headshot-only injection failed: " + e.getMessage());
             Logger.logException(e);
         }
+    }
+
+    /** 只接受原版 SHOT → 暴击计算 → 命中部位赋值 → 定点命中的形状；漂移时拒注。 */
+    private static VarInsnNode headshotTargetStore(MethodNode method) {
+        String targetDesc = "(Lzombie/inventory/types/HandWeapon;Lzombie/characters/IsoGameCharacter;"
+                + "Lzombie/characters/IsoGameCharacter;)I";
+        if (!method.desc.equals(targetDesc)) {
+            throw new IllegalStateException("unexpected processHit descriptor: " + method.desc);
+        }
+        java.util.List<AbstractInsnNode> real = new java.util.ArrayList<>();
+        for (AbstractInsnNode insn : method.instructions) {
+            if (insn.getOpcode() >= 0) real.add(insn);
+        }
+        int shot = -1;
+        int critChance = -1;
+        int critStore = -1;
+        int bodyStore = -1;
+        int targetedHit = -1;
+        for (int i = 0; i < real.size(); i++) {
+            AbstractInsnNode insn = real.get(i);
+            if (insn instanceof FieldInsnNode field && field.getOpcode() == 178
+                    && field.owner.equals("zombie/combat/HitReaction") && field.name.equals("SHOT")
+                    && field.desc.equals("Lzombie/combat/HitReaction;")) {
+                if (shot != -1) throw new IllegalStateException("multiple SHOT branches");
+                shot = i;
+            }
+            if (insn instanceof MethodInsnNode call && call.getOpcode() == 182) {
+                if (call.owner.equals("zombie/characters/IsoPlayer") && call.name.equals("calculateCritChance")
+                        && call.desc.equals("(Lzombie/characters/IsoGameCharacter;)I")) {
+                    if (critChance != -1) throw new IllegalStateException("multiple critical rolls");
+                    critChance = i;
+                }
+                if (call.owner.equals("zombie/characters/IsoGameCharacter") && call.name.equals("setCriticalHit")
+                        && call.desc.equals("(Z)V")) {
+                    if (critStore != -1) throw new IllegalStateException("multiple critical assignments");
+                    critStore = i;
+                }
+                if (call.owner.equals("zombie/CombatManager") && call.name.equals("processTargetedHit")
+                        && call.desc.equals("(Lzombie/inventory/types/HandWeapon;Lzombie/characters/IsoGameCharacter;"
+                                + "Lzombie/characters/IsoGameCharacter;Lzombie/core/physics/RagdollBodyPart;"
+                                + "Lzombie/combat/ShotDirection;)V")) {
+                    if (targetedHit != -1) throw new IllegalStateException("multiple targeted-hit calls");
+                    targetedHit = i;
+                }
+            }
+            if (insn instanceof VarInsnNode store && store.getOpcode() == 54 && i >= 2
+                    && real.get(i - 1) instanceof MethodInsnNode ordinal && ordinal.getOpcode() == 182
+                    && ordinal.owner.equals("zombie/core/physics/RagdollBodyPart")
+                    && ordinal.name.equals("ordinal") && ordinal.desc.equals("()I")
+                    && real.get(i - 2) instanceof FieldInsnNode count && count.getOpcode() == 178
+                    && count.owner.equals("zombie/core/physics/RagdollBodyPart")
+                    && count.name.equals("BODYPART_COUNT")
+                    && count.desc.equals("Lzombie/core/physics/RagdollBodyPart;")) {
+                if (bodyStore != -1) throw new IllegalStateException("multiple target body-part stores");
+                bodyStore = i;
+            }
+        }
+        if (shot < 1 || shot + 1 >= real.size()
+                || !(real.get(shot - 1) instanceof VarInsnNode reaction) || reaction.getOpcode() != 25
+                || !(real.get(shot + 1) instanceof JumpInsnNode branch) || branch.getOpcode() != 166
+                || !(shot < critChance && critChance < critStore && critStore < bodyStore && bodyStore < targetedHit)) {
+            throw new IllegalStateException("processHit shot/critical/body-part order changed");
+        }
+        VarInsnNode store = (VarInsnNode) real.get(bodyStore);
+        int shotEnd = method.instructions.indexOf(branch.label);
+        if (shotEnd <= method.instructions.indexOf(real.get(targetedHit))
+                || targetedHit + 2 >= real.size()
+                || !(real.get(targetedHit + 1) instanceof VarInsnNode result)
+                || result.getOpcode() != 21 || result.var != store.var
+                || real.get(targetedHit + 2).getOpcode() != 172) {
+            throw new IllegalStateException("processHit targeted-hit return no longer belongs to SHOT");
+        }
+        return store;
     }
 
     //*********************************************************

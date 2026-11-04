@@ -178,10 +178,16 @@ public class CoreAPI {
     public boolean isVisualDrawPlayerInfo;
     public boolean isVisualDrawLineToVehicle;
     public boolean isVisualDrawLineToPlayers;
-    // 二百二十六 动物 ESP: 标记开关 / 雷达连线开关 / 物种筛选 (空串=全部, 存物种 id)
+    // 二百二十六 动物 ESP: 标记开关 / 雷达连线开关 / 物种筛选
+    // 三百零一 物种多选: animalSpeciesFilter 存逗号分隔的物种 id; isAnimalSpeciesAll = 「全部」模式。
+    // 两者必须分开: 自定义模式下空串 = 一种都不显示 (与「全部」区分), 旧配置无 k86 时按空串推断全部。
     public boolean isVisualsAnimalsEnable;
     public boolean isVisualDrawLineToAnimals;
+    public boolean isAnimalSpeciesAll = true;
     public String animalSpeciesFilter = "";
+    /** 多选集合解析缓存 (逐帧渲染路径; 键 = 参与切分的原串)。 */
+    private String animalSpeciesSetKey;
+    private java.util.HashSet<String> animalSpeciesSet;
     // 二百三十四 牲畜拖车 ESP: 追踪动物拖车 (部件 TrailerAnimalFood 判定; 颜色复用载具 ESP 色)
     public boolean isVisualsTrailersEnable;
     public boolean isVisualEnable360Vision = true;
@@ -303,6 +309,7 @@ public class CoreAPI {
             {"isVisualDrawLineToAnimals", "k83"},
             {"animalSpeciesFilter", "k84"},
             {"isVisualsTrailersEnable", "k85"},
+            {"isAnimalSpeciesAll", "k86"},
         };
         for (String[] e : m) {
             CONFIG_KEY_CODES.put(e[0], e[1]);
@@ -390,6 +397,7 @@ public class CoreAPI {
         var3.setProperty("isVisualDrawLineToAnimals", Boolean.toString(this.isVisualDrawLineToAnimals));
         var3.setProperty("isVisualsTrailersEnable", Boolean.toString(this.isVisualsTrailersEnable));
         var3.setProperty("animalSpeciesFilter", this.animalSpeciesFilter == null ? "" : this.animalSpeciesFilter);
+        var3.setProperty("isAnimalSpeciesAll", Boolean.toString(this.isAnimalSpeciesAll));
         var3.setProperty("isVisualEnable360Vision", Boolean.toString(this.isVisualEnable360Vision));
         var3.setProperty("isMapDrawLocalPlayer", Boolean.toString(this.isMapDrawLocalPlayer));
         var3.setProperty("isMapDrawAllPlayers", Boolean.toString(this.isMapDrawAllPlayers));
@@ -520,7 +528,15 @@ public class CoreAPI {
         this.isVisualsAnimalsEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsAnimalsEnable", false);
         this.isVisualDrawLineToAnimals = ConfigUtils.getBooleanFromConfig(var3, "isVisualDrawLineToAnimals", false);
         this.isVisualsTrailersEnable = ConfigUtils.getBooleanFromConfig(var3, "isVisualsTrailersEnable", false);
-        this.animalSpeciesFilter = ConfigUtils.getStringFromConfig(var3, "animalSpeciesFilter", "");
+        this.animalSpeciesFilter = CoreAPI.normalizeAnimalSpeciesFilter(
+                ConfigUtils.getStringFromConfig(var3, "animalSpeciesFilter", ""));
+        if (var3.containsKey("isAnimalSpeciesAll")) {
+            this.isAnimalSpeciesAll = ConfigUtils.getBooleanFromConfig(var3, "isAnimalSpeciesAll", true);
+        }
+        else {
+            // 旧版单选配置兼容: k84 为空串 = 全部; 有 id = 只显示该物种
+            this.isAnimalSpeciesAll = this.animalSpeciesFilter.isEmpty();
+        }
         this.isVisualEnable360Vision = ConfigUtils.getBooleanFromConfig(var3, "isVisualEnable360Vision", true);
         this.isMapDrawLocalPlayer = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawLocalPlayer", true);
         this.isMapDrawAllPlayers = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawAllPlayers", false);
@@ -1511,6 +1527,56 @@ public class CoreAPI {
         return animalTypeToSpecies == null ? null : animalTypeToSpecies.get(type);
     }
 
+    // ===================== 物种多选 (三百零一) =====================
+    // 存储沿用 k84 单串, 多选以逗号分隔; 是否「全部」由 k86 独立表达,
+    // 这样「全部」与「自定义但一种都没选」在配置里可区分。
+
+    /** 规范化多选串: 去空白 / 去空项 / 去重, 保持首次出现顺序 (不校验物种是否存在, 兼容客户端 mod)。 */
+    public static String normalizeAnimalSpeciesFilter(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        java.util.LinkedHashSet<String> ids = new java.util.LinkedHashSet<String>();
+        for (String part : raw.split(",")) {
+            String id = part.trim();
+            if (!id.isEmpty()) {
+                ids.add(id);
+            }
+        }
+        return String.join(",", ids);
+    }
+
+    /** 当前自定义筛选集合 (按原串缓存; 逐帧渲染路径零重复切分)。 */
+    private java.util.HashSet<String> animalSpeciesIdSet() {
+        String raw = this.animalSpeciesFilter;
+        if (this.animalSpeciesSet != null && Objects.equals(raw, this.animalSpeciesSetKey)) {
+            return this.animalSpeciesSet;
+        }
+        java.util.HashSet<String> set = new java.util.HashSet<String>();
+        if (raw != null) {
+            for (String part : raw.split(",")) {
+                String id = part.trim();
+                if (!id.isEmpty()) {
+                    set.add(id);
+                }
+            }
+        }
+        this.animalSpeciesSetKey = raw;
+        this.animalSpeciesSet = set;
+        return set;
+    }
+
+    /** 该物种当前是否参与显示: 全部模式恒 true; 自定义模式下空选择 = 一种都不显示。 */
+    public boolean isAnimalSpeciesVisible(String speciesId) {
+        if (this.isAnimalSpeciesAll) {
+            return true;
+        }
+        if (speciesId == null) {
+            return false;
+        }
+        return this.animalSpeciesIdSet().contains(speciesId);
+    }
+
     private void updateAnimalsVisuals() {
         IsoPlayer var1;
         if (this.isVisualsEnable && (this.isVisualsAnimalsEnable || this.isVisualDrawLineToAnimals) && (var1 = IsoPlayer.getInstance()) != null) {
@@ -1523,12 +1589,10 @@ public class CoreAPI {
                 float var7 = this.animalsUIColor.g;
                 float var8 = this.animalsUIColor.b;
                 float scale = Rendering.espTextScale();
-                String filter = this.animalSpeciesFilter;
-                boolean hasFilter = filter != null && !filter.isEmpty();
                 for (IsoAnimal var9 : var2) {
                     if (var9 == null) continue;
                     String speciesId = CoreAPI.speciesIdOfType(var9.getAnimalType());
-                    if (hasFilter && !filter.equals(speciesId)) continue;
+                    if (!this.isAnimalSpeciesVisible(speciesId)) continue;
                     float var10 = PlayerUtils.getScreenPositionX(var9);
                     float var11 = PlayerUtils.getScreenPositionY(var9);
                     float dist = PlayerUtils.getDistanceBetweenPlayers(var1, var9);

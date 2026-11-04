@@ -23,8 +23,8 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Combat
 
-- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / CritMax / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (auto-refill; the refill count is set on the Loot page) / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
-- **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; the vanilla damage falloff across targets is removed, so every zombie takes full damage — combine with CritMax / One-Shot Kill)
+- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / Increase Critical Chance (raises weapon critical chance; does not guarantee a critical hit) / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (auto-refill; the refill count is set on the Loot page) / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
+- **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; the vanilla damage falloff across targets is removed, so every zombie takes full damage — combine with Increase Critical Chance / One-Shot Kill)
 - **Temp Weapon**: locally spawn a firearm and swap it into your hands (searchable full firearm list + swap/restore)
 
 ### Items (SP)
@@ -51,7 +51,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### ESP
 
-- Master switch + five modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed), zombie info (overhead HP readout, zombie radar), animal info (show animal names, animal radar with distance lines within 150 tiles, species filter, track livestock trailers), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision — every zombie/vehicle/player forced visible)
+- Master switch + five modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed), zombie info (overhead HP readout, zombie radar), animal info (show animal names, animal radar with distance lines within 150 tiles, multi-select species filter, track livestock trailers), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision — every zombie/vehicle/player forced visible)
 
 ### Map
 
@@ -67,6 +67,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 - **Corpse spawn**: spawn a corpse at your feet carrying the chosen items and loot it (multiplayer only; **it leaves a log entry on the server - use with caution**)
 - **Timed spawn**: uses the game's own action so the item is real and persistent (visible to others), with an "Accelerate" toggle for its speed (multiplayer only)
 - **Unbox spawn**: keep a carrier (jar box / log stack x2-x4 / firewood bundle) in your backpack, pick a target and count, then spawn; craft the matching unpack recipe once to release any listed items (multiplayer only)
+- **Multi-item list**: fishing-rod, corpse and timed spawn accept several ticked items at once - add them to a list, adjust each quantity there, then run them in sequence (unbox spawn stays single-item; multiplayer only)
 
 ### Build
 
@@ -115,7 +116,7 @@ Requirements: **JDK 25** and **Gradle 9.1.0**. The build runs through the includ
 
 1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, keeping the original file name (it is only read at compile time and never modified).
 2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-3. Take `modcore-3.2.6-B42.jar` from the `build` directory.
+3. Take `modcore-3.2.7-B42.jar` from the `build` directory.
 4. Copy the jar together with `etherhack-src/install.bat` (and optionally `etherhack-src/uninstall.bat`) into the **game root directory**.
 5. Run `install.bat` to install the mod.
 
@@ -132,7 +133,7 @@ cd etherhack-src
 gradlew.bat jar
 ```
 
-The output jar is at `etherhack-src/build/modcore-3.2.6-B42.jar`. The build embeds the Lua sources from `src/main/resources/modcore/lua/`.
+The output jar is at `etherhack-src/build/modcore-3.2.7-B42.jar`. The build embeds the Lua sources from `src/main/resources/modcore/lua/`.
 
 ## Testing
 
@@ -150,7 +151,7 @@ Note: `temp/` is a local scratch directory and is not part of the repository.
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/modcore-3.2.6-B42.jar` | Ready-to-use build (current release) |
+| `etherhack-src/build/modcore-3.2.7-B42.jar` | Ready-to-use build (current release) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `analysis/` | Reverse-engineering evidence and design docs (`analysis/**/*.md` is tracked; decompiled sources stay local only) |

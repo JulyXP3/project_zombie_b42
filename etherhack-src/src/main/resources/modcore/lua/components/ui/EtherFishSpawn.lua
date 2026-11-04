@@ -18,6 +18,9 @@ EtherFishSpawn.armedAt = 0
 EtherFishSpawn.timeoutMs = 30000
 EtherFishSpawn.countBefore = 0
 EtherFishSpawn.message = ""
+-- 三百零三 队列用: 每次结束自增 epoch + 记录结果, 队列据此把"这一次"与上一件区分开
+EtherFishSpawn.epoch = 0
+EtherFishSpawn.lastResult = nil
 
 --*********************************************************
 --* 入口: 面板"生成"按钮调用 (target = 物品全名, 如 Base.Sledgehammer)
@@ -26,24 +29,24 @@ function EtherFishSpawn.trigger(target)
     if not isMultiplayer() then
         print("[FishSpawn] multiplayer only (use your own dedicated server)")
         EtherFishSpawn.message = getTranslate("UI_FishSpawn_MultiplayerOnly")
-        return
+        return false
     end
     if EtherFishSpawn.busy then
         print("[FishSpawn] already busy: " .. tostring(EtherFishSpawn.target))
-        return
+        return false
     end
     if target == nil or target == "" then
-        return
+        return false
     end
     local player = getPlayer()
     if player == nil then
-        return
+        return false
     end
     local rod = player:getPrimaryHandItem()
     if rod == nil or not rod:getScriptItem() or not rod:getScriptItem():getWeaponSprite() then
         print("[FishSpawn] equip a fishing rod in primary hand first")
         EtherFishSpawn.message = getTranslate("UI_FishSpawn_NeedRod")
-        return
+        return false
     end
 
     -- 移除客户端 FishingManager: 我们的 Java cast 不走客户端钓鱼状态机,
@@ -71,12 +74,15 @@ function EtherFishSpawn.trigger(target)
     end
     EtherFishSpawn.message = getTranslate("UI_FishSpawn_Casting")
     print("[FishSpawn] target " .. target)
+    return true
 end
 
 --*********************************************************
 --* 结算
 --*********************************************************
 function EtherFishSpawn.finish(reason)
+    EtherFishSpawn.lastResult = tostring(reason or "failed")
+    EtherFishSpawn.epoch = (EtherFishSpawn.epoch or 0) + 1
     local ok, _ = pcall(fishSpawnReset)
     if not ok then end
     if reason == "ok" then

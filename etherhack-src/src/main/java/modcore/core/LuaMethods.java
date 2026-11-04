@@ -1223,8 +1223,27 @@ public class LuaMethods {
 
     @LuaMethod(name="setAnimalSpeciesFilter", global=true)
     public static void setAnimalSpeciesFilter(String var0) {
-        CoreMain.getInstance().CoreAPI.animalSpeciesFilter = var0 == null ? "" : var0;
+        // 三百零一 物种多选: 参数为逗号分隔物种 id; 空串 = 一种都不显示 (与「全部」区分),
+        // 调用本方法即进入自定义模式。
+        CoreMain.getInstance().CoreAPI.animalSpeciesFilter = CoreAPI.normalizeAnimalSpeciesFilter(var0);
+        CoreMain.getInstance().CoreAPI.isAnimalSpeciesAll = false;
         saveConfig("startup");
+    }
+
+    @LuaMethod(name="isAnimalSpeciesAll", global=true)
+    public static boolean isAnimalSpeciesAll() {
+        return CoreMain.getInstance().CoreAPI.isAnimalSpeciesAll;
+    }
+
+    @LuaMethod(name="setAnimalSpeciesAll", global=true)
+    public static void setAnimalSpeciesAll(boolean var0) {
+        CoreMain.getInstance().CoreAPI.isAnimalSpeciesAll = var0;
+        saveConfig("startup");
+    }
+
+    @LuaMethod(name="isAnimalSpeciesSelected", global=true)
+    public static boolean isAnimalSpeciesSelected(String var0) {
+        return CoreMain.getInstance().CoreAPI.isAnimalSpeciesVisible(var0);
     }
 
     @LuaMethod(name="getAnimalSpeciesIds", global=true)

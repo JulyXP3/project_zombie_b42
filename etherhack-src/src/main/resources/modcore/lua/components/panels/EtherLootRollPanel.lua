@@ -26,7 +26,7 @@ function EtherLootRollPanel:_group(gx, gy, gw, gh)
 end
 
 function EtherLootRollPanel:_text(tx, ty, text, col, font, hint)
-    table.insert(self.texts, {
+    local t = {
         x = tx, y = ty, text = text,
         col = col or EtherTheme.text,
         font = font or UIFont.Small,
@@ -36,7 +36,9 @@ function EtherLootRollPanel:_text(tx, ty, text, col, font, hint)
         -- 拿到的是错误坐标, 而且 createChildren 只执行一次, 画完即丢 (实机:
         -- g1 提示消失、render 里逐帧画的钓鱼提示却正常, 即此因)。
         hint = hint or false,
-    });
+    };
+    table.insert(self.texts, t);
+    return t;   -- 返回条目: 模式切换时可按 hidden 动态隐藏 (如钓竿模式的数量标签)
 end
 
 -- 分区标题: Small 薄荷居中 (标题在功能分组盒内, 与全局标题语言一致)
@@ -61,18 +63,38 @@ function EtherLootRollPanel:prerender()
     if self.localPlayer == nil then return end
     if self.groups == nil then return end
 
+    -- 清单数量变化时刷新按钮文案 (勾选加入/弹窗删除都会改)
+    if self.queueBtn ~= nil then
+        local qn = EtherSpawnQueue ~= nil and EtherSpawnQueue.count() or 0;
+        if self._queueCountShown ~= qn then
+            self._queueCountShown = qn;
+            self:updateQueueBtnText();
+            -- 清单数量变化会影响开盒模式下「清单」按钮的可用态 (非空才可点去清空),
+            -- 以及生成按钮的文案 (生成 / 生成清单 (N))
+            self:updateSpawnModeUI();
+            self:updateSpawnBtn();
+            -- 清单清空后撤掉「请先清空清单」提示, 否则会一直挂在开盒模式的状态行上
+            if qn == 0 and EtherBoxPoison ~= nil
+                and EtherBoxPoison.message == getTranslate("UI_SpawnQueue_ClearFirst") then
+                EtherBoxPoison.message = "";
+            end
+        end
+    end
+
     for i = 1, #self.groups do
         local g = self.groups[i];
         EtherTheme.drawTileBox(self, g.x, g.y, g.w, g.h, false, 8);
     end
     for i = 1, #self.texts do
         local t = self.texts[i];
-        if t.header then
-            EtherTheme.drawSectionTitle(self, t.x, t.y, t.w, t.text, t.textW, "lines");
-        elseif t.hint then
-            EtherTheme.drawHintText(self, t.text, t.x, t.y, t.col);
-        else
-            self:drawText(t.text, t.x, t.y, t.col.r, t.col.g, t.col.b, t.col.a or 1, t.font);
+        if not t.hidden then
+            if t.header then
+                EtherTheme.drawSectionTitle(self, t.x, t.y, t.w, t.text, t.textW, "lines");
+            elseif t.hint then
+                EtherTheme.drawHintText(self, t.text, t.x, t.y, t.col);
+            else
+                self:drawText(t.text, t.x, t.y, t.col.r, t.col.g, t.col.b, t.col.a or 1, t.font);
+            end
         end
     end
     -- 底部说明 (提示/警告) 按当前生成模式二选一绘制
@@ -135,6 +157,28 @@ function EtherLootRollPanel:updateSpawnModeUI()
             self:updateAccelBtnText();
         end
     end
+
+    -- 数量输入框: 只有钓竿生成不用数量 (EtherFishSpawn.trigger 无数量参数, 一次抛竿
+    -- 只出一件) —— 该模式下隐藏标签与输入框, 避免用户以为能一次生成多件。
+    local needCount = self.spawnMode ~= "fish";
+    if self.countBox ~= nil then
+        self.countBox:setVisible(needCount);
+        self.countBox:setEditable(needCount);
+    end
+    if self.countLabel ~= nil then
+        self.countLabel.hidden = not needCount;
+    end
+
+    -- 开盒生成不支持多选 (用户拍板): 「加入清单」置灰; 「清单」在清单为空时也置灰,
+    -- 但非空时保留可点 —— 否则用户在开盒模式里无法清空清单, 「请先清空清单」的
+    -- 提示就没法就地执行。
+    if self.addBtn ~= nil then
+        self.addBtn:setEnable(self.spawnMode ~= "poison")
+    end
+    if self.queueBtn ~= nil then
+        local hasItems = EtherSpawnQueue ~= nil and EtherSpawnQueue.count() > 0;
+        self.queueBtn:setEnable(self.spawnMode ~= "poison" or hasItems)
+    end
 end
 
 --*********************************************************
@@ -145,6 +189,53 @@ function EtherLootRollPanel:updateAccelBtnText()
     local on = EtherTakeSpawn ~= nil and EtherTakeSpawn.accelerate;
     self.accelBtn.title = getTranslate("UI_TakeSpawn_Accel") .. ": "
         .. getTranslate(on and "UI_TakeSpawn_On" or "UI_TakeSpawn_Off");
+end
+
+--*********************************************************
+--* 多选清单 (三百零三): 把勾选行按当前数量加进待生成清单
+--*********************************************************
+function EtherLootRollPanel:updateQueueBtnText()
+    if self.queueBtn == nil then return end
+    self.queueBtn.title = tr("UI_SpawnQueue_Open", { n = tostring(EtherSpawnQueue.count()) });
+end
+
+-- 生成按钮的可用态 (清单运行中禁用; 文案恒为「生成」, 三百一十一)
+function EtherLootRollPanel:updateSpawnBtn()
+    if self.spawnBtn == nil then return end
+    local running = EtherSpawnQueue ~= nil and EtherSpawnQueue.running;
+    self.spawnBtn:setEnable(not running);
+end
+
+function EtherLootRollPanel:addCheckedToQueue()
+    if self.datas == nil or self.datas.items == nil then return end
+    if self.spawnMode == "poison" then
+        -- 开盒生成不做多选 (用户拍板): 只提示, 不入清单
+        EtherSpawnQueue.message = getTranslate("UI_SpawnQueue_ModeUnsupported");
+        return
+    end
+    local checked = self.datas.checked or {};
+    -- 钓竿生成一次只出一件: 数量固定 1 (输入框在该模式下已隐藏)
+    local count = (self.spawnMode == "fish") and 1
+        or (tonumber(self.countBox:getInternalText()) or 1);
+    -- 勾选是按物品全名跨过滤保存的: 这里遍历整个勾选集合, 而不是当前可见列表 ——
+    -- 否则"搜鱼勾两件 → 搜 m16 勾一件 → 加入清单"只会加到最后搜索里勾的 (三百一十 修)
+    local entries = {};
+    for full, name in pairs(checked) do
+        table.insert(entries, { full = full, name = name });
+    end
+    for _, e in ipairs(entries) do
+        EtherSpawnQueue.add(e.full, e.name, count);
+    end
+    self.datas.checked = {};          -- 全部加入后清空勾选 (含当前过滤之外的)
+    local added = #entries;
+    self:updateQueueBtnText();
+    if added == 0 then
+        EtherSpawnQueue.message = getTranslate("UI_SpawnQueue_NothingChecked");
+        print("[SpawnQueue] nothing checked");
+    else
+        EtherSpawnQueue.message = "";
+        print("[SpawnQueue] added " .. added .. " item(s), count " .. count);
+    end
 end
 
 --*********************************************************
@@ -170,8 +261,25 @@ function EtherLootRollPanel:applyFishFilter()
 end
 
 --*********************************************************
---* 列表行绘制 (名称 + 物品ID, 风格对齐 UIItemTables)
+--* 列表行绘制 (勾选框 + 名称 + 物品ID, 风格对齐 UIItemTables)
+--* 三百零三: 行首勾选框用于「加入清单」; 勾选态按物品全名存在列表对象上,
+--*   过滤重建列表不丢勾选 (key 不是行号)。
 --*********************************************************
+local CHECK_TEX = {};
+local CHECK_W = 16;
+local CHECK_HIT_W = 22;
+local NAME_X = 44;
+
+local function checkTexture(on)
+    local key = on and "on" or "off";
+    if CHECK_TEX[key] == nil then
+        CHECK_TEX[key] = resolveTexture(on
+            and "modcore/media/ui/checkbox_checked.png"
+            or "modcore/media/ui/checkbox_unchecked.png") or false;
+    end
+    return CHECK_TEX[key];
+end
+
 function EtherLootRollPanel:drawFishItem(y, item, alt)
     if y + self:getYScroll() + self.itemheight < 0 or y + self:getYScroll() >= self.height then
         return y + self.itemheight
@@ -189,18 +297,52 @@ function EtherLootRollPanel:drawFishItem(y, item, alt)
     local clipY = math.max(0, y + self:getYScroll())
     local clipY2 = math.min(self.height, y + self:getYScroll() + self.itemheight)
 
+    -- 勾选框 (行首): 点击由此行右侧的 onMouseDown 处理 (只认 x <= CHECK_HIT_W)
+    local fullName = item.item and item.item:getFullName() or nil
+    local tex = checkTexture(fullName ~= nil and self.checked ~= nil and self.checked[fullName] ~= nil)
+    if tex then
+        self:drawTextureScaled(tex, 3, y + (self.itemheight - CHECK_W) / 2, CHECK_W, CHECK_W, 1, 1, 1, 1)
+    end
+
     self:setStencilRect(clipX, clipY, clipX2 - clipX, clipY2 - clipY)
-    self:drawText(item.text, 25, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
+    self:drawText(item.text, NAME_X, y + 4, th.text.r, th.text.g, th.text.b, a, self.font);
     self:clearStencilRect()
 
     local itemId = item.item:getFullName()
     if itemId == nil then itemId = item.item:getName() or "?" end
     self:drawText(itemId, self.columns[2].size + 10, y + 4, th.textDim.r, th.textDim.g, th.textDim.b, a, self.font);
 
-    -- 二百七十五 (L3): 图标走 EtherTheme 缓存 (零逐帧桥调用/拼接/查表), 五页共用一份
-    EtherTheme.drawItemIcon(self, item.item, y, iconSize);
+    -- 图标 (原 drawItemIcon 固定画在 x=4, 勾选框占位后右移)
+    local texture = EtherTheme.itemTexture(item.item)
+    if texture then
+        self:drawTextureScaledAspect2(texture, 23, y + (self.itemheight - iconSize) / 2, iconSize, iconSize, 1, 1, 1, 1)
+    end
 
     return y + self.itemheight;
+end
+
+--*********************************************************
+--* 列表鼠标: 行首勾选区域切换勾选, 其余区域保持原版整行选中。
+--*********************************************************
+function EtherLootRollPanel.onListMouseDown(list, x, y)
+    if x <= CHECK_HIT_W and list.checked ~= nil then
+        local row = list:rowAt(x, y);
+        if row >= 1 and row <= #list.items then
+            local it = list.items[row];
+            local full = it.item and it.item:getFullName() or nil;
+            if full ~= nil then
+                -- 存显示名而不是 true: 过滤走掉后仍能按名字加入清单 (三百一十 修)
+                if list.checked[full] ~= nil then
+                    list.checked[full] = nil;
+                else
+                    list.checked[full] = it.text or full;
+                end
+                return true;
+            end
+        end
+    end
+    ISScrollingListBox.onMouseDown(list, x, y);
+    return true;
 end
 
 --*********************************************************
@@ -441,8 +583,26 @@ function EtherLootRollPanel:createChildren()
         self.modeCombo:addOptionWithData(getTranslate(modeDefs[i].key), modeDefs[i].mode);
     end
     self:addChild(self.modeCombo);
+
+    -- 加速开关 (一百三十一): 挪到模式行, 仅"计时生成"可见 —— 页脚那行要放
+    -- 生成/加入清单/清单 + 状态文字, 俄语长文案下塞不下第 4 个按钮 (三百一十)。
+    local accelTitle = getTranslate("UI_TakeSpawn_Accel") .. ": " .. getTranslate("UI_TakeSpawn_Off");
+    local accelW = UIButton.measureWidth(accelTitle);
+    local accelX = innerX + comboW + GAP;
+    local accelLimit = (showCountLabel and (cntX - labelW - GAP * 2) or (cntX - GAP)) - accelX;
+    if accelW > accelLimit then accelW = accelLimit; end
+    if accelW < 70 then accelW = 70; end
+    self.accelBtn = UIButton:new(accelX, cy + EtherTheme.entryBtnDY, accelW, ctrlH, accelTitle,
+    function()
+        EtherTakeSpawn.accelerate = not EtherTakeSpawn.accelerate;
+        self:updateAccelBtnText();
+    end, accelW)
+    self.accelBtn:initialise();
+    self.accelBtn:instantiate();
+    self.accelBtn.isOnlyInGame = true;
+    self:addChild(self.accelBtn);
     if showCountLabel then
-        self:_text(cntX - labelW - math.floor(GAP / 2),
+        self.countLabel = self:_text(cntX - labelW - math.floor(GAP / 2),
             cy + EtherTheme.entryLabelDY, countLabelT, EtherTheme.text, UIFont.Small);
     end
     self.countBox = ISTextEntryBox:new("1", cntX, cy, cntW, EtherTheme.entryH);
@@ -522,6 +682,8 @@ function EtherLootRollPanel:createChildren()
         math.max(0, math.floor(notesAvail / EtherTheme.fontHgtHint)));
     local notesH = notesLines * EtherTheme.fontHgtHint + GAP * 2;
     local bottomY = g3y + g3h - IP - ctrlH - notesH;
+    -- 三百一十一: 按钮一律显示「生成」, 清单/单件的区别只体现在点击后的逻辑上,
+    -- 宽度只按这一个文案取 (旧的双文案预留会白白占宽)
     local spawnTitle = getTranslate("UI_FishSpawn_Button");
     local spawnW = UIButton.measureWidth(spawnTitle);
     if spawnW > innerW then spawnW = innerW; end
@@ -551,11 +713,28 @@ function EtherLootRollPanel:createChildren()
     self.datas:addColumn(getTranslate("UI_ItemCreator_Title_ItemName"), 0);
     self.datas:addColumn(idT, math.floor(innerW * 0.6));
     self:addChild(self.datas);
+    -- 三百零三 多选: 勾选态按物品全名保存 (过滤重建列表不丢), 行首点击切换
+    self.datas.checked = {};
+    self.datas.onMouseDown = function(list, x, y)
+        return EtherLootRollPanel.onListMouseDown(list, x, y);
+    end
 
     self:initFishList();
 
     self.spawnBtn = UIButton:new(innerX, bottomY, spawnW, ctrlH, spawnTitle,
     function()
+        -- 三百零八: 生成统一走这一个按钮 —— 清单非空时按清单串行生成, 为空时生成当前选中行
+        local qn = EtherSpawnQueue ~= nil and EtherSpawnQueue.count() or 0;
+        if qn > 0 then
+            if self.spawnMode == "poison" then
+                -- 开盒生成不支持多选: 只提示先清空清单 (不执行生成)
+                EtherBoxPoison.message = getTranslate("UI_SpawnQueue_ClearFirst");
+                print("[SpawnQueue] clear the list before using unbox spawn");
+                return;
+            end
+            EtherSpawnQueue.start(self.spawnMode);
+            return;
+        end
         local sel = self.datas.selected;
         if self.datas.items == nil or sel < 1 or sel > #self.datas.items then
             print("[Spawn] select an item first")
@@ -588,23 +767,51 @@ function EtherLootRollPanel:createChildren()
     self.spawnBtn.isOnlyInGame = true;
     self:addChild(self.spawnBtn);
 
-    -- 加速开关 (一百三十一): 位置固定, 仅"计时生成"模式可见 (其余模式 setVisible(false),
-    -- 不参与布局)。开着 = 减短客户端动作时长 + 服务端侧加速件 (Hand_L pain NaN 上行);
-    -- 关着 = 原版时长 (数量 1 也要约 10 秒)。
-    local accelW = math.floor((innerX + innerW - (innerX + spawnW + GAP * 2)) * 0.45);
-    if accelW < 90 then accelW = 90; end
-    self.accelBtn = UIButton:new(innerX + spawnW + GAP * 2, bottomY, accelW, ctrlH,
-        getTranslate("UI_TakeSpawn_Accel"),
+    -- 多选入口 (三百零三): [加入清单] 把勾选行按当前数量加进待生成清单,
+    -- [清单 (N)] 打开清单弹窗 (改数量/删除/开始/停止)。支持: 钓竿/尸体/计时三种;
+    -- 开盒生成不支持, 弹窗里点开始会提示。
+    local addTitle = getTranslate("UI_SpawnQueue_Add");
+    local queueTitleProbe = tr("UI_SpawnQueue_Open", { n = "00" });
+    local addW = math.min(UIButton.measureWidth(addTitle), math.floor(innerW * 0.34));
+    local queueW = math.min(UIButton.measureWidth(queueTitleProbe), math.floor(innerW * 0.34));
+    -- 页脚右侧留状态区: 三按钮先让位, 至少 130px 给动态消息。俄语长按钮下
+    -- 原布局会把状态文字挤到面板外 (三百一十 实测), 这里宁可缩按钮 (UIButton
+    -- 自带缩字兜底) 也不让状态文字出界。
+    local statusMinW = 130;
+    local usedW = spawnW + addW + queueW + GAP * 3;
+    if innerW - usedW < statusMinW then
+        local deficit = statusMinW - (innerW - usedW);
+        local nq = math.max(70, queueW - deficit);
+        deficit = deficit - (queueW - nq);
+        queueW = nq;
+        if deficit > 0 then
+            addW = math.max(70, addW - deficit);
+        end
+    end
+    self.addBtn = UIButton:new(innerX + spawnW + GAP, bottomY, addW, ctrlH, addTitle,
     function()
-        EtherTakeSpawn.accelerate = not EtherTakeSpawn.accelerate;
-        self:updateAccelBtnText();
-    end, accelW)
-    self.accelBtn:initialise();
-    self.accelBtn:instantiate();
-    self.accelBtn.isOnlyInGame = true;
-    self.accelBtn:setVisible(false);
-    self.accelBtn.modeTag = "take";
-    self:addChild(self.accelBtn);
+        self:addCheckedToQueue();
+    end, addW);
+    self.addBtn:initialise();
+    self.addBtn:instantiate();
+    self.addBtn.isOnlyInGame = true;
+    self:addChild(self.addBtn);
+
+    self.queueBtn = UIButton:new(innerX + spawnW + GAP * 2 + addW, bottomY, queueW, ctrlH,
+        tr("UI_SpawnQueue_Open", { n = tostring(EtherSpawnQueue.count()) }),
+    function()
+        EtherSpawnQueue.openPopup(self.spawnMode);
+    end, queueW);
+    self.queueBtn:initialise();
+    self.queueBtn:instantiate();
+    self.queueBtn.isOnlyInGame = true;
+    self:addChild(self.queueBtn);
+    self._queueCountShown = EtherSpawnQueue.count();
+
+
+    -- 多选/数量控件的初始可用态 (按钮此时才创建完毕, 需再刷一次)
+    self:updateSpawnModeUI();
+    self:updateSpawnBtn();
 
     -- 使用提示 + 留痕警告 (按钮行之下, 按内宽折行静态注册; 双模式各注册一份,
     -- 绘制时按 spawnMode 二选一 —— modeTexts 条目带 mode 字段, prerender 过滤)
@@ -630,9 +837,11 @@ function EtherLootRollPanel:createChildren()
     regModeBlock(hintLinesD, {}, "take");
     regModeBlock(hintLinesP, {}, "poison");
 
-    -- 状态文字区域 (生成按钮右侧): 只显示动态状态消息 (生成中/已生成/失败),
-    -- 空闲时留空 —— 使用提示已改为底部静态注册, 不再在此兜底
-    self.statusX = innerX + spawnW + GAP * 2 + accelW + GAP * 2;
+    -- 状态文字区域 (按钮行右侧): 只显示动态状态消息 (生成中/已生成/失败),
+    -- 空闲时留空 —— 使用提示已改为底部静态注册, 不再在此兜底。
+    -- 三百零七: 状态区宽度在布局时**预留给加速按钮**, 不再事后按 accelW 反推 ——
+    -- 旧算式把状态区起点算到了加速按钮内部, 生成成功日志直接压在按钮/提示上。
+    self.statusX = innerX + spawnW + GAP * 3 + addW + queueW;
     self.statusY = bottomY + labelDY;
     self.statusW = (innerX + innerW) - self.statusX;
     if self.statusW < 60 then self.statusW = 60; end

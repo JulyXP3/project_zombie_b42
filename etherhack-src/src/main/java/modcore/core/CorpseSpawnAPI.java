@@ -47,6 +47,11 @@ import java.util.List;
 
 public class CorpseSpawnAPI {
 
+    /** 单件数量上限 (与旧接口一致)。 */
+    private static final int MAX_COUNT_PER_ITEM = 100;
+    /** 一具尸体的总件数上限: 防 AddCorpseToMapPacket 体积失控。 */
+    private static final int MAX_TOTAL_ITEMS = 300;
+
     /*
      * Forge a corpse at the player's feet carrying `count` copies of `itemType`
      * and upload it to the server. The corpse appears immediately and can be
@@ -55,21 +60,37 @@ public class CorpseSpawnAPI {
      */
     @LuaMethod(name = "corpseSpawnPrepare", global = true)
     public static boolean corpseSpawnPrepare(String itemType, int count) {
+        return corpseSpawnPrepareBatch(itemType + "=" + count);
+    }
+
+    /*
+     * 三百零三 多选: 一具尸体装多种物品 (而不是造 N 具), 仍是同一条
+     * AddCorpseToMapPacket。pairs 形如 "Base.Axe=2,Base.Nails=50"。
+     * 任一字段非法/总量超上限直接抛错, 由 Lua 侧 pcall 展示真实原因。
+     */
+    @LuaMethod(name = "corpseSpawnPrepareBatch", global = true)
+    public static boolean corpseSpawnPrepareBatch(String pairs) {
         IsoPlayer p = IsoPlayer.getInstance();
         if (p == null) throw new RuntimeException("no player");
         IsoGridSquare sq = p.getCurrentSquare();
         if (sq == null) throw new RuntimeException("no current square");
-        if (itemType == null || itemType.isEmpty() || count < 1 || count > 100) {
-            throw new RuntimeException("bad args: item=" + itemType + " count=" + count);
-        }
 
-        List<InventoryItem> items = new ArrayList<InventoryItem>(count);
-        for (int i = 0; i < count; i++) {
-            InventoryItem item = InventoryItemFactory.CreateItem(itemType);
-            if (item == null) {
-                throw new RuntimeException("CreateItem failed for " + itemType);
+        List<String> types = new ArrayList<String>();
+        List<Integer> counts = new ArrayList<Integer>();
+        CorpseSpawnAPI.parseItemPairs(pairs, types, counts);
+
+        List<InventoryItem> items = new ArrayList<InventoryItem>();
+        int total = 0;
+        for (int i = 0; i < types.size(); i++) {
+            int count = counts.get(i);
+            for (int k = 0; k < count; k++) {
+                InventoryItem item = InventoryItemFactory.CreateItem(types.get(i));
+                if (item == null) {
+                    throw new RuntimeException("CreateItem failed for " + types.get(i));
+                }
+                items.add(item);
             }
-            items.add(item);
+            total += count;
         }
 
         // client-side corpse container; the server will re-read this from
@@ -99,9 +120,46 @@ public class CorpseSpawnAPI {
         // bRemote=false + GameClient.client -> sends AddCorpseToMapPacket
         // with the full body serialization (container included)
         sq.addCorpse(body, false);
-        Logger.printLog("[CorpseSpawn] forged corpse uploaded with "
-                + count + "x " + itemType);
+        Logger.printLog("[CorpseSpawn] forged corpse uploaded with " + total
+                + " item(s) in " + types.size() + " type(s)");
         return true;
+    }
+
+    /** 解析 "Name=count,..." — 去空段, 校验名称/数量/总量 (供批量入口与单元测试共用)。 */
+    static void parseItemPairs(String pairs, List<String> types, List<Integer> counts) {
+        if (pairs == null || pairs.trim().isEmpty()) {
+            throw new RuntimeException("empty item list");
+        }
+        int total = 0;
+        for (String part : pairs.split(",")) {
+            String seg = part.trim();
+            if (seg.isEmpty()) {
+                continue;
+            }
+            int eq = seg.indexOf('=');
+            if (eq <= 0 || eq == seg.length() - 1) {
+                throw new RuntimeException("bad entry: " + seg + " (expected Name=count)");
+            }
+            String type = seg.substring(0, eq).trim();
+            int count;
+            try {
+                count = Integer.parseInt(seg.substring(eq + 1).trim());
+            } catch (NumberFormatException e) {
+                throw new RuntimeException("bad count: " + seg);
+            }
+            if (type.isEmpty() || count < 1 || count > MAX_COUNT_PER_ITEM) {
+                throw new RuntimeException("bad entry: " + seg + " (count 1-" + MAX_COUNT_PER_ITEM + ")");
+            }
+            types.add(type);
+            counts.add(count);
+            total += count;
+        }
+        if (types.isEmpty()) {
+            throw new RuntimeException("empty item list");
+        }
+        if (total > MAX_TOTAL_ITEMS) {
+            throw new RuntimeException("total items " + total + " exceeds " + MAX_TOTAL_ITEMS);
+        }
     }
 
     @LuaMethod(name = "corpseSpawnIsReady", global = true)
