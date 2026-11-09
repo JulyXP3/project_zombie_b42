@@ -166,14 +166,16 @@ function EtherTempWeapon.statusLine()
         curAmmo = gun:getCurrentAmmoCount();
         maxAmmo = gun:getMaxAmmo();
     end
+    local lang = getLanguage();
     local cache = EtherTempWeapon.statusCache;
-    if cache.gun == gun and cache.cur == curAmmo and cache.max == maxAmmo then
+    if cache.lang == lang and cache.gun == gun and cache.cur == curAmmo and cache.max == maxAmmo then
         return cache.str;
     end
     local ammo = "";
     if curAmmo ~= nil then
         ammo = string.format(" [%d/%d]", curAmmo, maxAmmo);
     end
+    cache.lang = lang;
     cache.gun = gun;
     cache.cur = curAmmo;
     cache.max = maxAmmo;

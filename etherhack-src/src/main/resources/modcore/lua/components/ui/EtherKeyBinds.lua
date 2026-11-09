@@ -27,13 +27,14 @@ EtherKeyBinds.captureId = nil; -- 捕获中的 featureId
 
 -- 注册一个可绑定的功能。冲突键在注册与捕获时都会提示。
 function EtherKeyBinds.register(featureId, labelKey, handler, defaultKey)
+    local alreadyRegistered = EtherKeyBinds.registry[featureId] ~= nil;
     EtherKeyBinds.registry[featureId] = {
         label = labelKey,
         handler = handler,
         defaultKey = defaultKey,
     };
     EtherKeyBinds.bindings[featureId] = nil; -- 延迟解析: 配置可能尚未加载
-    table.insert(EtherKeyBinds.order, featureId);
+    if not alreadyRegistered then table.insert(EtherKeyBinds.order, featureId); end
 end
 
 -- 解析当前键码: Java 侧配置优先, 缺失(未设置/0)回退默认键

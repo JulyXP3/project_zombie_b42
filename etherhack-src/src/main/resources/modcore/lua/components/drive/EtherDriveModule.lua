@@ -40,17 +40,20 @@ local STATE_KEYS = {
 -- 二百七十七 (L6): 行 1/行 3 按源值记忆化 — 状态/目标/限速没变就复用上帧串
 -- (原每帧两次 tr 模板 + format ×3 + 拼接 + 颜色表分配)
 local STATUS_LINE_COLOR = { r = 1, g = 1, b = 1, a = 1 };
-local statusCache = { s = nil, act = nil, tx = nil, ty = nil, line1 = nil, lim = nil, cap = nil, line3 = nil };
+-- lang 必须进键: 模块级缓存跨面板重建存活, 语言按钮重建 EtherMain 不会清它;
+-- 旧实现只按状态/限速判断 → 在 RU 下渲染过一次后, 切 CN/EN 仍复用俄文串。
+local statusCache = { s = nil, act = nil, tx = nil, ty = nil, line1 = nil, lim = nil, cap = nil, line3 = nil, lang = nil };
 
 function StatusRow:render()
     local y = 0;
+    local lang = getLanguage();
     -- 行 1: 状态 + 目标坐标
     local stateId = autoDriveGetStateId();
     local act = autoDriveIsActive();
     local tx = act and autoDriveGetTargetX() or nil;
     local ty = act and autoDriveGetTargetY() or nil;
     local c = statusCache;
-    if c.s ~= stateId or c.act ~= act or c.tx ~= tx or c.ty ~= ty then
+    if c.lang ~= lang or c.s ~= stateId or c.act ~= act or c.tx ~= tx or c.ty ~= ty then
         local line = tr("UI_DrivePanel_Status") .. ": " .. tr(STATE_KEYS[stateId] or "UI_DrivePanel_StatusIdle");
         if act then
             line = line .. string.format("  (%d, %d)", tx, ty);
@@ -69,10 +72,11 @@ function StatusRow:render()
     -- 行 3: 速度体系提示 (服务端限速 → 硬顶, 登录同步可读, 研判 §四.3)
     local limit = autoDriveGetSpeedLimit();
     local cap = autoDriveGetHardCap();
-    if c.lim ~= limit or c.cap ~= cap then
+    if c.lang ~= lang or c.lim ~= limit or c.cap ~= cap then
         c.lim, c.cap = limit, cap;
         c.line3 = tr("UI_DrivePanel_HintLimit", { limit = string.format("%.0f", limit), cap = string.format("%.0f", cap) });
     end
+    c.lang = lang;   -- 两行都判断完再落语言, 语言变化时行 1/行 3 同帧重算
     EtherTheme.drawHintText(self, c.line3, 0, y, EtherTheme.textDim, 1);
 end
 
@@ -197,6 +201,60 @@ end
 --* 追加进宿主页 (EtherVehiclePanel): addModule 同族模块盒。
 --* 高度预算与摆放同一套判定 (与载具页既有模块同构)。
 --*********************************************************
+--* 车辆重置结果 → 提示文案 (三百三十): 后端返回结果码, 面板不再"点了没反应"。
+local RESET_KEYS = {
+    ["checking"] = "UI_DrivePanel_ResetChecking",
+    ["cancelled"] = "UI_DrivePanel_ResetCancelled",
+    ["busy"] = "UI_DrivePanel_ResetBusy",
+    ["lifted"] = "UI_DrivePanel_ResetLifted",
+    ["uprighted"] = "UI_DrivePanel_ResetUprighted",
+    ["dropped"] = "UI_DrivePanel_ResetDropped",
+    ["blocked-chunks"] = "UI_DrivePanel_ResetBlocked",
+    ["chunk-ring-not-loaded"] = "UI_DrivePanel_ResetBlocked",
+    ["no-vehicle"] = "UI_DrivePanel_ResetNoVehicle",
+    ["no vehicle"] = "UI_DrivePanel_ResetNoVehicle",
+    ["no-driver"] = "UI_DrivePanel_ResetNoVehicle",
+    ["noop"] = "UI_DrivePanel_ResetNoop",
+};
+local resetWatching = false;
+local resetNextMs = 0;
+local function resetFeedback(result)
+    local key = RESET_KEYS[result] or "UI_DrivePanel_ResetFailed";
+    local isError = not (result == "checking" or result == "cancelled"
+        or result == "lifted" or result == "uprighted" or result == "dropped" or result == "noop");
+    local player = getPlayer();
+    if HaloTextHelper ~= nil and player ~= nil then
+        local color = isError and HaloTextHelper.getColorRed() or HaloTextHelper.getColorGreen();
+        HaloTextHelper.addText(player, tr(key), "[col=175,175,175], [/]", color);
+    end
+end
+
+local function resetVehicle()
+    local ok = autoDriveResetVehicle();
+    local result = ok and "checking" or "error";
+    if type(autoDriveGetResetResult) == "function" then
+        local okr, v = pcall(autoDriveGetResetResult);
+        if okr and type(v) == "string" then result = v; end
+    end
+    resetWatching = result == "checking";
+    resetNextMs = 0;
+    resetFeedback(result);
+end
+
+-- 只在本次按钮操作尚未结束时读状态，实际落地观察仍由 Java 既有 OnTick 推进。
+Events.OnTick.Add(function()
+    if not resetWatching then return; end
+    local now = getTimestampMs();
+    if now < resetNextMs then return; end
+    resetNextMs = now + 100;
+    local ok, result = pcall(autoDriveGetResetResult);
+    if not ok then result = "error"; end
+    if result ~= "checking" then
+        resetWatching = false;
+        resetFeedback(result);
+    end
+end);
+
 function EtherDriveModule_addTo(panel)
     local w = panel:_rowContentW();
     local innerW = w - EtherFormPanel.BOX_PAD_X * 2;
@@ -230,7 +288,7 @@ function EtherDriveModule_addTo(panel)
         -- ②.5 车辆重置 (宽限期兜底: 嵌墙/埋地时恢复高度 + 碰撞豁免续 15s)
         local resetBtn = UIButton:new(ix, cy, resetBtnW, resetH,
             tr("UI_DrivePanel_ResetVehicle"), function()
-                autoDriveResetVehicle();
+                resetVehicle();
             end, resetBtnW);
         resetBtn:initialise();
         resetBtn:instantiate();

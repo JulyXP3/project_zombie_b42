@@ -50,6 +50,7 @@ import org.objectweb.asm.tree.TryCatchBlockNode;
 
 public class Patch {
     private static final Map<String, ClassNode> classNodeMap = new HashMap<String, ClassNode>();
+    private static final Map<String, ClassNode> hierarchyCache = new HashMap<String, ClassNode>();
 
     /**
      * C (2026-09-14 八十二, 安装事故教训): **失败可见**。旧版"某个类没写进磁盘"只在日志里
@@ -60,6 +61,11 @@ public class Patch {
      */
     private static final java.util.Set<String> failedClasses = new java.util.LinkedHashSet<String>();
     private static final java.util.Set<String> missingTargets = new java.util.LinkedHashSet<String>();
+    private static final Map<String, String> failureDetails = new java.util.LinkedHashMap<>();
+
+    public static Map<String, String> getFailureDetails() {
+        return java.util.Collections.unmodifiableMap(failureDetails);
+    }
 
     public static java.util.Set<String> getFailedClasses() {
         return failedClasses;
@@ -73,6 +79,28 @@ public class Patch {
     public static void resetPatchReport() {
         failedClasses.clear();
         missingTargets.clear();
+        failureDetails.clear();
+    }
+
+    /** A preparation session cannot retain classes or hierarchy misses from another game JAR. */
+    public static void resetSession() {
+        classNodeMap.clear();
+        hierarchyCache.clear();
+        hierarchyMiss.clear();
+        projectZomboidJarPath = null;
+        resetPatchReport();
+    }
+
+    public static Map<String, byte[]> exportModifiedClasses() {
+        Map<String, byte[]> result = new java.util.LinkedHashMap<>();
+        for (String name : new java.util.TreeSet<>(classNodeMap.keySet())) {
+            ClassNode node = classNodeMap.get(name);
+            verifyClassNode(name, node);
+            SafeClassWriter writer = new SafeClassWriter(ClassWriter.COMPUTE_FRAMES);
+            node.accept(writer);
+            result.put(name, writer.toByteArray());
+        }
+        return java.util.Collections.unmodifiableMap(result);
     }
 
     /**
@@ -145,8 +173,25 @@ public class Patch {
     public static void injectIntoClass(String className, String methodName, boolean isStatic,
                                        ShapeGuard guard, Consumer<MethodNode> injector,
                                        String hookOwner, String hookName) {
+        ClassNode previous = classNodeMap.get(className);
+        try {
+            injectIntoClassTransactional(className, methodName, isStatic, guard, injector, hookOwner, hookName);
+        } catch (RuntimeException | Error failure) {
+            if (previous == null) classNodeMap.remove(className);
+            else classNodeMap.put(className, previous);
+            failedClasses.add(className);
+            Throwable detail = failure;
+            while (detail.getCause() != null) detail = detail.getCause();
+            failureDetails.put(className + "#" + methodName, detail.toString());
+            throw failure;
+        }
+    }
+
+    private static void injectIntoClassTransactional(String className, String methodName, boolean isStatic,
+                                       ShapeGuard guard, Consumer<MethodNode> injector,
+                                       String hookOwner, String hookName) {
         Logger.print("Injection into a game file '" + className + "' in method: '" + methodName + "'");
-        ClassNode classNode = classNodeMap.computeIfAbsent(className, Patch::loadClassNode);
+        ClassNode classNode = mutableCopy(className);
         if (classNode == null) {
             throw new RuntimeException("Failed to load class " + className);
         }
@@ -213,21 +258,27 @@ public class Patch {
     }
 
     public static void modifyClass(String className, Consumer<ClassNode> modifier) {
-        ClassNode classNode = classNodeMap.computeIfAbsent(className, Patch::loadClassNode);
+        ClassNode classNode = mutableCopy(className);
         if (classNode == null) {
             throw new RuntimeException("Failed to load class " + className);
         }
-        modifier.accept(classNode);
         try {
+            modifier.accept(classNode);
             Patch.verifyClassNode(className, classNode);
         }
-        catch (RuntimeException e) {
-            // 与 injectIntoClass 同规 (2026-09-14 八十二): 坏改动不进待写盘表
-            classNodeMap.remove(className);
+        catch (RuntimeException | Error e) {
             Patch.failedClasses.add(className);
             throw e;
         }
         classNodeMap.put(className, classNode);
+    }
+
+    private static ClassNode mutableCopy(String name) {
+        ClassNode source = classNodeMap.get(name);
+        if (source == null) return loadClassNode(name);
+        ClassNode copy = new ClassNode();
+        source.accept(copy);
+        return copy;
     }
 
     /**
@@ -446,7 +497,18 @@ public class Patch {
             return type1;
         }
         if (type1.startsWith("[") || type2.startsWith("[")) {
-            return null;   // 数组合并 (不同数组/数组×对象): 默认算法同样得到 Object, 不猜
+            if (type1.startsWith("[") && type2.startsWith("[")) {
+                String left = arrayComponent(type1);
+                String right = arrayComponent(type2);
+                if (left != null && right != null) {
+                    String common = getCommonSuperFromGameJar(left, right);
+                    if (common == null) return null;
+                    return "[" + (common.startsWith("[") ? common : "L" + common + ";");
+                }
+            }
+            String other = type1.startsWith("[") ? type2 : type1;
+            if (other.equals("java/lang/Cloneable") || other.equals("java/io/Serializable")) return other;
+            return "java/lang/Object";
         }
         if (Patch.isAssignableFromGameJar(type1, type2)) {
             return type1;
@@ -509,16 +571,26 @@ public class Patch {
             return null;
         }
         ClassNode node = classNodeMap.get(internalName);
+        if (node == null) node = hierarchyCache.get(internalName);
         if (node == null) {
             node = Patch.loadClassNode(internalName);
             if (node != null) {
-                classNodeMap.put(internalName, node);
+                hierarchyCache.put(internalName, node);
             }
             else {
                 Patch.hierarchyMiss.add(internalName);
             }
         }
         return node;
+    }
+
+    private static String arrayComponent(String descriptor) {
+        String component = descriptor.substring(1);
+        if (component.startsWith("[")) return component;
+        if (component.startsWith("L") && component.endsWith(";")) {
+            return component.substring(1, component.length() - 1);
+        }
+        return null;
     }
 
     private static class SafeClassWriter
@@ -528,17 +600,9 @@ public class Patch {
         }
 
         protected String getCommonSuperClass(String type1, String type2) {
-            try {
-                return super.getCommonSuperClass(type1, type2);
-            }
-            catch (RuntimeException e) {
-                String resolved = Patch.getCommonSuperFromGameJar(type1, type2);
-                if (resolved != null) {
-                    return resolved;
-                }
-                Logger.printLog("Could not resolve common superclass for " + type1 + " and " + type2 + ", using Object");
-                return "java/lang/Object";
-            }
+            String resolved = Patch.getCommonSuperFromGameJar(type1, type2);
+            if (resolved != null) return resolved;
+            throw new IllegalStateException("Cannot resolve class hierarchy for " + type1 + " and " + type2);
         }
     }
 }

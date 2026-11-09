@@ -69,7 +69,18 @@ function EtherBuildPanel:render()
     self:syncWallSelection();
     local msg = tostring(EtherBuildSpawn.message or "");
     if msg ~= "" and self.statusX ~= nil then
-        EtherTheme.drawHintText(self, msg, self.statusX, self.statusY, EtherTheme.textDim);
+        -- 动态状态消息同样走折行 (最多两行, 超出加省略号; 完整内容见控制台)
+        if self.statusMsg ~= msg then
+            self.statusMsg = msg;
+            self.statusLines = EtherTheme.wrapHint(msg, self.statusW or 0);
+        end
+        local lines = self.statusLines or { msg };
+        for i = 1, math.min(#lines, 2) do
+            local line = lines[i];
+            if i == 2 and #lines > 2 then line = line .. "..."; end
+            EtherTheme.drawHintText(self, line, self.statusX,
+                self.statusY + (i - 1) * EtherTheme.fontHgtHint, EtherTheme.textDim);
+        end
     end
 end
 
@@ -77,7 +88,7 @@ function EtherBuildPanel:updatePlaceBtn()
     if self.placeBtn == nil then return end
     local on = EtherBuildSpawn.ghost ~= nil;
     local title = getTranslate("UI_Build_Place") .. ": "
-        .. getTranslate(on and "UI_TakeSpawn_On" or "UI_TakeSpawn_Off");
+        .. getTranslate(on and "UI_Common_On" or "UI_Common_Off");
     if self.placeBtn.title ~= title then
         self.placeBtn.title = title;
     end
@@ -216,11 +227,15 @@ function EtherBuildPanel:createChildren()
     end
 
     -- 底部状态组先定高 (开关 + 状态 + 提示), 列表吃中间全部
-    local hintLines = EtherTheme.wrapHint(getTranslate("UI_Build_Hint"), innerW);
-    local warnLines = EtherTheme.wrapHint(getTranslate("UI_Build_TraceWarn"), innerW);
-    local placeH = (ctrlH + GAP) * 2;
-    local statusH = EtherTheme.fontHgtHint + GAP;
-    local notesH = (#hintLines + #warnLines) * EtherTheme.fontHgtHint + GAP * 2;
+    -- 折行留右侧 12px 安全边距: 长句在部分字号下会与框线贴齐 (实测建造页提示)
+    local noteW = innerW - 12;
+    local hintLines = EtherTheme.wrapHint(getTranslate("UI_Build_Hint"), noteW);
+    local warnLines = EtherTheme.wrapHint(getTranslate("UI_Build_TraceWarn"), noteW);
+    -- 三个按钮各占一行 (摆放/扫描/强制重扫), 漏算一行会把提示挤出分组框
+    local placeH = (ctrlH + GAP) * 3;
+    -- 状态消息也按两行预留: 动态消息可能折行, 之前只预留一行会压住下方提示
+    local statusH = EtherTheme.fontHgtHint * 2 + GAP;
+    local notesH = (#hintLines + #warnLines) * EtherTheme.fontHgtHint;
     local g2h = IP + fhS + GAP + placeH + statusH + notesH + IP;
     local g2y = H - PAD - g2h;
     self:_group(PAD, g2y, boxW, g2h);
@@ -254,7 +269,7 @@ function EtherBuildPanel:createChildren()
 
     -- [进入摆放模式]/[退出摆放] 开关 (整行宽)
     local placeT = getTranslate("UI_Build_Place") .. ": "
-        .. getTranslate("UI_TakeSpawn_Off");
+        .. getTranslate("UI_Common_Off");
     local placeW = UIButton.measureWidth(placeT);
     if placeW > innerW then placeW = innerW; end
     self.placeBtn = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, placeW, ctrlH, "",
@@ -309,9 +324,12 @@ function EtherBuildPanel:createChildren()
     self:addChild(forceBtn);
     cy = cy + ctrlH + GAP;
 
-    -- 状态行 (render 动态绘制, 这里只登记坐标)
+    -- 状态行 (render 动态绘制, 这里只登记坐标; 预留两行, 折行见 render)
     self.statusX, self.statusY = innerX, cy;
-    cy = cy + EtherTheme.fontHgtHint + GAP;
+    self.statusW = noteW;
+    self.statusMsg = nil;
+    self.statusLines = nil;
+    cy = cy + EtherTheme.fontHgtHint * 2 + GAP;
 
     for i = 1, #hintLines do
         self:_text(innerX, cy, hintLines[i], EtherTheme.textDim, nil, true);

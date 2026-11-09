@@ -3,6 +3,7 @@ package modcore.core;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import se.krka.kahlua.integration.annotations.LuaMethod;
 import se.krka.kahlua.vm.KahluaTable;
 import zombie.core.ActionManager;
@@ -16,7 +17,7 @@ import zombie.core.Transaction;
  * `zombie/characters/CharacterTimedActions/LuaTimedActionNew.java:88-103` 在 MP 下自己轮询
  * `ActionManager.isDone/isRejected`, 服务端 `NetTimedActionPacket:63-89` + `ActionManager:88-103`
  * 会回 Accept/Reject/Done。我方经原版计时动作上行的动作全部定义了 `complete` (建点见括号):
- * ISTakeBricks (core/TakeSpawnAPI) / ISPickupFishAction (core/FishingSpawnAPI) /
+ * ISPickupFishAction (core/FishingSpawnAPI) /
  * ISRepairLightbar (panels/EtherVehiclePanel) / ISEjectMagazine + ISUnloadBulletsFromFirearm
  * (ui/EtherAmmoFarm) / ISClothingExtraAction (ui/EtherExchange) / ISTakeTrap + ISCheckTrapAction
  * (ui/EtherTrapPOC) / ISHotwireVehicle (fixes/ServerSyncBlocker) —— 全是服务端权威动作
@@ -39,7 +40,7 @@ public final class TimedActionReceipt {
     static {
         try {
             MethodHandles.Lookup lookup = MethodHandles.privateLookupIn(ActionManager.class, MethodHandles.lookup());
-            ACTIONS = lookup.findVarHandle(ActionManager.class, "actions", Queue.class);
+            ACTIONS = lookup.findStaticVarHandle(ActionManager.class, "actions", ConcurrentLinkedQueue.class);
         }
         catch (Throwable t) {
             ACTIONS = null;   // 退化: 一律返回 3 (未知), 不影响其它功能
@@ -92,5 +93,16 @@ public final class TimedActionReceipt {
             return 3;
         }
         return 3;
+    }
+
+    /** 只清理自己创建的动作表，不取消玩家队列里的其它动作。 */
+    static void remove(KahluaTable actionTable) {
+        if (ACTIONS == null || actionTable == null) {
+            return;
+        }
+        Object queueObject = ACTIONS.get();
+        if (queueObject instanceof Queue<?> queue) {
+            queue.removeIf(entry -> entry instanceof NetTimedAction action && action.action == actionTable);
+        }
     }
 }

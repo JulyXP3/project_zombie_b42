@@ -12,7 +12,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.io.FileReader;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
@@ -71,37 +70,27 @@ public class LuaTranslator {
 
     public void loadTranslations() {
         this.currentLanguage = this.loadSavedLanguage();
-        File var1 = new File(TRANSLATIONS_PATH);
-        File[] var2 = var1.listFiles(LuaTranslator::lambda$loadTranslations$0);
-        if (var2 == null) {
-            Logger.printLog("Failed to load translations: no files found.");
-        } else {
-            File[] var3 = var2;
-            int var4 = var2.length;
-            for (int var5 = 0; var5 < var4; ++var5) {
-                File var6 = var3[var5];
-                String var7 = var6.getName().replace(".txt", "");
-                HashMap<String, String> var8 = new HashMap<String, String>();
-                try (BufferedReader var9 = new BufferedReader(new FileReader(var6));){
-                    String var10;
-                    while ((var10 = var9.readLine()) != null) {
-                        String[] var11;
-                        if (var10.trim().isEmpty() || !var10.contains("=") || (var11 = var10.split("=", 2)).length < 2) continue;
-                        String var12 = var11[0].trim();
-                        String var13 = var11[1].trim();
-                        if (var13.endsWith(",")) {
-                            var13 = var13.substring(0, var13.length() - 1);
-                        }
-                        var13 = var13.replaceAll("\"", "");
-                        var8.put(var12, var13);
+        try {
+            for (String path : modcore.utils.RuntimeResources.list(TRANSLATIONS_PATH + "/")) {
+                if (!path.endsWith(".txt")) continue;
+                String language = path.substring(path.lastIndexOf('/') + 1, path.length() - 4);
+                HashMap<String, String> values = new HashMap<>();
+                try (BufferedReader reader = new BufferedReader(new java.io.InputStreamReader(
+                        modcore.utils.RuntimeResources.require(path), java.nio.charset.StandardCharsets.UTF_8))) {
+                    String line;
+                    while ((line = reader.readLine()) != null) {
+                        if (line.trim().isEmpty() || !line.contains("=")) continue;
+                        String[] pair = line.split("=", 2);
+                        String value = pair[1].trim();
+                        if (value.endsWith(",")) value = value.substring(0, value.length() - 1);
+                        values.put(pair[0].trim(), value.replace("\"", ""));
                     }
                 }
-                catch (Exception var16) {
-                    Logger.printLog("Failed to load translation file: " + var6.getName());
-                    var16.printStackTrace();
-                }
-                this.translations.put(var7, var8);
+                this.translations.put(language, values);
             }
+            if (!this.translations.containsKey("EN")) throw new IOException("English translation resource missing");
+        } catch (IOException e) {
+            throw new IllegalStateException("Failed to load translation resources", e);
         }
     }
 

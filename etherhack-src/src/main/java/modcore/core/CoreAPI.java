@@ -34,6 +34,7 @@ import modcore.core.LuaMethods;
 import modcore.core.CoreMain;
 import modcore.core.RadioXpAPI;
 import modcore.core.RecipeAPI;
+import modcore.core.WornSpawnAPI;
 import modcore.core.ServerSyncBlocker;
 import modcore.GameClientWrapper;
 import modcore.annotations.LuaEvents;
@@ -48,7 +49,6 @@ import modcore.utils.Logger;
 import modcore.utils.PlayerUtils;
 import modcore.utils.PacketRateLimiter;
 import modcore.utils.WorldRef;
-import modcore.core.VehicleSeatAPI;
 import modcore.core.MousePickAPI;
 import modcore.core.TimedActionReceipt;
 import modcore.utils.Rendering;
@@ -224,20 +224,8 @@ public class CoreAPI {
 
     public static File configDir() {
         File dir = new File(zombie.core.Core.getInstance().getMyDocumentFolder(), "modcore/config");
-        if (!dir.exists()) {
-            dir.mkdirs();
-            // 一次性迁移: 游戏目录下的旧配置 (3.2.4 早期版放游戏根) 搬到用户目录
-            File legacy = new File("modcore/config");
-            if (legacy.isDirectory()) {
-                File[] old = legacy.listFiles();
-                if (old != null) {
-                    for (File f : old) {
-                        f.renameTo(new File(dir, f.getName()));
-                    }
-                }
-                legacy.delete();
-                new File("modcore").delete();
-            }
+        if (!dir.exists() && !dir.mkdirs() && !dir.isDirectory()) {
+            throw new IllegalStateException("Cannot create user configuration directory: " + dir);
         }
         return dir;
     }
@@ -624,24 +612,26 @@ public class CoreAPI {
         this.exposer.exposeAPI(this.createProtectedMethods());
         this.exposer.exposeServerSyncBlocker();
             this.exposer.exposeFishingSpawn();
-            this.exposer.exposeTrapSpawn();
             this.exposer.exposeCorpseSpawn();
             // 一百九十 万象天引: B 聚集原语
             this.exposer.exposeZombieGather();
-            // 一百三十一 计时动作真实生成 (ISTakeBricks 真物品路线)
-            this.exposer.exposeTakeSpawn();
             this.exposer.exposeRadioXp();
             this.exposer.exposeRateLimiter();
             this.exposer.exposeWorldRef();
-            this.exposer.exposeVehicleSeat();
             // E2 (2026-09-14 八十八): 渲染层拾取 (pickObjectAt/pickObjectInfoAt)
             this.exposer.exposeMousePick();
             // A2 (2026-09-14 八十九): 原版计时动作精确回执 (timedActionState)
             this.exposer.exposeTimedActionReceipt();
             // C3 探针 (2026-09-14 九十一): 载具原生体读数/跳步 (vehicleNativeProbeRead/vehicleNativeHop)
             this.exposer.exposeVehicleTeleport();
+            // 任意钥匙点火: 服务端点火口注入 + startEngine
+            this.exposer.exposeVehicleIgnition();
+            // 载具修理链路: 拆/装网络动作 + 物品耐久同步
+            this.exposer.exposeVehicleRepair();
         this.exposer.exposeChat();
         this.exposer.exposeRecipes();
+        // 穿戴生成 (2026-11-07): SyncClothing 造物 + 食物临时压重 + 换装掉落
+        this.exposer.exposeWornSpawn();
         this.exposer.exposeModScan();
         this.exposer.exposeRenderingAPI();
         // 探鱼雷达取数桥 (2026-10-18, 两阶段 fishRadarScanBegin/Finish)
@@ -746,8 +736,19 @@ public class CoreAPI {
         if (item == null || !item.getStringItemType().equals("RangedWeapon") || item.getContainer() == null || item.getMaxAmmo() <= 0) {
             return;
         }
+        boolean changed = false;
         if (item.getCurrentAmmoCount() != item.getMaxAmmo()) {
             item.setCurrentAmmoCount(item.getMaxAmmo());
+            changed = true;
+        }
+        // B42 的枪有两个状态: 弹匣计数 + 膛内那一发 (roundChambered)。
+        // 只补计数时弹匣满了但膛是空的, 而上膛动作要求弹匣有弹, 空枪会卡在"打不出也上不了膛";
+        // 这里把膛内那发一并补上, 空枪也能直接击发。
+        if (item instanceof HandWeapon weapon && weapon.haveChamber() && !weapon.isRoundChambered()) {
+            weapon.setRoundChambered(true);
+            changed = true;
+        }
+        if (changed) {
             INetworkPacket.send(PacketTypes.PacketType.SyncItemFields, player, item);
         }
     }
@@ -840,7 +841,7 @@ public class CoreAPI {
             this.multiHitOption = SandboxOptions.instance.getOptionByName("MultiHitZombies");
         }
         if (this.multiHitOption != null
-                && !Boolean.TRUE.equals(this.multiHitOption.asConfigOption().getValueAsObject()) != this.isMultiHitZombies) {
+                && Boolean.TRUE.equals(this.multiHitOption.asConfigOption().getValueAsObject()) != this.isMultiHitZombies) {
             SandboxOptions.instance.set("MultiHitZombies", (Object)this.isMultiHitZombies);
         }
         if (var1.isTimedActionInstantCheat() != this.isTimedActionCheat) {
@@ -970,8 +971,6 @@ public class CoreAPI {
         // 各功能的客户端本地踩值不受影响; 服务端副本一致性替代方案见
         // analysis/红队方法论与早期功能条目(2026-08-19-已实施-索引).md 文末
         // 2026-10-01 执行记录 (ClientCommand onHealthCheatCurrentPlayer)。
-        // 一百三十一 计时生成加速件收尾 (未武装时立即返回, 零开销; 常驻以防中途断线残留 NaN)
-        TakeSpawnAPI.tick();
         if (this.isUnlimitedCarry || this.isNoMuscleStrain
                 || this.isUnlimitedCondition || this.isUnlimitedEndurance) {
             // 一百二十二 (掉血根治, 用户实测驱动): 机制 = 稳定版 (git 仓库, 用户实测不掉血的
@@ -1735,6 +1734,8 @@ public class CoreAPI {
     @SubscribeLuaEvent(eventName="OnTick")
     public void onTickUpdate() {
         try {
+            modcore.drive.AutoDriveAPI.updateVehicleReset();
+            VehicleTeleportAPI.discardRemovedVehicleState();
             IsoPlayer player = IsoPlayer.getInstance();
             if (player == null || player.isDead()) {
                 return;
@@ -1863,19 +1864,6 @@ public class CoreAPI {
             }
         }
 
-        public void exposeTrapSpawn() {
-            for (Method method : TrapSpawnAPI.class.getMethods()) {
-                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
-                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
-                String name = annotation.name();
-                if (name == null || name.isEmpty()) {
-                    name = method.getName();
-                }
-                this.exposeGlobalClassFunction(LuaManager.env, TrapSpawnAPI.class, method, name);
-                Logger.printLog("Exposed TrapSpawnAPI method: " + name);
-            }
-        }
-
         public void exposeCorpseSpawn() {
             for (Method method : CorpseSpawnAPI.class.getMethods()) {
                 if (!method.isAnnotationPresent(LuaMethod.class)) continue;
@@ -1900,19 +1888,6 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, ZombieGatherAPI.class, method, name);
                 Logger.printLog("Exposed ZombieGatherAPI method: " + name);
-            }
-        }
-
-        public void exposeTakeSpawn() {
-            for (Method method : TakeSpawnAPI.class.getMethods()) {
-                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
-                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
-                String name = annotation.name();
-                if (name == null || name.isEmpty()) {
-                    name = method.getName();
-                }
-                this.exposeGlobalClassFunction(LuaManager.env, TakeSpawnAPI.class, method, name);
-                Logger.printLog("Exposed TakeSpawnAPI method: " + name);
             }
         }
 
@@ -1955,19 +1930,6 @@ public class CoreAPI {
             }
         }
 
-        public void exposeVehicleSeat() {
-            for (Method method : VehicleSeatAPI.class.getMethods()) {
-                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
-                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
-                String name = annotation.name();
-                if (name == null || name.isEmpty()) {
-                    name = method.getName();
-                }
-                this.exposeGlobalClassFunction(LuaManager.env, VehicleSeatAPI.class, method, name);
-                Logger.printLog("Exposed VehicleSeatAPI method: " + name);
-            }
-        }
-
         /** A2 (八十九): TimedActionReceipt 的 @LuaMethod(global=true) 全量暴露 */
         public void exposeTimedActionReceipt() {
             for (Method method : TimedActionReceipt.class.getMethods()) {
@@ -1993,6 +1955,40 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, VehicleTeleportAPI.class, method, name);
                 Logger.printLog("Exposed VehicleTeleportAPI method: " + name);
+            }
+        }
+
+        /**
+         * 任意钥匙点火: VehicleIgnitionAPI 的 @LuaMethod(global=true) 全量暴露
+         * (反射循环与 exposeVehicleTeleport 同款; 必须在 loadAPI 的 PrivateGlobals 捕获窗内)。
+         */
+        public void exposeVehicleIgnition() {
+            for (Method method : VehicleIgnitionAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, VehicleIgnitionAPI.class, method, name);
+                Logger.printLog("Exposed VehicleIgnitionAPI method: " + name);
+            }
+        }
+
+        /**
+         * 载具修理链路: VehicleRepairAPI 的 @LuaMethod(global=true) 全量暴露
+         * (反射循环与 exposeVehicleIgnition 同款; 必须在 loadAPI 的 PrivateGlobals 捕获窗内)。
+         */
+        public void exposeVehicleRepair() {
+            for (Method method : VehicleRepairAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, VehicleRepairAPI.class, method, name);
+                Logger.printLog("Exposed VehicleRepairAPI method: " + name);
             }
         }
 
@@ -2065,6 +2061,19 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, RecipeAPI.class, method, name);
                 Logger.printLog("Exposed RecipeAPI method: " + name);
+            }
+        }
+
+        public void exposeWornSpawn() {
+            for (Method method : WornSpawnAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, WornSpawnAPI.class, method, name);
+                Logger.printLog("Exposed WornSpawnAPI method: " + name);
             }
         }
 

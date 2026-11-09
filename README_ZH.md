@@ -2,7 +2,9 @@
 
 面向 Project Zomboid Build 42 的 [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) 社区维护构建。
 
-在原版基础上新增了 **耕种 / 地图传送 + 汽车传送 / 载具导航模式(沿道路网自动行驶) / 点亮全图 / 真-夜视 / 战斗强化 + 临时武器 / 战利品重掷 + 物品生成(物品生成 (MP) · 尸体生成 · 计时生成 · 开盒生成) / ESP / 物品雷达 + 小地图标记** 等大量功能, 并针对 B42 客户端 Lua 环境 (Kahlua) 做了多处修复与加固。完整功能见下方「功能一览」。
+在原版基础上新增了 **耕种 / 地图传送 + 汽车传送 / 载具导航模式(沿道路网自动行驶) / 整车自动维修 / 免费建造 / 点亮全图 / 真-夜视 / 战斗强化 + 临时武器 / 物品生成(物品生成 (MP) · 尸体生成 · 开盒生成 · 穿戴生成) / ESP / 物品雷达 + 小地图标记** 等大量功能, 并针对 B42 客户端 Lua 环境 (Kahlua) 做了多处修复与加固。完整功能见下方「功能一览」。
+
+> 当前版本：**3.2.8-B42**（适配 Project Zomboid **42.22.2**）。
 
 > **重要声明:** 本项目**禁止任何形式的商业用途**(包括售卖、付费下载等), 二次修改与转载**必须标注原作者**。授权条款详见文末「许可证」。
 
@@ -23,7 +25,7 @@
 
 ### 战斗
 
-- **战斗强化**: 攻速倍率(1~2.5) / 攻击距离加成(0~4) / 秒杀模式 / 提高暴击率(提高武器暴击机会，并非必定暴击) / 枪械只爆头(必爆头, 3 倍伤害) / 枪械百发百中(无视环境) / 群攻 / 提高枪械射速 / 无限弹药(耗尽自动补满; 补充数量在「战利品」页设置) / 无卡壳 / 关窗射击(在车上)(手持枪械时车窗关着也能打到车外僵尸; 近战与推搡不受影响)
+- **战斗强化**: 攻速倍率(1~2.5) / 攻击距离加成(0~4) / 秒杀模式 / 提高暴击率(提高武器暴击机会，并非必定暴击) / 枪械只爆头(必爆头, 3 倍伤害) / 枪械百发百中(无视环境) / 群攻 / 提高枪械射速 / 无限弹药(开启时自动补满枪械与背包弹匣, 关闭后恢复正常消耗) / 无卡壳 / 关窗射击(在车上)(手持枪械时车窗关着也能打到车外僵尸; 近战与推搡不受影响)
 - **超级群攻**: 每次挥击命中上限 10~20(可攻击以自身为中心的全部敌人; 原版的多目标伤害递减已取消, 每只都吃全额伤害, 可配合提高暴击率/秒杀模式)
 - **临时武器**: 本地生成枪械替换手持(全枪械列表搜索 + 临时替换/取消替换)
 
@@ -37,7 +39,7 @@
 
 ### 陷阱
 
-- **模式切换**: 食物 / 武器; 搜索 + 点击生成(食物: 站在已放置的陷阱旁; 武器: 陷阱自动放在脚下并自动拾取, 每件需数秒); 数量可循环
+- **食物生成**: 站在已放置的陷阱旁, 搜索并选择食物后点击生成; 名称、ID 和数量同排, 可按数量循环。
 
 ### 交换
 
@@ -61,13 +63,11 @@
 
 ### 战利品
 
-- **重置战利品(F9)**: 半径可调(默认 10), 重置后打开容器重新生成战利品(可反复刷枪柜/弹药箱, 仅多人)
 - **刷弹药**: 按弹匣/枪械类型生成弹药
 - **物品生成 (MP)**: 主手装备鱼竿后可将列表中任意物品生成进背包(约 5~8 秒入包; 生成失败会在服务端留下日志; 仅多人)
 - **尸体生成**: 在脚下生成一具携带指定物品的尸体, 搜尸取物(仅多人; **会在服务器上留下日志, 请谨慎使用**)
-- **计时生成**: 走游戏自身的取物动作生成**真实物品**(可持久化、他人可见), 带「加速」开关控制生成速度(仅多人)
 - **开盒生成**: 背包备好载体(玻璃罐整盒/双三四原木堆/柴捆), 选择目标与数量后点击生成, 再正常做一次对应开盒/拆堆合成即放出列表中任意物品(仅多人)
-- **多选清单**: 钓竿/尸体/计时生成支持勾选多个物品加入清单, 在清单里逐项调整数量后一键依次生成(开盒生成仍为单件; 仅多人)
+- **多选清单**: 钓竿/尸体生成支持勾选多个物品加入清单, 在清单里逐项调整数量后一键生成(钓竿每项一件; 开盒生成仍为单件; 仅多人)
 
 ### 建造
 
@@ -75,9 +75,8 @@
 
 ### 载具
 
-- **引擎与启动**: 无条件启动引擎(单次 / 自动重试, 成功即自动取消; 引擎能否启动仍需油/电)
-- **维修与补给**: 修理车辆(用本车后备箱/手套箱/座椅里的物品当令牌, 默认不消耗; 每步头顶提示) / 直发修理(立即满件, 每件在服务端留一行日志) / 加满油
-- **远程上车**: 自己上车(20 米内最近载具的司机座) / 把最近的其他在线玩家塞进其附近载具的司机座(仅多人)
+- **引擎与启动**: 任意钥匙点火(单次 / 自动重试) —— 背包里有任意车钥匙即可插入目标车点火口启动; 无钥匙启动与必定短接仍未修复, 仍需油/电/引擎完好。
+- **维修**: 自动修理整车(引擎/后备箱/手套箱等无安装结构的部件除外) —— 不需要物品, 成功率看角色技能, 失败无妨, 成功一次即可把部件修到最高耐久; 低技能时自动重试并显示当前部件、剩余耐久与尝试次数(仅多人)。
 - **导航模式**: 沿道路网自动开往终点 —— 上驾驶位打火后按 M 打开地图右键「导航前往此处」即出发; 行驶中再锚定 = 改道; 巡航速度自适应(服务端限速×95%)或手动指定(按设定值执行, 超过服务器限速在严格服计入超速); 按任意驾驶键当帧接管, 到达/下车/引擎熄火自动结束
 
 ### 耕种
@@ -112,46 +111,63 @@
 
 ## 安装
 
-环境要求: **JDK 25** 与 **Gradle 9.1.0**。构建通过内置的 Gradle wrapper(`gradlew.bat`)执行, 首次运行会自动下载 Gradle; 也可使用本机已安装的 Gradle。
+**目标游戏机器需先安装 Windows x64 完整 JDK 25**（不是精简 JRE）。安装包不再附带或下载 Java；安装、启动辅助工具和卸载使用自行安装的 JDK，实际游戏仍使用游戏自带 Java。
 
-1. 准备编译依赖: 将游戏根目录下的 `projectzomboid.jar` 复制到 `etherhack-src/lib/` 目录下 (保持原文件名, 该文件仅用于编译, 不会被修改)。
-2. 打开 `etherhack-src/build.bat`, 填写好 `JAVA_HOME`, 保存之后运行 `build.bat`。
-3. 从 `build` 目录中拿到 `modcore-3.2.7-B42.jar`。
-4. 将 jar 和 `etherhack-src/install.bat`(以及可选的 `etherhack-src/uninstall.bat`)一起复制到游戏根目录。
-5. 运行 `install.bat` 完成安装。
+- 推荐设置 `JAVA_HOME` 为 JDK 安装根目录（不是 `bin`）；未设置时，从 `PATH` 查找 `java.exe`，因此也可将 JDK 的 `bin` 加入 `PATH`。
+- 已设置但无效的 `JAVA_HOME` 不会自动退回 `PATH`。版本、架构或必要组件不符合时，停止操作并提示，不改启动文件、不启动游戏。
+- 准备好 JDK 后，三文件安装/启动/卸载不需联网，也不要求另装 PowerShell。
 
-安装成功后会**自动删除 jar**。卸载有两种方式：① 目录里**没有** `modcore-*.jar` 时再运行 `install.bat`(合并脚本会自动进入卸载模式)；② 直接运行 `uninstall.bat`(独立卸载脚本, 随时可用, 与 jar 是否在目录里无关)。两者都会删掉注入的 `zombie\`、`modcore\` 与 `%USERPROFILE%\Zomboid\modcore.bin`, 不会碰游戏本体。切勿删除 `projectzomboid.jar`——那是游戏本体。
+构建环境需要 **Windows x64 完整 JDK 25**、**PowerShell 7（`pwsh` 可从 PATH 调用）**和内置 **Gradle 9.1.0 wrapper**：
 
-游戏中按 **Insert** 打开 EtherHack 面板。
+1. 准备编译依赖：将目标游戏的 `projectzomboid.jar` 复制到 `etherhack-src/lib/`，保持原文件名；不要修改游戏原文件。
+2. 以文本形式打开 `etherhack-src/build-fast.bat`，在顶部填写 `BUILD_JAVA_HOME`（JDK 根目录）和 `BUILD_GAME_DIR`（游戏根目录）。
+3. 运行 `etherhack-src/build-fast.bat`。(如果你需要走完整构建, 就运行build.bat, 但这会需要5-10分钟)
+4. 从 `etherhack-src/build/` 取出 `modcore-3.2.8-B42.jar`，与 `etherhack-src/install.bat`、`etherhack-src/uninstall.bat` 一起复制到游戏根目录下。
+5. 运行install.bat, 等待执行完毕。
+
+## 启动(两种方式)
+
+| 入口 | 结果 |
+| --- | --- |
+| `ProjectZomboid64.bat`（或 ShowConsole / OpenGLDebug 变体） | 带EtherHack菜单 |
+| `ProjectZomboid64.exe`（含 Steam 的「开始游戏」） | 原版启动, 不会有EtherHack菜单 |
+
+游戏中按 **Insert** 打开面板 (推荐在设置中将菜单开关从Install键改掉)
+
+## 卸载
+
+1. 完全退出游戏（Steam 里也要退出，不要停留在主菜单）。
+2. 把 `uninstall.bat` 复制到游戏根目录（和 `ProjectZomboid64.exe` 放在同一个文件夹）。
+3. 双击运行 `uninstall.bat`，等窗口提示完成。
+4. 之后用 `ProjectZomboid64.exe` 或 Steam 的「开始游戏」启动，就是原版游戏，不会有 EtherHack 菜单。
+
+- 卸载只需要 `uninstall.bat` 一个文件，不需要 `install.bat` 或 `modcore-*.jar`。
+- 和安装一样，电脑上要先装好 JDK 25。
+- 卸载不会删除存档、设置和日志。如果提示失败，先确认游戏已完全退出，再运行一次。
+- 如果以前用过旧测试版，可能还留有旧文件；当前卸载程序不保证清理所有历史版本的遗留。遇到这种情况先联系维护者确认，不要自行删除游戏文件夹。
 
 ## 从源码构建
 
-环境要求: JDK 25, 已包含 Gradle wrapper。
+环境要求：Windows x64 完整 JDK 25、PowerShell 7 和内置 Gradle wrapper。先填写两个 BAT 顶部的本机路径：
 
 ```bat
-cd etherhack-src
-gradlew.bat jar
+set "BUILD_JAVA_HOME=E:\JDK25"
+set "BUILD_GAME_DIR=E:\Steam\steamapps\common\ProjectZomboid"
 ```
 
-产物在 `etherhack-src/build/modcore-3.2.7-B42.jar`。Lua 源码嵌入在 `src/main/resources/modcore/lua/` 中, 构建时自动打包。
+随后运行 `etherhack-src/build.bat`（完整测试并打包），或 `etherhack-src/build-fast.bat`（仅编译打包）。两个入口均核对游戏 JAR 与 `lib/projectzomboid.jar` 一致；快速入口不要求游戏 Java 副本。
 
-## 测试
+产物为 `etherhack-src/build/modcore-3.2.8-B42.jar`。完整入口自动管理 `temp/native-runtime-build/` 下的测试副本，副本不存在或缺文件会重建，游戏 Java 更新后会选用新副本；未知文件、被改记录、跳转路径或并发构建会拒绝，不自动删除可疑内容。保留 `temp/` 中的其他工具和证据，不需要清空整个目录。
 
-```bat
-rem Lua 冒烟测试 (扫描 + 防抖 + 移动刷新 + 开关逻辑)
-temp\tools\lua51\lua5.1.exe tests\run_scan_test.lua etherhack-src\src\main\resources\modcore\lua\components\ui\EtherItemSearch.lua
+自动化可通过 `MODCORE_BUILD_JAVA_HOME`、`MODCORE_BUILD_GAME_DIR` 覆盖顶部配置；游戏位置参数优先于环境覆盖，`PZ_GAME_DIR` 仍兼容。显式错误配置不会改用系统 Java。`MODCORE_NO_PAUSE=1` 可取消结束暂停。`build.bat --fast` 仍仅跳过部分测试，产物同样未完整验收。
 
-rem Kahlua 兼容性静态检查 (禁用 API 黑名单)
-temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main\resources\modcore\lua\components\ui\EtherItemSearch.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIItemTables.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIMap.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIMovableMiniMap.lua
-```
-
-注意: `temp/` 是本机临时目录, 不属于仓库内容。
+完整验收要求测试失败、错误、跳过均为 0；单独执行 `gradlew.bat jar` 或快速入口只是打包，不等于验收通过。
 
 ## 仓库结构
 
 | 路径 | 说明 |
 |---|---|
-| `etherhack-src/build/modcore-3.2.7-B42.jar` | 可直接使用的构建产物(当前版本) |
+| `etherhack-src/build/modcore-3.2.8-B42.jar` | 3.2.8 产物（适配 42.22.2）：隔离验证通过；自动修理已实机验收（其余功能按各自文档状态） |
 | `etherhack-src/` | 完整源码 (Gradle 工程, 含 `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua 冒烟测试 + Kahlua 兼容性检查脚本 |
 | `analysis/` | 反编译取证与设计文档 (`analysis/**/*.md` 入库, 反编译产物仅存本地) |

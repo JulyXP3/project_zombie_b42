@@ -1,34 +1,38 @@
 package modcore;
 
-import modcore.GamePatcher;
-import modcore.utils.Logger;
-
+/** Offline preparation and explicit, reversible deployment entry. */
 public class Main {
     public static void main(String[] args) {
-        if (args.length != 1) {
-            Logger.print("You must specify one of the '--install' or '--uninstall' flags");
+        if (args.length > 0 && (args[0].equals("--install-agent") || args[0].equals("--uninstall-agent"))) {
+            try {
+                modcore.build.AgentInstaller.run(args);
+            } catch (Exception e) {
+                System.err.println("Agent deployment failed: " + e.getMessage());
+                e.printStackTrace(System.err);
+                System.exit(1);
+            }
             return;
         }
-        GamePatcher gamePatcher = new GamePatcher();
-        switch (args[0]) {
-            case "--install": {
-                // C (2026-09-14 八十二): 有类补丁失败时以非 0 退出码收尾, install.bat 据此
-                // 报错并保留安装器 jar (旧版一律退 0 → 装坏了也显示 "Installation completed")
-                if (!gamePatcher.patchGame()) {
-                    Logger.error("Installation FAILED - see the messages above; the installer jar was kept for retry.");
-                    System.exit(1);
+        if (args.length == 4 && (args[0].equals("--prepare-agent") || args[0].equals("--prepare-runtime"))) {
+            try {
+                modcore.attach.JdkRequirement.requireCurrent();
+                if (args[0].equals("--prepare-runtime")) {
+                    modcore.build.AgentLoadout.prepareRuntime(java.nio.file.Path.of(args[1]),
+                            java.nio.file.Path.of(args[2]), java.nio.file.Path.of(args[3]));
+                } else {
+                    modcore.build.AgentLoadout.prepare(java.nio.file.Path.of(args[1]),
+                            java.nio.file.Path.of(args[2]), java.nio.file.Path.of(args[3]));
                 }
-                break;
+            } catch (Exception e) {
+                System.err.println("Agent preparation failed: " + e.getMessage());
+                e.printStackTrace(System.err);
+                System.exit(1);
             }
-            case "--uninstall": {
-                gamePatcher.restoreFiles();
-                // 二百七十: 卸载零留痕 — 用户目录 modcore 树 (日志/配置) 最后深清
-                gamePatcher.purgeUserData();
-                break;
-            }
-            default: {
-                Logger.print("Unknown flag '" + args[0] + "'");
-            }
+            return;
         }
+        System.err.println("Legacy install/uninstall commands are disabled in this preview build.");
+        System.err.println("Use the three-file installer or --prepare-runtime <game.jar> <payload.jar> <runtime.jar>.");
+        System.err.println("Review old deployment files manually; this tool will not remove them.");
+        System.exit(1);
     }
 }

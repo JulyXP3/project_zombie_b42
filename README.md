@@ -2,7 +2,9 @@
 
 A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) for Project Zomboid Build 42.
 
-The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Loot reroll + item spawning (Item Spawn / Corpse spawn / Timed spawn / Unbox spawn) / ESP / Item Radar + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
+The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / full-vehicle auto-repair / free building / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Item spawning (Item Spawn / Corpse spawn / Unbox spawn / Worn spawn) / ESP / Item Radar + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
+
+> Current version: **3.2.8-B42** (for Project Zomboid **42.22.2**).
 
 > **Important:** **Any form of commercial use is prohibited** (including selling and paywalled downloads), and forks/modifications **must credit the original authors**. See the License section at the end for details.
 
@@ -23,7 +25,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Combat
 
-- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / Increase Critical Chance (raises weapon critical chance; does not guarantee a critical hit) / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (auto-refill; the refill count is set on the Loot page) / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
+- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / Increase Critical Chance (raises weapon critical chance; does not guarantee a critical hit) / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (refills firearms and inventory magazines while enabled; normal consumption resumes when disabled) / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
 - **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; the vanilla damage falloff across targets is removed, so every zombie takes full damage — combine with Increase Critical Chance / One-Shot Kill)
 - **Temp Weapon**: locally spawn a firearm and swap it into your hands (searchable full firearm list + swap/restore)
 
@@ -37,7 +39,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Traps
 
-- **Mode switch**: food / weapon; search + click to spawn (food: stand next to a placed trap; weapon: the trap is placed at your feet automatically and auto-collected, a few seconds per item); count can be looped
+- **Food spawn**: stand next to a placed trap, search and select a food item, then spawn; name, ID and count share one row, with repeated spawning by count.
 
 ### Swap
 
@@ -61,13 +63,11 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Loot
 
-- **Reset loot (F9)**: adjustable radius (default 10); reopened containers get re-rolled (gun cabinets/ammo boxes can yield weapons and ammo; multiplayer only)
 - **Ammo farming**: spawn ammo per magazine/weapon type
 - **Item Spawn (MP)**: with a fishing rod equipped, spawn any listed item into your inventory (~5-8s; a failed spawn leaves a log entry on the server; multiplayer only)
 - **Corpse spawn**: spawn a corpse at your feet carrying the chosen items and loot it (multiplayer only; **it leaves a log entry on the server - use with caution**)
-- **Timed spawn**: uses the game's own action so the item is real and persistent (visible to others), with an "Accelerate" toggle for its speed (multiplayer only)
 - **Unbox spawn**: keep a carrier (jar box / log stack x2-x4 / firewood bundle) in your backpack, pick a target and count, then spawn; craft the matching unpack recipe once to release any listed items (multiplayer only)
-- **Multi-item list**: fishing-rod, corpse and timed spawn accept several ticked items at once - add them to a list, adjust each quantity there, then run them in sequence (unbox spawn stays single-item; multiplayer only)
+- **Multi-item list**: fishing-rod and corpse spawn accept several ticked items at once - add them to a list, adjust quantities, then spawn (fishing produces one of each item; unbox spawn stays single-item; multiplayer only)
 
 ### Build
 
@@ -75,9 +75,8 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Vehicles
 
-- **Engine & starting**: start engine unconditionally (once / auto-retry, auto-unchecks on success; the engine still needs fuel and battery)
-- **Repair & supply**: repair vehicle (uses items already in this vehicle's trunk/glovebox/seats as tokens by default, so nothing is consumed; per-step overhead feedback) / direct repair (instant full condition, one server log line per part) / refuel
-- **Remote entry**: enter the nearest vehicle within 20m (driver seat) / stuff the nearest other online player into the driver seat of the vehicle near them (multiplayer)
+- **Engine & starting**: start with any key (single shot / auto-retry) - any car key in your inventory can be inserted into the target vehicle's ignition; keyless start and guaranteed hotwire are not yet repaired and fuel/battery/engine condition still apply.
+- **Repair**: auto-repair covers the whole vehicle (except engine/trunk/glove box and other parts without install tables) without items; success depends on the character's skill level, failures are harmless and one success restores full condition; low skill auto-retries and shows the current part, remaining condition and attempt count (multiplayer only).
 - **Navigation mode**: auto-drive along the road network — get in the driver's seat, start the engine, press M and right-click "navigate here"; re-anchor while driving to reroute; cruise speed is adaptive (95% of the server speed limit) or set manually (honored as-is; going over the server limit counts as speeding on strict servers); any driving key takes over instantly; ends on arrival / exit / engine stall
 
 ### Farming
@@ -112,46 +111,63 @@ See [UPDATELOG_EN.md](UPDATELOG_EN.md) for the full change history.
 
 ## Installation
 
-Requirements: **JDK 25** and **Gradle 9.1.0**. The build runs through the included Gradle wrapper (`gradlew.bat`), which downloads Gradle automatically on first run — or you can use a locally installed Gradle.
+**The game PC must have a full Windows x64 JDK 25 installed** (not a reduced JRE). The package no longer includes or downloads Java. Installation, launch coordination and removal use this external JDK; the game itself continues to use its bundled Java.
 
-1. Prepare the build dependency: copy `projectzomboid.jar` from the game root directory into `etherhack-src/lib/`, keeping the original file name (it is only read at compile time and never modified).
-2. Open `etherhack-src/build.bat`, fill in your `JAVA_HOME` path, save, and run it.
-3. Take `modcore-3.2.7-B42.jar` from the `build` directory.
-4. Copy the jar together with `etherhack-src/install.bat` (and optionally `etherhack-src/uninstall.bat`) into the **game root directory**.
-5. Run `install.bat` to install the mod.
+- Prefer setting `JAVA_HOME` to the JDK root, not its `bin` folder. If unset, `java.exe` is located through `PATH`, so adding the JDK's `bin` folder to `PATH` also works.
+- An invalid explicitly set `JAVA_HOME` does not fall back to `PATH`. An unsupported version, architecture or missing component stops the operation before changing launch files or starting the game.
+- Once the JDK is installed, the three-file installation, launch and removal flow needs neither network access nor an additional PowerShell installation.
 
-The installer deletes the jar automatically after a successful install. To uninstall: either run `install.bat` again later (with **no** `modcore-*.jar` in the folder - the merged script switches to uninstall mode), or run the standalone `uninstall.bat` (works at any time, whether or not the jar is present). Both remove the injected `zombie\` folder, the unpacked `modcore\` folder and `%USERPROFILE%\Zomboid\modcore.bin`, and never touch the game itself. Never delete `projectzomboid.jar` - that is the game itself.
+Build requirements: a **full Windows x64 JDK 25**, **PowerShell 7 (`pwsh` available on PATH)** and the included **Gradle 9.1.0 wrapper**:
 
-In-game: press **Insert** to open the EtherHack panel.
+1. Copy the target game's `projectzomboid.jar` into `etherhack-src/lib/`, keeping the original name. Do not modify the game's original file.
+2. Open `etherhack-src/build-fast.bat` in a text editor and fill in `BUILD_JAVA_HOME` (JDK root) and `BUILD_GAME_DIR` (game root) at the top.
+3. Run `etherhack-src/build-fast.bat`. (Run `build.bat` if you need the full build, but it takes about 5-10 minutes.)
+4. Take `modcore-3.2.8-B42.jar` from `etherhack-src/build/`, and copy it together with `etherhack-src/install.bat` and `etherhack-src/uninstall.bat` into the game root folder.
+5. Run `install.bat` and wait until it finishes.
+
+## Launch (two ways)
+
+| Entry | Result |
+| --- | --- |
+| `ProjectZomboid64.bat` (or ShowConsole / OpenGLDebug variants) | Starts with the EtherHack menu |
+| `ProjectZomboid64.exe` (including Steam's "Play" button) | Vanilla start, no EtherHack menu |
+
+Press **Insert** in-game to open the panel (it is recommended to rebind the menu key from Insert in Settings).
+
+## Uninstall
+
+1. Quit the game completely (also exit Steam; do not stay on the main menu).
+2. Copy `uninstall.bat` into the game root (the folder with `ProjectZomboid64.exe`).
+3. Double-click `uninstall.bat` and wait until it reports completion.
+4. Start the game with `ProjectZomboid64.exe` or Steam "Play" - it is the vanilla game with no EtherHack menu.
+
+- Only `uninstall.bat` is needed; `install.bat` and `modcore-*.jar` are not required.
+- Like installation, this needs JDK 25 on the PC.
+- Saves, settings and logs are kept. If it reports a failure, make sure the game is fully closed and run it again.
+- Older test builds may have left files behind. The current uninstaller does not guarantee removal of leftovers from every past version. Contact the maintainer before deleting anything from the game folder.
 
 ## Building from source
 
-Requirements: JDK 25, Gradle wrapper included.
+Requirements: a full Windows x64 JDK 25, PowerShell 7 and the included Gradle wrapper. Fill in the local paths at the top of both BAT files first:
 
 ```bat
-cd etherhack-src
-gradlew.bat jar
+set "BUILD_JAVA_HOME=E:\JDK25"
+set "BUILD_GAME_DIR=E:\Steam\steamapps\common\ProjectZomboid"
 ```
 
-The output jar is at `etherhack-src/build/modcore-3.2.7-B42.jar`. The build embeds the Lua sources from `src/main/resources/modcore/lua/`.
+Then run `etherhack-src/build.bat` (full tests and packaging), or `etherhack-src/build-fast.bat` (compilation and packaging only). Both check that the configured game JAR matches `lib/projectzomboid.jar`; the fast entry does not require a copied game runtime.
 
-## Testing
+The output JAR is `etherhack-src/build/modcore-3.2.8-B42.jar`. The full entry manages its test copy under `temp/native-runtime-build/`: missing copies/files are rebuilt, and a changed game runtime selects a new copy. Unknown content, changed ownership records, redirected paths or concurrent builds are refused rather than removed automatically. Keep other tools and evidence in `temp/`; there is no need to empty the whole directory.
 
-```bat
-rem Lua smoke test (scan + debounce + movement refresh + toggle logic)
-temp\tools\lua51\lua5.1.exe tests\run_scan_test.lua etherhack-src\src\main\resources\modcore\lua\components\ui\EtherItemSearch.lua
+Automation can override the top configuration with `MODCORE_BUILD_JAVA_HOME` and `MODCORE_BUILD_GAME_DIR`; a positional game path takes precedence, and `PZ_GAME_DIR` remains supported. An invalid explicit configuration does not fall back to system Java. Set `MODCORE_NO_PAUSE=1` to disable the final pause. `build.bat --fast` still skips only some tests, so its output is also not fully verified.
 
-rem Kahlua compatibility static check (banned API patterns)
-temp\tools\lua51\lua5.1.exe tests\check_kahlua_compat.lua etherhack-src\src\main\resources\modcore\lua\components\ui\EtherItemSearch.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIItemTables.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIMap.lua etherhack-src\src\main\resources\modcore\lua\components\ui\UIMovableMiniMap.lua
-```
-
-Note: `temp/` is a local scratch directory and is not part of the repository.
+Full acceptance requires zero failed, errored or skipped tests; `gradlew.bat jar` or the fast entry alone only packages code.
 
 ## Repository layout
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/modcore-3.2.7-B42.jar` | Ready-to-use build (current release) |
+| `etherhack-src/build/modcore-3.2.8-B42.jar` | 3.2.8 artifact (for 42.22.2): isolated checks passed; auto-repair accepted in-game (other features per their docs) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `analysis/` | Reverse-engineering evidence and design docs (`analysis/**/*.md` is tracked; decompiled sources stay local only) |

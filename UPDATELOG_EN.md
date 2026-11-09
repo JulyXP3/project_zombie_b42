@@ -1,6 +1,65 @@
 # Changelog
 
-## [3.2.7] - Current
+## [3.2.8] - Current
+
+- Fixed: long hint text on the Build page could run past the panel edge; it now wraps and keeps a right margin.
+
+- Fixed: some Chinese hints and vehicle descriptions could display with missing characters; they now use fully displayable wording.
+
+- Improved: the auto-repair and engine-start descriptions now match current behavior (no items needed, success depends on skill, any car key starts the engine).
+
+- Improved: auto-repair now shows the part being repaired, its current condition and success chance; on failures it shows the remaining condition and the retry attempt, and retries are faster.
+
+- Improved: auto-repair now covers the whole vehicle except the engine - no mechanics skill and no items are required; it continues part by part and skips parts that cannot be repaired.
+
+- Improved: removed the duplicate "start with any key (auto)" entry from the vehicle page; the single-shot and auto-retry entries remain, so there are no longer three equivalent controls.
+
+- Fixed: vehicle teleport now asks you to start the engine first, and refuses a vehicle with a trailer immediately instead of showing distance and hop counts first.
+
+- Build: version bumped to 3.2.8 (covers fixes and adjustments since 42.22.2).
+
+## [3.2.7]
+
+- Fixed: auto-repair on b42.22 now only targets the lightbar; other parts are no longer retried with failure logs. Renamed to "Auto-repair lightbar".
+
+- Fixed: vehicle teleport repeatedly reporting a failed write and refusing further teleports after a bad landing; recovery is now confirmed and released, with separate messages for pending recovery, recovery timeout and a real write failure.
+
+- Fixed: vehicle engines only appearing started on the client on multiplayer servers; any car key in the backpack can now complete an ignition the server accepts (fuel, battery and engine condition still apply).
+
+- Improved: the vehicle page options are now labelled "start with any key" and no longer show a locally faked hotwire state.
+
+- Improved: removed the old "Type 8 / Type 12" labels from the information page; anti-cheat enabled/disabled display now matches the game setting, so a disabled check no longer appears enabled.
+
+- Fixed: premature arrival messages and inconsistent vehicle positions after aborted teleports; vehicle reset now reports landing checks and cancellation (pending in-game verification).
+
+- Fixed: "vehicle teleport" aborting immediately and leaving the vehicle where it was.
+
+- Improved: launch session folders are capped at the three most recent and are also cleaned up on uninstall, so they no longer accumulate on disk.
+
+- Fixed: "worn spawn" not completing on multiplayer servers, leaving the item neither worn nor dropped; success is now reported only after the drop is confirmed, and failures clean up temporary state and restore weight.
+
+- Improved: the installer file is removed after a successful install; running the install script again uninstalls; only one temporary folder is kept.
+
+- Improved: simpler installation and removal; the highest version is used when several installers are present.
+
+- Fixed: the 42.22.2 installer reporting an unrecognized launch file and failing to install.
+
+- Improved: local path configuration, automatic test-environment preparation and clearer build configuration errors.
+
+- Improved: smaller installation package, clearer missing-environment messages and upgrades from older installations.
+
+- Improved: startup, offline installation and removal for 42.22.2, preserving user settings, saves and logs.
+- Fixed: reporting loading complete before the project was ready.
+- Added: a launch identifier on the main panel to help identify the current window.
+
+- Fixed: the Multi-hit toggle not correctly enabling or disabling the feature.
+- Removed: the non-working trap-spawn weapon mode on b42.22; food mode is retained.
+- Fixed: ammo consumption not resuming after Unlimited Ammo was disabled.
+- Improved: food search, ID and count inputs now share one row on the Traps page.
+- Removed: Reset Loot and Timed Spawn.
+- Removed: vehicle Direct Repair, Refuel, Send Other Player into Vehicle and Self Enter Nearby Vehicle.
+
+- Added: a "worn spawn" mode on the Loot page - keep one wearable (its slot empty) and one food in your backpack, pick a target and click spawn; the target drops at your feet.
 
 - Added: a multi-item spawn list on the Loot page - fishing-rod, corpse and timed spawn let you tick several items, add them to a list where you can change quantities, remove entries or stop, then run them in order (unbox spawn stays single-item).
 

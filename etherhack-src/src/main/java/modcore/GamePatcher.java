@@ -230,44 +230,12 @@ public class GamePatcher {
             if (insertionPoint == null) {
                 throw new IllegalStateException("Cannot find LuaManager.init() invocation in the method when patching the Game window");
             }
-            // L4b 两阶段注入 (实测教训 2026-09-10):
-            //   boot() 解包 — 必须在 LuaManager.init **之前**: LuaManager.init 的
-            //   exposer 链会触发 ClimateManager 类初始化 -> 已补丁的
-            //   LuaEventManager.triggerEvent 引用 modcore 类, 解包前解析即
-            //   NoClassDefFoundError (实机启动崩溃);
-            //   start() 初始化链 — 在 LuaManager.init **之后**: CoreAPI 的
-            //   SafeExposer 依赖 LuaManager.env/converterManager。
-            // boot: 解包 (插在 LuaManager.init 调用之前)
-            InsnList bootCall = new InsnList();
-            LabelNode bootTryStart = new LabelNode();
-            LabelNode bootTryEnd = new LabelNode();
-            LabelNode bootCatchStart = new LabelNode();
-            LabelNode bootAfter = new LabelNode();
-            bootCall.add((AbstractInsnNode)bootTryStart);
-            bootCall.add((AbstractInsnNode)new MethodInsnNode(184, "zombie/coreboot", "boot", "()V", false));
-            bootCall.add((AbstractInsnNode)bootTryEnd);
-            bootCall.add((AbstractInsnNode)new JumpInsnNode(167, bootAfter));
-            bootCall.add((AbstractInsnNode)bootCatchStart);
-            bootCall.add((AbstractInsnNode)new InsnNode(87));
-            bootCall.add((AbstractInsnNode)bootAfter);
-            method.instructions.insertBefore(insertionPoint, bootCall);
-            method.tryCatchBlocks.add(new TryCatchBlockNode(bootTryStart, bootTryEnd, bootCatchStart, "java/lang/Throwable"));
-
-            // start: 反射初始化链 (插在 LuaManager.init 调用之后, 原注入段位置)
-            InsnList startCall = new InsnList();
-            LabelNode startTryStart = new LabelNode();
-            LabelNode startTryEnd = new LabelNode();
-            LabelNode startCatchStart = new LabelNode();
-            LabelNode startAfter = new LabelNode();
-            startCall.add((AbstractInsnNode)startTryStart);
-            startCall.add((AbstractInsnNode)new MethodInsnNode(184, "zombie/coreboot", "start", "()V", false));
-            startCall.add((AbstractInsnNode)startTryEnd);
-            startCall.add((AbstractInsnNode)new JumpInsnNode(167, startAfter));
-            startCall.add((AbstractInsnNode)startCatchStart);
-            startCall.add((AbstractInsnNode)new InsnNode(87));
-            startCall.add((AbstractInsnNode)startAfter);
-            method.instructions.insert(insertionPoint, startCall);
-            method.tryCatchBlocks.add(new TryCatchBlockNode(startTryStart, startTryEnd, startCatchStart, "java/lang/Throwable"));
+            // 准备必须在 LuaManager.init 前，依赖 Lua 环境的启动必须在后。
+            // 初始化失败必须传播，不能吞异常后继续写入就绪状态。
+            method.instructions.insertBefore(insertionPoint,
+                    new MethodInsnNode(184, "zombie/coreboot", "boot", "()V", false));
+            method.instructions.insert(insertionPoint,
+                    new MethodInsnNode(184, "zombie/coreboot", "start", "()V", false));
         });
     }
 
@@ -606,10 +574,17 @@ public class GamePatcher {
                 bodyStore = i;
             }
         }
+        // b42.22: 暴击掷骰搬进 isCriticalHit(), SHOT 分支里只剩部位选择。
+        // 暴击段"存在才校验顺序", 不存在时只要求 SHOT → 部位槽 → 定点命中仍按序。
+        boolean hasCritical = critChance >= 0 || critStore >= 0;
+        boolean ordered = hasCritical
+                ? shot < critChance && critChance < critStore && critStore < bodyStore
+                : shot < bodyStore;
         if (shot < 1 || shot + 1 >= real.size()
                 || !(real.get(shot - 1) instanceof VarInsnNode reaction) || reaction.getOpcode() != 25
                 || !(real.get(shot + 1) instanceof JumpInsnNode branch) || branch.getOpcode() != 166
-                || !(shot < critChance && critChance < critStore && critStore < bodyStore && bodyStore < targetedHit)) {
+                || !ordered
+                || !(bodyStore < targetedHit)) {
             throw new IllegalStateException("processHit shot/critical/body-part order changed");
         }
         VarInsnNode store = (VarInsnNode) real.get(bodyStore);
@@ -636,40 +611,80 @@ public class GamePatcher {
         Logger.print("Patching CombatManager.calculateHitChanceData with always-hit hook...");
         try {
             Patch.injectIntoClass("zombie/CombatManager", "calculateHitChanceData", false, method -> {
-                AbstractInsnNode putfield = method.instructions.getLast();
-                while (putfield != null && !(putfield instanceof FieldInsnNode
-                        && ((FieldInsnNode)putfield).owner.equals("zombie/CombatManager$HitChanceData")
-                        && ((FieldInsnNode)putfield).name.equals("hitChance"))) {
-                    putfield = putfield.getPrevious();
+                // b42.22: HitChanceData 由可变类改成 record, 方法末尾不再是 PUTFIELD,
+                // 而是 `new HitChanceData(clampedHitChance, aimPenalty)` 后直接 ARETURN。
+                // 锚点改为: 方法里最后一处 `NEW HitChanceData` 之前的那条 FSTORE(命中率局部槽),
+                // 在它之后覆写该局部槽 —— 后面的 FLOAD 读到的就是 100。
+                TypeInsnNode creation = null;
+                for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                    if (insn instanceof TypeInsnNode candidate && candidate.getOpcode() == 187
+                            && "zombie/CombatManager$HitChanceData".equals(candidate.desc)) {
+                        creation = candidate;
+                    }
                 }
-                if (putfield == null) {
-                    throw new IllegalStateException("hitChance PUTFIELD not found in calculateHitChanceData");
+                if (creation == null) {
+                    throw new IllegalStateException("HitChanceData creation not found in calculateHitChanceData");
                 }
-                // 开关守卫 (与 patchHeadshotOnly 同款三级判空): isAlwaysHit=false 时跳过覆写,
-                // PUTFIELD 落回钳制原值 = 原版行为。守卫指令全部栈中性 (IFNULL/IFEQ 自弹测试值),
-                // 不影响 [hitChanceData_ref, clamped_F] 操作数栈。
+                AbstractInsnNode store = previousOpcode(creation);
+                AbstractInsnNode dup = nextOpcode(creation);
+                AbstractInsnNode chanceLoad = nextOpcode(dup);
+                AbstractInsnNode penaltyLoad = nextOpcode(chanceLoad);
+                AbstractInsnNode init = nextOpcode(penaltyLoad);
+                AbstractInsnNode ret = init == null ? null : nextOpcode(init);
+                if (!(store instanceof VarInsnNode chanceSlot) || chanceSlot.getOpcode() != 56) {
+                    throw new IllegalStateException("hit chance local store not found before HitChanceData");
+                }
+                if (dup == null || dup.getOpcode() != 89
+                        || !(chanceLoad instanceof VarInsnNode) || chanceLoad.getOpcode() != 23
+                        || !(penaltyLoad instanceof VarInsnNode) || penaltyLoad.getOpcode() != 23
+                        || !(init instanceof MethodInsnNode) || init.getOpcode() != 183
+                        || !"<init>".equals(((MethodInsnNode) init).name)
+                        || !"(FF)V".equals(((MethodInsnNode) init).desc)
+                        || ret == null || ret.getOpcode() != 176) {
+                    throw new IllegalStateException("HitChanceData return shape changed in calculateHitChanceData");
+                }
+                int hitChanceVar = chanceSlot.var;
+                if (((VarInsnNode) chanceLoad).var != hitChanceVar) {
+                    throw new IllegalStateException("unexpected hit chance operand slot");
+                }
+                // 开关守卫 (三级判空, 栈中性): isAlwaysHit=false 时局部槽保持钳制后的原值。
                 InsnList toInject = new InsnList();
                 LabelNode skipOverwrite = new LabelNode();
-                toInject.add((AbstractInsnNode)new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
-                toInject.add((AbstractInsnNode)new JumpInsnNode(198, skipOverwrite));
-                toInject.add((AbstractInsnNode)new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
-                toInject.add((AbstractInsnNode)new FieldInsnNode(180, "modcore/core/CoreMain", "CoreAPI", "Lmodcore/core/CoreAPI;"));
-                toInject.add((AbstractInsnNode)new JumpInsnNode(198, skipOverwrite));
-                toInject.add((AbstractInsnNode)new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
-                toInject.add((AbstractInsnNode)new FieldInsnNode(180, "modcore/core/CoreMain", "CoreAPI", "Lmodcore/core/CoreAPI;"));
-                toInject.add((AbstractInsnNode)new FieldInsnNode(180, "modcore/core/CoreAPI", "isAlwaysHit", "Z"));
-                toInject.add((AbstractInsnNode)new JumpInsnNode(153, skipOverwrite));
-                toInject.add((AbstractInsnNode)new InsnNode(87));
-                toInject.add((AbstractInsnNode)new LdcInsnNode(Float.valueOf(100.0f)));
-                toInject.add((AbstractInsnNode)skipOverwrite);
-                method.instructions.insertBefore(putfield, toInject);
-                Logger.print("  [OK] Injected always-hit (chance=100) into CombatManager.calculateHitChanceData()");
+                toInject.add(new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
+                toInject.add(new JumpInsnNode(198, skipOverwrite));
+                toInject.add(new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
+                toInject.add(new FieldInsnNode(180, "modcore/core/CoreMain", "CoreAPI", "Lmodcore/core/CoreAPI;"));
+                toInject.add(new JumpInsnNode(198, skipOverwrite));
+                toInject.add(new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
+                toInject.add(new FieldInsnNode(180, "modcore/core/CoreMain", "CoreAPI", "Lmodcore/core/CoreAPI;"));
+                toInject.add(new FieldInsnNode(180, "modcore/core/CoreAPI", "isAlwaysHit", "Z"));
+                toInject.add(new JumpInsnNode(153, skipOverwrite));
+                toInject.add(new LdcInsnNode(Float.valueOf(100.0f)));
+                toInject.add(new VarInsnNode(56, hitChanceVar)); // FSTORE: 覆写钳制后的命中率局部槽
+                toInject.add(skipOverwrite);
+                method.instructions.insertBefore(creation, toInject);
+                Logger.print("  [OK] Injected always-hit (chance=100, slot " + hitChanceVar
+                        + ") into CombatManager.calculateHitChanceData()");
             });
         }
         catch (Exception e) {
             Logger.print("Warning: Always-hit injection failed: " + e.getMessage());
             Logger.logException(e);
         }
+    }
+
+    /** Previous real opcode, skipping labels/line numbers/frames inserted by the compiler. */
+    private static AbstractInsnNode previousOpcode(AbstractInsnNode from) {
+        AbstractInsnNode insn = from == null ? null : from.getPrevious();
+        while (insn != null && insn.getOpcode() < 0) insn = insn.getPrevious();
+        return insn;
+    }
+
+    /** Next real opcode, skipping labels/line numbers/frames inserted by the compiler. */
+    private static AbstractInsnNode nextOpcode(AbstractInsnNode from) {
+        AbstractInsnNode insn = from == null ? null : from.getNext();
+        while (insn != null && insn.getOpcode() < 0) insn = insn.getNext();
+        return insn;
     }
 
     //*********************************************************
@@ -793,35 +808,84 @@ public class GamePatcher {
         list.add(new JumpInsnNode(153, skip));
     }
 
-    // 属主僵尸命中包抑制: GameClient.sendPlayerHit 头部 (静态方法, target = 参数槽 1)
+    // 属主僵尸命中包抑制: b42.22 改由 attackCollisionCheck 的 PlayerHit 上报。
+    // 关闭/初始化未完成走原版发送; 枪械也走原版, 服务端依赖该包触发扣弹。
+    // 仅近战过滤后没有剩余目标时跳过整包, 不能把门控出口与抑制出口共用。
     public void patchSuperMultiHitSuppression() {
-        Logger.print("Patching GameClient.sendPlayerHit with owner-zombie suppression...");
+        Logger.print("Patching CombatManager.attackCollisionCheck with owner-zombie hit-packet filter...");
         try {
-            Patch.injectIntoClass("zombie/network/GameClient", "sendPlayerHit", true, method -> {
+            Patch.injectIntoClass("zombie/CombatManager", "attackCollisionCheck", false, method -> {
+                if (!method.desc.equals("(Lzombie/characters/IsoGameCharacter;Lzombie/inventory/types/HandWeapon;"
+                        + "Lzombie/ai/states/SwipeStatePlayer;Lzombie/AttackType;)V")) {
+                    throw new IllegalStateException("Unexpected attackCollisionCheck descriptor: " + method.desc);
+                }
+                MethodInsnNode send = null;
+                AbstractInsnNode anchor = null;
+                int listSlot = -1;
+                for (AbstractInsnNode candidate = method.instructions.getFirst(); candidate != null; candidate = candidate.getNext()) {
+                    if (!(candidate instanceof MethodInsnNode call) || call.getOpcode() != 184
+                            || !call.owner.equals("zombie/network/packets/INetworkPacket")
+                            || !call.name.equals("send")
+                            || !call.desc.equals("(Lzombie/network/PacketTypes$PacketType;[Ljava/lang/Object;)V")) {
+                        continue;
+                    }
+                    // 参数数组构造的起点: 往回找到同一调用块里的 `getstatic PacketType.PlayerHit`
+                    AbstractInsnNode start = null;
+                    boolean array = false;
+                    for (AbstractInsnNode insn = call.getPrevious(); insn != null; insn = insn.getPrevious()) {
+                        if (insn instanceof TypeInsnNode type && type.getOpcode() == 189
+                                && "java/lang/Object".equals(type.desc)) {
+                            array = true;
+                        }
+                        if (insn instanceof FieldInsnNode field && field.getOpcode() == 178
+                                && field.owner.equals("zombie/network/PacketTypes$PacketType")
+                                && field.name.equals("PlayerHit")) {
+                            start = field;
+                            break;
+                        }
+                        if (insn instanceof MethodInsnNode || insn instanceof JumpInsnNode) break;
+                    }
+                    if (start == null || !array) continue;
+                    // 载荷槽: 数组第 3 个元素 `iconst_2; aload <slot>; aastore`
+                    int slot = -1;
+                    for (AbstractInsnNode insn = call.getPrevious(); insn != null; insn = insn.getPrevious()) {
+                        if (insn.getOpcode() != 5) continue; // ICONST_2
+                        AbstractInsnNode load = nextOpcode(insn);
+                        AbstractInsnNode store = nextOpcode(load);
+                        if (!(load instanceof VarInsnNode loadVar) || loadVar.getOpcode() != 25) continue;
+                        if (store == null || store.getOpcode() != 83) continue; // AASTORE
+                        slot = loadVar.var;
+                        break;
+                    }
+                    if (slot < 0) continue;
+                    send = call;
+                    anchor = start;
+                    listSlot = slot;
+                    break;
+                }
+                if (send == null) {
+                    throw new IllegalStateException("PlayerHit send call not found in attackCollisionCheck");
+                }
                 InsnList toInject = new InsnList();
-                LabelNode skip = new LabelNode();
-                addSuperMultiHitGate(toInject, skip);
-                // target instanceof IsoZombie
-                toInject.add(new VarInsnNode(25, 1));
-                toInject.add(new TypeInsnNode(193, "zombie/characters/IsoZombie"));
-                toInject.add(new JumpInsnNode(153, skip));
-                // NetworkZombieSimulator.getInstance().isZombieSimulated(Short.valueOf(((IsoZombie)target).getOnlineID()))
-                toInject.add(new VarInsnNode(25, 1));
-                toInject.add(new TypeInsnNode(192, "zombie/characters/IsoZombie"));
-                toInject.add(new MethodInsnNode(182, "zombie/characters/IsoZombie", "getOnlineID", "()S", false));
-                toInject.add(new MethodInsnNode(184, "java/lang/Short", "valueOf", "(S)Ljava/lang/Short;", false));
-                toInject.add(new MethodInsnNode(184, "zombie/popman/NetworkZombieSimulator", "getInstance", "()Lzombie/popman/NetworkZombieSimulator;", false));
-                toInject.add(new InsnNode(95)); // SWAP: [Short, sim] → [sim, Short]
-                toInject.add(new MethodInsnNode(182, "zombie/popman/NetworkZombieSimulator", "isZombieSimulated", "(Ljava/lang/Short;)Z", false));
-                toInject.add(new JumpInsnNode(153, skip));
-                toInject.add(new InsnNode(177)); // RETURN: 属主模拟僵尸不发包 (血量走模拟包盲采)
-                toInject.add(skip);
-                method.instructions.insert(toInject);
-                Logger.print("  [OK] Injected owner-zombie hit-packet suppression into GameClient.sendPlayerHit()");
+                LabelNode sendOriginal = new LabelNode();
+                LabelNode suppressed = new LabelNode();
+                addSuperMultiHitGate(toInject, sendOriginal);
+                toInject.add(new VarInsnNode(25, 2));
+                toInject.add(new MethodInsnNode(182, "zombie/inventory/types/HandWeapon", "isRanged", "()Z", false));
+                toInject.add(new JumpInsnNode(154, sendOriginal));
+                toInject.add(new VarInsnNode(25, listSlot));
+                toInject.add(new MethodInsnNode(184, "modcore/core/HitPacketFilter", "filter",
+                        "(Ljava/util/List;)Z", false));
+                toInject.add(new JumpInsnNode(153, suppressed));
+                toInject.add(sendOriginal);
+                method.instructions.insertBefore(anchor, toInject);
+                method.instructions.insert(send, suppressed);
+                Logger.print("  [OK] Injected owner-zombie hit filter (list slot " + listSlot
+                        + ") into CombatManager.attackCollisionCheck()");
             });
         }
         catch (Exception e) {
-            Logger.print("Warning: sendPlayerHit suppression injection failed: " + e.getMessage());
+            Logger.print("Warning: hit-packet filter injection failed: " + e.getMessage());
             Logger.logException(e);
         }
     }
@@ -834,54 +898,61 @@ public class GamePatcher {
     //* 无其他读点 (javap 核实), 跳过 IINC 无副作用; 门控关闭指令栈完全还原原版。
     //*********************************************************
     public void patchSuperMultiHitFullDamage() {
-        Logger.print("Patching CombatManager.attackCollisionCheck with full-damage hook...");
+        Logger.print("Patching CombatManager.getHitDamage with full-damage hook...");
         try {
-            Patch.injectIntoClass("zombie/CombatManager", "attackCollisionCheck", false, method -> {
-                // 锚点: FLOAD damage → ILOAD split → IINC split,1 → I2F → LDC 0.5f → FMUL → FDIV → FSTORE damageSplit
-                // (javap 实测槽位 damage=33/split=12/damageSplit=34, iload split 全方法唯一;
-                //  扫描按语义序列匹配, 槽位从指令流现取, 不硬编码)
-                AbstractInsnNode anchorFload = null;
-                AbstractInsnNode anchorFstore = null;
+            Patch.injectIntoClass("zombie/CombatManager", "getHitDamage", false, method -> {
+                // b42.22: 伤害分摊从 attackCollisionCheck 内联搬进 getHitDamage(..., hitIndex)。
+                // 形状: FLOAD damage → ILOAD hitIndex → ICONST_1 → IADD → I2F
+                //       → LDC 0.5f → FMUL → FDIV → FSTORE damageSplit
+                // 槽位从指令流现取, 不硬编码。
                 int damageVar = -1;
                 int damageSplitVar = -1;
                 for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
-                    if (!(insn instanceof VarInsnNode) || ((VarInsnNode)insn).getOpcode() != 23) continue; // FLOAD damage
-                    AbstractInsnNode iload = skipIgnorable(insn.getNext());
-                    if (!(iload instanceof VarInsnNode) || ((VarInsnNode)iload).getOpcode() != 21) continue; // ILOAD split
-                    int splitVar = ((VarInsnNode)iload).var;
-                    AbstractInsnNode iinc = skipIgnorable(iload.getNext());
-                    if (!(iinc instanceof IincInsnNode) || ((IincInsnNode)iinc).var != splitVar || ((IincInsnNode)iinc).incr != 1) continue;
-                    AbstractInsnNode i2f = skipIgnorable(iinc.getNext());
-                    if (!(i2f instanceof InsnNode) || i2f.getOpcode() != 134) continue; // I2F
-                    AbstractInsnNode ldc = skipIgnorable(i2f.getNext());
-                    if (!(ldc instanceof LdcInsnNode) || !(((LdcInsnNode)ldc).cst instanceof Float)
-                            || ((Float)((LdcInsnNode)ldc).cst).floatValue() != 0.5f) continue;
-                    AbstractInsnNode fmul = skipIgnorable(ldc.getNext());
-                    if (!(fmul instanceof InsnNode) || fmul.getOpcode() != 106) continue; // FMUL
-                    AbstractInsnNode fdiv = skipIgnorable(fmul.getNext());
-                    if (!(fdiv instanceof InsnNode) || fdiv.getOpcode() != 110) continue; // FDIV
-                    AbstractInsnNode fstore = skipIgnorable(fdiv.getNext());
-                    if (!(fstore instanceof VarInsnNode) || ((VarInsnNode)fstore).getOpcode() != 56) continue; // FSTORE damageSplit
-                    anchorFload = insn;
-                    anchorFstore = fstore;
-                    damageVar = ((VarInsnNode)insn).var;
-                    damageSplitVar = ((VarInsnNode)fstore).var;
+                    if (!(insn instanceof VarInsnNode) || insn.getOpcode() != 23) continue; // FLOAD damage
+                    AbstractInsnNode iload = nextOpcode(insn);
+                    if (!(iload instanceof VarInsnNode) || iload.getOpcode() != 21) continue; // ILOAD hitIndex
+                    AbstractInsnNode one = nextOpcode(iload);
+                    if (one == null || one.getOpcode() != 4) continue; // ICONST_1
+                    AbstractInsnNode add = nextOpcode(one);
+                    if (add == null || add.getOpcode() != 96) continue; // IADD
+                    AbstractInsnNode i2f = nextOpcode(add);
+                    if (i2f == null || i2f.getOpcode() != 134) continue; // I2F
+                    AbstractInsnNode ldc = nextOpcode(i2f);
+                    if (!(ldc instanceof LdcInsnNode) || !(((LdcInsnNode) ldc).cst instanceof Float)
+                            || (Float) ((LdcInsnNode) ldc).cst != 0.5f) continue;
+                    AbstractInsnNode fmul = nextOpcode(ldc);
+                    if (fmul == null || fmul.getOpcode() != 106) continue; // FMUL
+                    AbstractInsnNode fdiv = nextOpcode(fmul);
+                    if (fdiv == null || fdiv.getOpcode() != 110) continue; // FDIV
+                    AbstractInsnNode fstore = nextOpcode(fdiv);
+                    if (!(fstore instanceof VarInsnNode) || fstore.getOpcode() != 56) continue; // FSTORE split
+                    damageVar = ((VarInsnNode) insn).var;
+                    damageSplitVar = ((VarInsnNode) fstore).var;
                 }
-                if (anchorFload == null) {
-                    throw new IllegalStateException("damage split sequence (FLOAD/ILOAD/IINC/I2F/LDC 0.5f/FMUL/FDIV/FSTORE) not found in attackCollisionCheck");
+                if (damageVar < 0) {
+                    throw new IllegalStateException("damage split sequence (FLOAD/ILOAD/ICONST_1/IADD/I2F/LDC 0.5f/FMUL/FDIV/FSTORE) not found in getHitDamage");
+                }
+                // 锚点: 返回前的 `new HitDamageData(damageSplit, rangeDel, ...)`
+                TypeInsnNode creation = null;
+                for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
+                    if (insn instanceof TypeInsnNode candidate && candidate.getOpcode() == 187
+                            && "zombie/CombatManager$HitDamageData".equals(candidate.desc)) {
+                        creation = candidate;
+                        break;
+                    }
+                }
+                if (creation == null) {
+                    throw new IllegalStateException("HitDamageData construction not found in getHitDamage");
                 }
                 InsnList toInject = new InsnList();
-                LabelNode skip = new LabelNode(); // 门关: 落回原版分摊 (damage 已在栈顶, 与原 FLOAD 后栈形一致)
-                LabelNode end = new LabelNode();  // 门开: 直跳原版 FSTORE 之后
+                LabelNode skip = new LabelNode();
                 addSuperMultiHitGate(toInject, skip);
-                // 门开: damageSplit = damage (damage 已由锚点 FLOAD 压栈)
-                toInject.add(new VarInsnNode(56, damageSplitVar));
-                toInject.add(new JumpInsnNode(167, end)); // GOTO end
+                toInject.add(new VarInsnNode(23, damageVar));      // FLOAD damage
+                toInject.add(new VarInsnNode(56, damageSplitVar)); // FSTORE damageSplit
                 toInject.add(skip);
-                method.instructions.insert(anchorFload, toInject);
-                method.instructions.insert(anchorFstore, end);
-                Logger.print("  [OK] Injected full-damage (split skip, slots " + damageVar + "/" + damageSplitVar
-                        + ") into CombatManager.attackCollisionCheck()");
+                method.instructions.insertBefore(creation, toInject);
+                Logger.print("  [OK] Injected full-damage (split restored, slots " + damageVar + "/" + damageSplitVar
+                        + ") into CombatManager.getHitDamage()");
             });
         }
         catch (Exception e) {
@@ -1597,6 +1668,90 @@ public class GamePatcher {
         Logger.print("The injections were completed!");
         Logger.print("The cheat installation is complete, you can enter the game!");
         return true;
+    }
+
+    /** Prepared bytes only; this entry never invokes installation or cleanup. */
+    public record PreparedPatches(java.util.Map<String, byte[]> classes, java.util.List<String> unavailable) {}
+
+    public PreparedPatches prepareAgentPatches(Path gameJar) throws IOException {
+        Patch.resetSession();
+        Patch.setProjectZomboidJarPath(gameJar.toRealPath().toString());
+        String digest = modcore.agent.PayloadArchive.digest(gameJar);
+        java.util.List<String> unavailable = new java.util.ArrayList<>();
+        java.util.Map<String, Runnable> steps = new java.util.LinkedHashMap<>();
+        steps.put("exposePrivateFields", this::exposePrivateFields);
+        steps.put("patchGameWindow", this::patchGameWindow);
+        steps.put("patchItemContainer", this::patchItemContainer);
+        steps.put("patchCombatSpeed", this::patchCombatSpeed);
+        steps.put("patchAttackRange", this::patchAttackRange);
+        steps.put("patchLuaEventManager", this::patchLuaEventManager);
+        steps.put("patchLuaManager", this::patchLuaManager);
+        steps.put("patchAntiCheatSystem", this::patchAntiCheatSystem);
+        steps.put("patchHeadshotOnly", this::patchHeadshotOnly);
+        steps.put("patchAlwaysHit", this::patchAlwaysHit);
+        steps.put("patchSuperMultiHit", this::patchSuperMultiHit);
+        steps.put("patchSuperMultiHitSuppression", this::patchSuperMultiHitSuppression);
+        steps.put("patchSuperMultiHitFullDamage", this::patchSuperMultiHitFullDamage);
+        steps.put("patchGameClientSyncBlocker", this::patchGameClientSyncBlocker);
+        steps.put("patchRoleCapabilityForSP", this::patchRoleCapabilityForSP);
+        steps.put("patchVehicleNoKey", this::patchVehicleNoKey);
+        steps.put("patchInvisibleKeep", this::patchInvisibleKeep);
+        steps.put("patchZombieSetTarget", this::patchZombieSetTarget);
+        steps.put("patchZombieSpotted", this::patchZombieSpotted);
+        steps.put("patchZombieShouldAttack", this::patchZombieShouldAttack);
+        steps.put("patchCharacterCreationBoost", this::patchCharacterCreationBoost);
+        steps.put("patchApplyTraitsSP", this::patchApplyTraitsSP);
+        steps.put("patchFullbright", this::patchFullbright);
+        steps.put("RootCapacityPatch", modcore.core.RootCapacityPatch::install);
+        steps.put("CarryMoodlePatch", modcore.core.CarryMoodlePatch::install);
+        steps.put("EnduranceStatPatch", modcore.core.EnduranceStatPatch::install);
+        steps.put("MaxWeightPatch", modcore.core.MaxWeightPatch::install);
+        steps.put("NoJamPatch", modcore.core.NoJamPatch::install);
+        steps.put("WindowShotPatch", modcore.core.WindowShotPatch::install);
+        steps.put("ConnectFlagsPatch", modcore.core.ConnectFlagsPatch::install);
+        steps.put("VehicleControlsPatch", modcore.drive.VehicleControlsPatch::install);
+        steps.put("BulletNoClipPatch", modcore.drive.BulletNoClipPatch::install);
+        for (java.util.Map.Entry<String, Runnable> step : steps.entrySet()) {
+            Patch.resetPatchReport();
+            try {
+                step.getValue().run();
+            } catch (RuntimeException | Error e) {
+                throw new IOException("Patch preparation failed: " + step.getKey(), e);
+            }
+            if (!Patch.getFailedClasses().isEmpty() || !Patch.getMissingTargets().isEmpty()) {
+                if (!knownPreviewDrift(digest, step.getKey())) {
+                    throw new IOException("Unexpected patch failure: " + step.getKey() + " "
+                            + Patch.getFailureDetails() + " " + Patch.getMissingTargets());
+                }
+                unavailable.add(step.getKey());
+                Logger.warn("Unavailable for this exact preview version: " + step.getKey());
+            }
+        }
+        Patch.modifyClass("zombie/GameWindow", node -> {
+            int changed = 0;
+            for (MethodNode method : node.methods) {
+                for (AbstractInsnNode instruction : method.instructions) {
+                    if (instruction instanceof MethodInsnNode call && call.owner.equals("zombie/coreboot")) {
+                        call.owner = "modcore/core/RuntimeBootstrap";
+                        changed++;
+                    }
+                }
+            }
+            if (changed != 2) throw new IllegalStateException("Expected boot/start bridge, found " + changed);
+        });
+        return new PreparedPatches(Patch.exportModifiedClasses(), java.util.List.copyOf(unavailable));
+    }
+
+    private boolean knownPreviewDrift(String digest, String step) {
+        if (!digest.equals("531daad77c92dcb93534e66ff37becf86dc119f55c62345c622c52021170723e")) return false;
+        String expected = switch (step) {
+            case "patchHeadshotOnly" -> "java.lang.IllegalStateException: processHit shot/critical/body-part order changed";
+            default -> null;
+        };
+        return expected != null && Patch.getFailedClasses().equals(java.util.Set.of("zombie/CombatManager"))
+                && Patch.getFailureDetails().size() == 1 && Patch.getFailureDetails().containsValue(expected)
+                && (Patch.getMissingTargets().isEmpty() || step.equals("patchHeadshotOnly")
+                && Patch.getMissingTargets().equals(java.util.Set.of("zombie/CombatManager#processHit (shape guard)")));
     }
 
     public void restoreFiles() {

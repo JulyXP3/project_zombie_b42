@@ -694,8 +694,8 @@ end
 --*   ③ **抬高落下 + 逐帧落位判定** (一百零五 方案A, 取代 一百 的"固定 z 平移"): 每跳把物理体
 --*      抬高 VEH_RAISE 再平移, 车从目标上空落下, 落位高度由物理引擎解算 —— 消除"旧 z 嵌进
 --*      更高地形"的穿地下坠; 落点是水面时车沉到河床停稳 (水面对物理是空的, IsoChunk.calcPhysics
---*      不为水格生成形状), 同样算成功。判定只看"是否停稳": 仍在动就继续等; 停稳 = 校验漂移过关;
---*      从抬高点掉超 VEH_ABORT_DROP 仍未停 = 真空区, 当帧回滚; 超时未停稳 = 失败回滚。
+--*      不为水格生成形状), 同样保留。接地/三源一致且跨时间窗高度收敛后才算完成；
+--*      从抬高点掉超 VEH_ABORT_DROP 仍未停 = 真空区, 当帧回滚; 超时未落地 = 失败回滚。
 --*      (一百 的"下沉超过 15/5 就回滚"两条线已删 —— 它们会把合法的落谷/落水误杀成 sinking。)
 --*   ④ **反作弊位移预算** (一百零一 重做, 取代 一百 的判据): 被查的量不是"载具速度", 而是
 --*      **乘客的 SpeedChecker**, 喂进去的是**物理包里的载具坐标**
@@ -720,6 +720,10 @@ end
 --*      no-square ⇒ 车传送不出水域 (用户实测: "汽车在水上动不了, 传送不出去")。抬高基准改为
 --*      max(物理 z, 逻辑层 x 2.44949), 保证"始终从目的地地面 +1.5 楼层落下" (否则从水里起跳会
 --*      落在陆地地面之下, 又变回"嵌进地形")。陆地/建筑上层两种写法等价 ⇒ 零行为变化。
+--*   ⑦ **3×3 区块环 + 冻结判定 (三百三十)**: 目的地必须 3×3 区块全部就绪 —— 否则
+--*      BaseVehicle.checkSurroundingChunks 会把物理强制停用, 车停在抬高点上悬空;
+--*      旧实现把"z 不再变化"当落地, 区块到位、物理恢复后原生体又把车写回起跳点。
+--*      现在持续复核授权/区块环/模拟开关，不再凭高度动过一次绕过冻结；到达后仍有 30 秒看门狗。
 --* 取消: ESC / 鼠标左键 (宽限期后), 或不再在驾驶位 / 死亡 / 整程超时。
 --*********************************************************
 local VEH_HOP_CAP = 45;                          -- 单跳硬上限 (区块窗口半径约 48~56 格, 取 45 留边)
@@ -730,9 +734,7 @@ local VEH_HOP_MIN_MS = 250;                      -- 跳间绝对下限 (只防�
 local VEH_STILL_EPS = 0.15;                      -- 停稳门: 100ms 内位移超过它 = 车还在动
 local VEH_STILL_HOLD_MS = 1300;                  -- 停稳门: 要求的静止时长 (> 采样窗上限 1150ms)
 local VEH_STILL_WAIT_MS = 10000;                 -- 等停稳的上限, 超过以 "moving" 中止
-local VEH_SETTLE_EPS = 0.05;                     -- 单帧高度变化小于它 = 这一帧没动
-local VEH_SETTLE_HOLD_MS = 200;                  -- 连续没动这么久 = 落位完成
-local VEH_SETTLE_MAX_MS = 3000;                  -- 落位观察硬上限 (抬高落体需要更久, 一百零五 方案A)
+local VEH_SETTLE_MAX_MS = 3000;                  -- Java 共用落地观察的硬上限；Lua 同时保留兜底时限
 local VEH_RAISE = 3.7;                           -- 方案A 抬高落下: 起跳抬升量 = 1.5 楼层 (物理单位,
                                                  -- 1 楼层 ≈ 2.44949; 用户实测: 初值 15.0 ≈ 6 楼层过高,
                                                  -- 一百零六 按实测调为 1.5 楼层)
@@ -742,6 +744,8 @@ local VEH_LOAD_WAIT_MS = 8000;                   -- 全档位都不就绪时的�
 local VEH_TOTAL_TIMEOUT = 300000;                -- 整程超时
 local VEH_CANCEL_GRACE = 800;                    -- 启动后取消输入宽限 (防误吃启动那次点击)
 local VEH_LEDGER_WAIT_MS = 4500;                 -- 台账一直不清空的兜底 (3 倍滑窗; 正常不该发生)
+local VEH_WATCHDOG_MS = 30000;                   -- 到达后看门狗时长 (确认车没有被同步回原位)
+local VEH_WATCHDOG_TILES = 3.0;                  -- 看门狗位移阈值 (超过即提示)
 
 --* 反作弊预算推导 (起跳时算一次): L = 服务器真实限速, B = 单窗口位移预算, D = 单跳上限。
 --* 缺 autoDriveGetSpeedLimit (安装态旧) 时退回 70 —— 那正是 SpeedLimit 的默认值。
@@ -756,7 +760,7 @@ local function vehBudget()
 end
 
 local vehTeleportTask = nil;   -- { vehicle=, tx=, ty=, startedMs=, nextHopMs=, expectX=, expectY=, hops=, notReadyMs=,
-                                --   observing=, observeDeadline=, settleMs=, hopZ0=, hopZMin=, zPrev=, lastDrop=,
+                                --   observing=, observeDeadline=, hopZ0=, hopZMin=, lastDrop=, uprighted=,
                                 --   limit=, budget=, windowMs=, hopMax=, ledger={}, gateOpen=, gateHinted=, ledgerWaitMs= }
 
 --* 位移台账 (一百零一, 反作弊位移预算的执行器):
@@ -825,20 +829,56 @@ local VEH_REASON_KEYS = {
     ["verify"] = "UI_Map_VehTeleportReasonVerify",
     ["sinking"] = "UI_Map_VehTeleportReasonVerify",
     ["moving"] = "UI_Map_VehTeleportReasonMoving",
+    ["frozen"] = "UI_Map_VehTeleportReasonFrozen",
+    ["hop"] = "UI_Map_VehTeleportReasonHop",
 };
 
-local function vehAbortReasonText(reason)
-    local key = VEH_REASON_KEYS[reason];
+local VEH_DETAIL_KEYS = {
+    ["pending-restore"] = "UI_Map_VehTeleportReasonPendingRestore",
+    ["restore-timeout"] = "UI_Map_VehTeleportReasonRestoreTimeout",
+    ["not-local"] = "UI_Map_VehTeleportReasonNotLocal",
+    ["engine-off"] = "UI_Map_VehTeleportEngineOff",
+    ["towing-linked"] = "UI_Map_VehTeleportTowing",
+    ["waiting-towing"] = "UI_Map_VehTeleportTowing",
+    ["physics-off"] = "UI_Map_VehTeleportReasonFrozen",
+    ["no-driver"] = "UI_Map_VehTeleportDriverOnly",
+};
+
+local function vehAbortReasonText(reason, detail)
+    local code = tostring(detail or "");
+    if string.sub(code, 1, 8) == "blocked-" then code = string.sub(code, 9); end
+    local key = VEH_DETAIL_KEYS[code];
+    if string.sub(code, 1, 16) == "physics-rejected" then
+        key = "UI_Map_VehTeleportReasonRejected";
+    end
+    key = key or VEH_REASON_KEYS[reason];
     if key ~= nil then return tr(key); end
     return tostring(reason);
 end
 
 local function vehTeleportAbort(reason, detail)
     if vehTeleportTask == nil then return; end
-    local vehicle = vehTeleportTask.vehicle;
+    local task = vehTeleportTask;
+    local vehicle = task.vehicle;
+    local restoreText = nil;
+    if task.observing and vehicle ~= nil then
+        if type(vehicleNativeProbeRead) == "function" then
+            local probed, snapshot = pcall(vehicleNativeProbeRead, vehicle);
+            if probed then print("[VehTeleport] failed landing: " .. tostring(snapshot)); end
+        end
+        local ok, rolled = pcall(vehicleNativeRollback, vehicle);
+        print("[VehTeleport] rollback: " .. tostring(ok and rolled or "error"));
+        restoreText = tr(ok and rolled == "ok" and "UI_Map_VehTeleportRestored"
+            or "UI_Map_VehTeleportRestorePending");
+    end
+    if task.observing and vehicle ~= nil and type(vehicleNativeLandingEnd) == "function" then
+        pcall(vehicleNativeLandingEnd, vehicle);
+    end
     vehTeleportTask = nil;
     UIMap.lastTeleportCancel = reason;
-    vehHalo(getPlayer(), "UI_Map_VehTeleportAborted", { reason = vehAbortReasonText(reason) }, true);
+    local reasonText = vehAbortReasonText(reason, detail);
+    if restoreText ~= nil then reasonText = reasonText .. "; " .. restoreText; end
+    vehHalo(getPlayer(), "UI_Map_VehTeleportAborted", { reason = reasonText }, true);
     print("[VehTeleport] aborted: " .. tostring(reason) .. (detail and (" - " .. detail) or ""));
     --* 一百零九 排障: 中止时补一行三源探针 (逻辑层 lvl= / 物理 z / 由物理 z 反推的层 physLvl= /
     --* 区块窗口)。用户实测那次失败只留下 "aborted: ... no-square", 无法判断是"层不合法"还是
@@ -851,9 +891,40 @@ end
 
 -- 二百七十七 (L12): 空闲期停稳跟踪的 100ms 门限提到桥调用之前 — 原每 tick 白做
 -- getPlayer/getVehicle 两次跨界 (16 个常驻 OnTick 中唯一空闲期有实质开销的)
+--* 到达后看门狗 (三百三十): 30 秒内若车从落点移动超过 3 格, 打印一次并给红字提示。
+--* 用途是确认"过一段时间回到原位"是否已被修好; 只诊断, 不自动再传送。
+local vehWatch = nil;
+local function vehArmWatch(vehicle, now)
+    if vehicle == nil then vehWatch = nil; return; end
+    vehWatch = {
+        x = vehicle:getX(), y = vehicle:getY(),
+        untilMs = now + VEH_WATCHDOG_MS, nextMs = now + 1000, warned = false,
+    };
+end
+
+local function vehWatchTick(now)
+    if vehWatch == nil then return; end
+    if now > vehWatch.untilMs then vehWatch = nil; return; end
+    if now < vehWatch.nextMs then return; end
+    vehWatch.nextMs = now + 1000;
+    local player = getPlayer();
+    local vehicle = player ~= nil and player:getVehicle() or nil;
+    if vehicle == nil then vehWatch = nil; return; end
+    local dx, dy = vehicle:getX() - vehWatch.x, vehicle:getY() - vehWatch.y;
+    local d2 = dx * dx + dy * dy;
+    if not vehWatch.warned and d2 > (VEH_WATCHDOG_TILES * VEH_WATCHDOG_TILES) then
+        vehWatch.warned = true;
+        local d = math.sqrt(d2);
+        vehHalo(player, "UI_Map_VehTeleportWatchdog", { dist = math.floor(d + 0.5) }, true);
+        print(string.format("[VehTeleport] watchdog: vehicle moved %.1f tiles after arrival (%.1f,%.1f -> %.1f,%.1f)",
+            d, vehWatch.x, vehWatch.y, vehicle:getX(), vehicle:getY()));
+    end
+end
+
 local vehStillGateMs = 0;
 local function onVehTeleportTick()
     local now = getTimestampMs();
+    vehWatchTick(now);
     local task = vehTeleportTask;
     if task == nil or not task.gateOpen then
         -- 停稳跟踪 (见 vehTrackStill): 空闲时常驻, 起跳门未开时也要继续跟 —— 否则"刚上车就点
@@ -915,55 +986,59 @@ local function onVehTeleportTick()
         end
     end
 
-    -- ③ 落位判定 (一百零五 方案A: 抬高落下 —— 停稳即成功): 跳后车从抬高点落下 (落谷/落水到河床
-    --    都合法), 判定只看"是否停稳" —— 仍在动 → 继续等 (最多 VEH_SETTLE_MAX_MS); 停稳 → 校验
-    --    漂移过关; 从抬高点掉超 VEH_ABORT_DROP 仍未停 = 真空区 (无地面), 当帧回滚; 超时未停稳 = 失败。
+    -- ③ 传送与重置共用落地观察；时间窗未收敛、无支撑或显示分裂都不能报到达。
     if task.observing then
         local z = vehicleNativePhysicsZ(vehicle);
-        local live = (z == z);                       -- NaN = 读不到物理体
+        local live = type(z) == "number" and z == z and math.abs(z) < math.huge;
         if live and task.hopZ0 ~= nil then
-            if task.zPrev == nil or math.abs(z - task.zPrev) > VEH_SETTLE_EPS then
-                task.settleMs = now;                 -- 这一帧还在动 → 停稳计时从头开始
-            end
-            task.zPrev = z;
             if z < task.hopZMin then task.hopZMin = z; end
             if (task.hopZ0 - z) > VEH_ABORT_DROP then
-                local rolled = vehicleNativeRollback(vehicle);
-                print(string.format("[VehTeleport] runaway fall dz=%.1f (abort limit %.1f, rollback %s)",
-                    z - task.hopZ0, VEH_ABORT_DROP, tostring(rolled)));
                 return vehTeleportAbort("sinking", string.format("dz=%.1f", z - task.hopZ0));
             end
         end
-        if not (live and task.hopZ0 ~= nil and (now - task.settleMs) >= VEH_SETTLE_HOLD_MS)
-            and now < task.observeDeadline then
-            return;                                  -- 还没停稳, 也没超时 → 继续观察
+        local polled, verdict = pcall(vehicleNativeLandingPoll, vehicle);
+        if not polled then verdict = "error"; end
+        if verdict == "flipped" then
+            if task.uprighted then return vehTeleportAbort("verify", "flipped-again"); end
+            local ok, up = pcall(vehicleNativeUpright, vehicle);
+            if not ok or up ~= "fixed" then
+                return vehTeleportAbort("verify", tostring(up));
+            end
+            task.uprighted = true;
+            if not vehicleNativeLandingBegin(vehicle) then
+                return vehTeleportAbort("verify", "no-observation");
+            end
+            task.observeDeadline = now + VEH_SETTLE_MAX_MS;
+            print("[VehTeleport] landing was flipped -> uprighted, checking the new landing");
+            return;
         end
-        task.observing = false;
-        -- lastDrop = 抬高点到最低点的总落差 (含落谷/落水的合法下沉, 只作日志取证, 不再回滚)
-        task.lastDrop = (task.hopZ0 ~= nil and task.hopZMin ~= nil)
-            and (task.hopZ0 - task.hopZMin) or 0;
-        local verdict = vehicleNativeVerify(vehicle, task.expectX, task.expectY, VEH_VERIFY_MAX_SINK);
         if verdict ~= "ok" then
-            local rolled = vehicleNativeRollback(vehicle);
-            print("[VehTeleport] hop verify failed: " .. tostring(verdict)
-                .. " (rollback " .. tostring(rolled) .. ")");
+            if verdict == "not-local" or verdict == "no-driver" or verdict == "waiting-towing"
+                or verdict == "towing-linked" or verdict == "no vehicle" or verdict == "no-observation"
+                or verdict == "chunk-ring-not-loaded" or verdict == "physics-off" then
+                return vehTeleportAbort(verdict == "physics-off" and "frozen" or "verify", tostring(verdict));
+            end
+            if now < task.observeDeadline and string.sub(tostring(verdict), 1, 8) ~= "timeout-" then
+                return;
+            end
+            return vehTeleportAbort("verify", "landing " .. tostring(verdict));
+        end
+        verdict = vehicleNativeVerify(vehicle, task.expectX, task.expectY, VEH_VERIFY_MAX_SINK);
+        if verdict ~= "ok" then
             return vehTeleportAbort("verify", tostring(verdict));
         end
-        -- 一百零八 落位扶正: 落体触地可能翻覆 (用户实测 1.5 楼层落下会翻车), 未翻则零动作。
-        -- 软检查 (老 jar 无此原语时静默跳过), 免得"Lua 新 jar 旧"的安装态直接拒绝传送。
-        if type(vehicleNativeUpright) == "function" then
-            local up = vehicleNativeUpright(vehicle);
-            if up == "fixed" then
-                print("[VehTeleport] landing was flipped -> uprighted (heading kept)");
-            elseif up ~= "ok" then
-                print("[VehTeleport] upright check: " .. tostring(up));
-            end
+        task.lastDrop = (task.hopZ0 ~= nil and task.hopZMin ~= nil)
+            and (task.hopZ0 - task.hopZMin) or 0;
+        if not vehicleNativeCommit(vehicle) then
+            return vehTeleportAbort("verify", "commit-unconfirmed");
         end
+        task.observing = false;
         task.hops = task.hops + 1;
         local ex, ey = task.tx - vehicle:getX(), task.ty - vehicle:getY();
         if math.sqrt(ex * ex + ey * ey) <= 1.5 then
             vehTeleportTask = nil;
             UIMap.lastTeleportCancel = "done";
+            vehArmWatch(vehicle, now);
             vehHalo(player, "UI_Map_VehTeleportArrived", { hops = task.hops }, false);
             print(string.format("[VehTeleport] arrived: %d hop(s), vehicle (%.1f,%.1f)",
                 task.hops, vehicle:getX(), vehicle:getY()));
@@ -980,6 +1055,7 @@ local function onVehTeleportTick()
     if dist <= 1.0 then
         vehTeleportTask = nil;
         UIMap.lastTeleportCancel = "done";
+        vehArmWatch(vehicle, now);
         vehHalo(player, "UI_Map_VehTeleportArrived", { hops = task.hops }, false);
         print(string.format("[VehTeleport] arrived: %d hop(s)", task.hops));
         return;
@@ -998,6 +1074,10 @@ local function onVehTeleportTick()
                 overBudget = true;                   -- 这一档会超预算 → 试更小档 (窗口滚动后自动恢复)
             else
                 local ready = vehicleNativeDestReady(vehicle, dx / dist * s, dy / dist * s);
+                if ready == "not-local" or ready == "engine-off" or ready == "no-driver"
+                    or ready == "waiting-towing" or ready == "towing-linked" then
+                    return vehTeleportAbort("verify", tostring(ready));
+                end
                 lastReady = ready;
                 if ready == "ok" then
                     step = s;
@@ -1054,13 +1134,16 @@ local function onVehTeleportTick()
         vehLedgerUsed(task, now, task.expectX, task.expectY, task.expectX, task.expectY), task.budget,
         task.lastDrop and string.format(" (prev landing dz=%.2f)", task.lastDrop) or ""));
     local z0 = vehicleNativePhysicsZ(vehicle);
-    if z0 == z0 then
-        task.hopZ0, task.hopZMin, task.zPrev = z0, z0, nil;
+    if type(z0) == "number" and z0 == z0 and math.abs(z0) < math.huge then
+        task.hopZ0, task.hopZMin = z0, z0;
     else
-        task.hopZ0, task.hopZMin, task.zPrev = nil, nil, nil;   -- 读不到物理体 → 退回超时判定
+        task.hopZ0, task.hopZMin = nil, nil;
     end
     task.observing = true;
-    task.settleMs = now;
+    task.uprighted = false;
+    if not vehicleNativeLandingBegin(vehicle) then
+        return vehTeleportAbort("verify", "no-observation");
+    end
     task.observeDeadline = now + VEH_SETTLE_MAX_MS;
     task.nextHopMs = now + math.max(VEH_HOP_MIN_MS, step * task.windowMs / task.budget);
 end
@@ -1085,7 +1168,10 @@ function UIMap:startVehicleTeleport(x, y)
         return true;
     end
     if type(vehicleNativeHop) ~= "function" or type(vehicleNativeDestReady) ~= "function"
-        or type(vehicleNativePhysicsZ) ~= "function" then
+        or type(vehicleNativePhysicsZ) ~= "function" or type(vehicleNativeVerify) ~= "function"
+        or type(vehicleNativeRollback) ~= "function" or type(vehicleNativeUpright) ~= "function"
+        or type(vehicleNativeLandingBegin) ~= "function" or type(vehicleNativeLandingPoll) ~= "function"
+        or type(vehicleNativeLandingEnd) ~= "function" or type(vehicleNativeCommit) ~= "function" then
         -- 安装态比 Lua 旧 (Java 原语缺失): 明确拒绝, 不进入每帧报错的空转
         print("[VehTeleport] refused: vehicle teleport API missing (reinstall the mod jar)");
         return true;
@@ -1094,6 +1180,19 @@ function UIMap:startVehicleTeleport(x, y)
         print("[VehTeleport] already running");
         return true;
     end
+    --* 拖挂与未启动在入口就拒绝，避免先报“xx 格 / xx 跳”再在落位检查里失败。
+    local entryState = vehicleNativeDestReady(vehicle, 0, 0);
+    if entryState == "towing-linked" or entryState == "waiting-towing" then
+        vehHalo(player, "UI_Map_VehTeleportTowing", nil, true);
+        print("[VehTeleport] refused: " .. tostring(entryState));
+        return true;
+    end
+    if entryState == "engine-off" then
+        vehHalo(player, "UI_Map_VehTeleportEngineOff", nil, true);
+        print("[VehTeleport] refused: start the engine before teleporting");
+        return true;
+    end
+    vehWatch = nil;                                  -- 新任务开始 → 上一次到达的看门狗作废
     if teleportTask ~= nil then
         UIMap.lastTeleportCancel = "state";
         teleportTask = nil;

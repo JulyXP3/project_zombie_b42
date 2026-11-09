@@ -23,6 +23,7 @@
  */
 package modcore.drive;
 
+import modcore.core.VehicleTeleportAPI;
 import modcore.utils.Logger;
 import zombie.characters.IsoGameCharacter;
 import zombie.characters.IsoZombie;
@@ -183,33 +184,117 @@ public final class BulletNoClipHook {
 
     // ============ 车辆重置 ============
 
-    /**
-     * 车辆重置 (「车辆重置」按钮): 把本车变换抬回正常行驶高度 (+ 翻了先扶正)。
-     * 嵌墙车在宽限到期后被原版贴地逻辑/静态碰撞挤进地里 (实测), 按钮兜底 ——
-     * x/z 不动, 仅重建 y (原生高度轴): 地面 z=0 → 原生 y≈0, 朝向保留。
-     *
-     * **一百零八 两处修正 (用户实测: "1.5 层楼传送落下途中翻车, 点重置车辆会直接坠落到地下")**:
-     * ① **只抬不压**: 原实现无条件 `t.origin.y = 0.0f` —— 平地上是"抬回地面", 但**有地形起伏时
-     *    y=0 低于地表网格** → 车被塞到地表以下 → 物理引擎穿地。现改为仅在 `y < 0` (真嵌地, 即本按钮
-     *    的原用途) 时抬回 0; 停在坡上/高处的车 (y > 0) 保持原高度, 不再被压下去。
-     * ② **翻车先扶正**: `VehicleTeleportAPI.uprightIfFlipped` (物理数组通道, 保留朝向 + 清零残速)。
-     *
-     * 返回 true = 已处理 (Lua 提示成功)。
-     */
+    private static BaseVehicle resetVehicle;
+    private static String resetSuccess = "noop";
+    private static boolean resetUprighted;
+    private static long resetDeadline;
+    private static String resetResult = "noop";
+
+    /** 重置只处理本地驾驶车辆；先做必要位姿修复，再开始有界落地观察。 */
+    public static String resetVehiclePoseResult(BaseVehicle self) {
+        if (resetVehicle != null) {
+            cancelVehicleReset();
+            return resetResult;
+        }
+        try {
+            String state = VehicleTeleportAPI.localSimulationState(self);
+            if (!"ok".equals(state)) {
+                return "no vehicle".equals(state) || "no-driver".equals(state) ? "no-vehicle" : state;
+            }
+            if (VehicleTeleportAPI.landingInProgress()) {
+                return "busy";
+            }
+            if (VehicleTeleportAPI.hasSavedPose(self)) {
+                String restored = VehicleTeleportAPI.nativeRollback(self);
+                if (!"ok".equals(restored)) {
+                    return "restore-" + restored;
+                }
+            }
+            boolean wasActive = self.isPhysicsActive();
+            state = VehicleTeleportAPI.activateLocalPhysics(self);
+            if (!"ok".equals(state)) {
+                return state;
+            }
+            String upright = VehicleTeleportAPI.uprightIfFlipped(self);
+            if (!"ok".equals(upright) && !"fixed".equals(upright)) {
+                return upright;
+            }
+            String lift = VehicleTeleportAPI.liftToLogicalGround(self);
+            if (!"ok".equals(lift) && !"lifted".equals(lift)) {
+                return lift;
+            }
+            if (!VehicleTeleportAPI.nativeLandingBegin(self)) {
+                return "busy";
+            }
+            resetVehicle = self;
+            resetUprighted = "fixed".equals(upright);
+            resetSuccess = "lifted".equals(lift) ? "lifted" : resetUprighted ? "uprighted" : wasActive ? "noop" : "dropped";
+            resetDeadline = System.nanoTime() / 1_000_000L + 3000L;
+            resetResult = "checking";
+            return resetResult;
+        }
+        catch (Throwable t) {
+            Logger.error("[AutoDrive] vehicle reset failed", t);
+            return "error";
+        }
+    }
+
+    public static boolean isVehicleResetPending() {
+        return resetVehicle != null;
+    }
+
+    /** 由既有 OnTick 驱动；不会每帧重新打开物理，也不会让观察超时后落入成功分支。 */
+    public static String pollVehicleReset() {
+        if (resetVehicle == null) {
+            return resetResult;
+        }
+        BaseVehicle vehicle = resetVehicle;
+        String state = VehicleTeleportAPI.nativeLandingPoll(vehicle);
+        if ("ok".equals(state)) {
+            finishReset(resetSuccess);
+        } else if ("flipped".equals(state) && !resetUprighted) {
+            String upright = VehicleTeleportAPI.uprightIfFlipped(vehicle);
+            if ("fixed".equals(upright) && VehicleTeleportAPI.nativeLandingBegin(vehicle)) {
+                resetUprighted = true;
+                resetSuccess = "lifted".equals(resetSuccess) ? "lifted" : "uprighted";
+                resetDeadline = System.nanoTime() / 1_000_000L + 3000L;
+            } else {
+                finishReset("fixed".equals(upright) || "ok".equals(upright) ? "no-observation" : upright);
+            }
+        } else if ("not-local".equals(state) || "no-driver".equals(state) || "no vehicle".equals(state)
+            || "waiting-towing".equals(state) || "towing-linked".equals(state) || "chunk-ring-not-loaded".equals(state)
+            || "physics-off".equals(state) || "no-observation".equals(state) || "flipped".equals(state)
+            || state.startsWith("timeout-")) {
+            finishReset(state);
+        } else if (System.nanoTime() / 1_000_000L >= resetDeadline) {
+            finishReset("timeout-" + state);
+        }
+        return resetResult;
+    }
+
+    public static void cancelVehicleReset() {
+        if (resetVehicle != null) {
+            finishReset("cancelled");
+        }
+    }
+
+    private static void finishReset(String result) {
+        if (!"lifted".equals(result) && !"uprighted".equals(result) && !"dropped".equals(result)
+            && !"noop".equals(result) && !"cancelled".equals(result)) {
+            try {
+                Logger.printLog("[AutoDrive] reset probe: " + VehicleTeleportAPI.nativeProbeRead(resetVehicle));
+            }
+            catch (Throwable t) {
+                // 车辆已移除时不让诊断阻断收尾。
+            }
+        }
+        VehicleTeleportAPI.nativeLandingEnd(resetVehicle);
+        resetVehicle = null;
+        resetResult = result;
+    }
+
+    /** boolean 只表示重置已开始，不代表已经落地。 */
     public static boolean resetVehiclePose(BaseVehicle self) {
-        if (self == null || self.isRemovedFromWorld()) {
-            return false;
-        }
-        // ① 翻覆先扶正 (未翻则零动作); 走物理数组通道, 与 C3 跳步同一机制
-        modcore.core.VehicleTeleportAPI.uprightIfFlipped(self);
-        // ② 只在嵌地 (y < 0) 时抬回地面层, 绝不把坡上的车压到 0
-        zombie.core.physics.Transform t = BaseVehicle.allocTransform();
-        self.getWorldTransform(t);
-        if (t.origin.y < 0.0f) {
-            t.origin.y = 0.0f;   // 地面行驶层 (update() 的 zi 换算: y/2.44949 ≈ 层 0)
-            self.setWorldTransform(t);
-        }
-        BaseVehicle.releaseTransform(t);
-        return true;
+        return "checking".equals(resetVehiclePoseResult(self));
     }
 }

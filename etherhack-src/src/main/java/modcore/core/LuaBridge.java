@@ -24,32 +24,55 @@ public class LuaBridge {
         if (env == null) {
             return;
         }
-        if (env.rawget(ENV_MARKER) != null) {
-            // 同一 env 内重复触发 (无重置): 跳过, 对齐 RunLua 的 loaded 缓存语义
-            // (重复执行会双注册 OnKeyPressed 等事件)
+        if (env.rawget(ENV_MARKER) != null || !RuntimeBootstrap.beginLua(env)) {
             return;
         }
-        // env 已被 ResetLua 换新 (标记消失): 清模块缓存后全量重载
-        LuaLoader.resetLoaded();
-        // L1 修正: 捕获窗 3 — 我方 Lua 加载期注入的轮换符号 + ENV_MARKER
+        // 缓存按环境失效；同一环境失败重试保留已经成功的模块，避免重复注册事件。
         PrivateGlobals.beginCapture();
-        Logger.printLog("Loading Lua (fileless)...");
-        // L1 (ReportSanitizer) 必须最先加载: 它要捕获 sendClientCommand 的
-        // 原始函数引用 — 任何后续 mod 加载前就位 (方案 §3-L1)
-        LuaLoader.load("modcore/lua/fixes/ReportSanitizer.lua");
-        // L3: fileless 加载, 不走 RunLua/虚拟 FS — getLoadedLua 枚举不到
-        LuaLoader.load("modcore/lua/fixes/ISChatFix.lua");
-        LuaLoader.load("modcore/lua/fixes/ServerSyncBlocker.lua");
-        // 一百一十六: ExtraInfo 捎带屏蔽 (包原版 Lua 全局 sendPlayerExtraInfo, 发送前
-        // 暂摘我方作弊位 — 依赖 cheatMaskSuspend/Restore 两个 Java 全局, 缺失自动跳过)
-        LuaLoader.load("modcore/lua/fixes/ExtraInfoMask.lua");
-        // 主入口: 内部 etherModules 列表经 loadModuleScript 全走 LuaLoader
-        LuaLoader.load("modcore/lua/modcoreMenu.lua");
-        // 自证探针: 复刻蓝队检测原语本地自测 (只 print 本地日志, 无网络)。必须放在
-        // modcoreMenu **之后** (二百四十二): 功能自检要查 EtherPick 模块全局, 提前
-        // 加载则加载期 E2-pick 必红 (模块尚未创建), 只有进游戏批次才转绿。
-        LuaLoader.load("modcore/lua/fixes/SelfProbe.lua");
-        env.rawset(ENV_MARKER, Boolean.TRUE);
-        PrivateGlobals.endCapture();
+        try {
+            Logger.printLog("Loading required Lua modules...");
+            for (String resource : java.util.List.of("modcore/lua/fixes/ReportSanitizer.lua",
+                    "modcore/lua/fixes/ISChatFix.lua", "modcore/lua/fixes/ServerSyncBlocker.lua",
+                    "modcore/lua/fixes/ExtraInfoMask.lua", pathToLuaMainFile)) {
+                LuaLoader.loadRequired(resource);
+            }
+            verifyReady(env);
+            // SelfProbe不是就绪门槛，只报告自身覆盖的检查。
+            LuaLoader.load("modcore/lua/fixes/SelfProbe.lua");
+            RuntimeBootstrap.luaReady(env);
+            env.rawset(ENV_MARKER, Boolean.TRUE);
+        } catch (RuntimeException | Error failure) {
+            env.rawset(ENV_MARKER, null);
+            RuntimeBootstrap.luaFailed(env, failure);
+            Logger.error("Required Lua initialization failed", failure);
+            throw failure;
+        } finally {
+            PrivateGlobals.endCapture();
+        }
+    }
+
+    static void verifyReady(KahluaTable env) {
+        for (String name : java.util.List.of("loadModuleScript", "getAccentUIColor", "resolveTexture",
+                "getProjectLaunchId", "recordProjectUIOpened")) {
+            requireFunction(env.rawget(name), "API " + name);
+        }
+        Object main = LuaLoader.symbol(env, "EtherMain");
+        Object bindings = LuaLoader.symbol(env, "EtherKeyBinds");
+        if (!(main instanceof KahluaTable menu) || !(bindings instanceof KahluaTable keys)) {
+            throw new IllegalStateException("Required menu or key binding module is missing");
+        }
+        requireFunction(menu.rawget("toggleMenu"), "menu toggle");
+        requireFunction(keys.rawget("onKeyPressed"), "key dispatcher");
+        if (!(keys.rawget("registry") instanceof KahluaTable registry)
+                || !(registry.rawget("menu") instanceof KahluaTable binding)) {
+            throw new IllegalStateException("Menu key binding is not registered");
+        }
+        requireFunction(binding.rawget("handler"), "menu key handler");
+    }
+
+    private static void requireFunction(Object value, String name) {
+        if (!(value instanceof se.krka.kahlua.vm.LuaClosure) && !(value instanceof se.krka.kahlua.vm.JavaFunction)) {
+            throw new IllegalStateException("Required function missing: " + name);
+        }
     }
 }

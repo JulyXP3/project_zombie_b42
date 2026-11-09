@@ -1,0 +1,1 @@
+error("deliberate module failure")

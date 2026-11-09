@@ -39,7 +39,6 @@ public class ServerSyncBlocker {
     private volatile boolean blockSkillsSync = false;
     private volatile boolean blockInventorySync = false;
     private volatile boolean blockTraitsSync = false;
-    private volatile boolean blockVehicleSync = false;
     private long lastFilterLogTime = 0L;
     // filterPackets 每 tick 调用 (CoreAPI.updateAPI 与 Lua onTick, 均主线程), 复用缓冲免每 tick 两次 ArrayList 分配
     private final ArrayList<ZomboidNetData> keptBuffer = new ArrayList<ZomboidNetData>();
@@ -110,18 +109,6 @@ public class ServerSyncBlocker {
         blocker.protectedSkillXP.clear();
         blocker.protectedTraits.clear();
         Logger.printLog("All protection disabled");
-    }
-
-    @LuaMethod(name="enableVehicleProtection", global=true)
-    public static void enableVehicleProtection() {
-        ServerSyncBlocker.getInstance().blockVehicleSync = true;
-        Logger.printLog("Vehicle protection enabled - vehicle state sync will be blocked");
-    }
-
-    @LuaMethod(name="disableVehicleProtection", global=true)
-    public static void disableVehicleProtection() {
-        ServerSyncBlocker.getInstance().blockVehicleSync = false;
-        Logger.printLog("Vehicle protection disabled");
     }
 
     @LuaMethod(name="protectStat", global=true)
@@ -289,9 +276,9 @@ public class ServerSyncBlocker {
     }
 
     private void filterPackets() {
-        // 门控不含 blockInventorySync: shouldFilterPacket 只过滤 stats/skills/xp/vehicle 四类包,
+        // 门控不含 blockInventorySync: shouldFilterPacket 只过滤 stats/skills/xp 三类包,
         // 仅 inventory/traits 开启时全量 drain 必然零命中 (纯空转+缓冲分配), 直接跳过输出等价
-        if (!(this.blockStatsSync || this.blockSkillsSync || this.blockVehicleSync)) {
+        if (!(this.blockStatsSync || this.blockSkillsSync)) {
             return;
         }
         try {
@@ -355,9 +342,6 @@ public class ServerSyncBlocker {
             if (packetId == PacketTypes.PacketType.PlayerXp.getId()) {
                 return this.blockSkillsSync;
             }
-            if (packetId == PacketTypes.PacketType.VehicleUpdate.getId()) {
-                return this.blockVehicleSync;
-            }
         }
         catch (Exception exception) {
             // empty catch block
@@ -374,7 +358,7 @@ public class ServerSyncBlocker {
     @LuaMethod(name="getProtectionStatus", global=true)
     public static String getProtectionStatus() {
         ServerSyncBlocker blocker = ServerSyncBlocker.getInstance();
-        return String.format("Stats:%b Skills:%b Inventory:%b Traits:%b Vehicle:%b", blocker.blockStatsSync, blocker.blockSkillsSync, blocker.blockInventorySync, blocker.blockTraitsSync, blocker.blockVehicleSync);
+        return String.format("Stats:%b Skills:%b Inventory:%b Traits:%b", blocker.blockStatsSync, blocker.blockSkillsSync, blocker.blockInventorySync, blocker.blockTraitsSync);
     }
 
     static {

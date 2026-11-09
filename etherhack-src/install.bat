@@ -1,157 +1,110 @@
 @echo off
-setlocal EnableExtensions
+setlocal EnableExtensions DisableDelayedExpansion
 cd /d "%~dp0"
 
-echo ============================================================
-echo   modcore Installer / Uninstaller (merged)
-echo ============================================================
-echo.
+rem ================================================================
+rem This script checks only these three things:
+rem   1) projectzomboid.jar is present in this folder (never changed)
+rem   2) which installer to run: the HIGHEST version when several
+rem      modcore-*.jar files are here (for example modcore-3.2.8-B42.jar
+rem      and an older modcore-3.2.7-B42.jar -> the 3.2.8 one is used)
+rem   3) a Windows x64 full JDK 25: JAVA_HOME first, then PATH
+rem After a successful install the modcore-*.jar here is deleted; running
+rem this script again with no jar runs the uninstall flow.
+rem Nothing else is verified. Only modcore's own files and the three
+rem launch batch files are written; the originals are backed up first.
+rem ================================================================
 
-if not exist projectzomboid.jar (
-    echo [ERROR] projectzomboid.jar not found - wrong folder, or the game jar is missing.
-    echo         If it was deleted by mistake: Steam - Project Zomboid - Properties -
-    echo         Installed Files - Verify integrity of game files.
-    echo         NEVER delete projectzomboid.jar - that is the game itself!
-    pause
+if not exist "projectzomboid.jar" (
+    echo [ERROR] Check 1 failed: projectzomboid.jar is missing.
+    echo Run this script from the game folder. Nothing was changed.
+    echo Never delete projectzomboid.jar - it is the original game.
     exit /b 1
 )
 
 set "MC_JAR="
-for %%f in (modcore-*.jar) do if not defined MC_JAR set "MC_JAR=%%f"
-if defined MC_JAR goto INSTALL
-goto UNINSTALL
+set "MC_FIRST="
+set "MC_COUNT=0"
+set "MC_HA=0"
+set "MC_HB=0"
+set "MC_HC=0"
+for %%F in (modcore-*.jar) do (
+    if not defined MC_FIRST set "MC_FIRST=%%~fF"
+    set /a MC_COUNT+=1 >nul
+    call :CONSIDER "%%~fF" "%%~nF"
+)
+if not defined MC_JAR set "MC_JAR=%MC_FIRST%"
+if not defined MC_JAR goto UNINSTALL_FLOW
+if %MC_COUNT% GTR 1 echo [INFO] %MC_COUNT% installer files found; using the highest version.
+echo Using installer: %MC_JAR%
 
-REM ============================================================
-REM   INSTALL MODE (modcore-*.jar found in this folder)
-REM ============================================================
-:INSTALL
-echo Mode: INSTALL (found %MC_JAR%)
-echo NOTE: Close the game before running this installer.
-echo.
-
-echo [1/3] Removing old injected game classes (zombie folder)...
-if exist zombie rmdir /s /q zombie
-if exist zombie (
-    echo [ERROR] Could not remove the zombie folder. Close the game and try again.
-    pause
+set "MC_JAVA="
+if defined JAVA_HOME (
+    set "MC_JAVA=%JAVA_HOME%\bin\java.exe"
+) else (
+    for %%J in (java.exe) do set "MC_JAVA=%%~$PATH:J"
+)
+if not defined MC_JAVA (
+    echo [ERROR] Check 3 failed: no Java found.
+    echo Set JAVA_HOME to a Windows x64 full JDK 25, or add its bin folder to PATH.
     exit /b 1
 )
-REM Legacy cleanup: old versions wrote logs into the game folder; logs now live in
-REM %USERPROFILE%\Zomboid\modcore\logs. Remove leftover game-folder logs.
-if exist "logs\modcore_*.log" del /f /q "logs\modcore_*.log" >nul 2>nul
-if exist logs rmdir "logs" >nul 2>nul
-
-echo [2/3] Installing modcore (encrypted payload + bootstrap stub)...
-set "JAVA_CMD="
-if exist "jre64\bin\java.exe" set "JAVA_CMD=jre64\bin\java.exe"
-if not defined JAVA_CMD (
-    where java >nul 2>nul
-    if not errorlevel 1 set "JAVA_CMD=java"
-)
-if not defined JAVA_CMD (
-    echo [ERROR] Java was not found. Make sure the game's jre64 folder is present
-    echo         or that java is on your PATH.
-    pause
+if not exist "%MC_JAVA%" (
+    echo [ERROR] Check 3 failed: no Windows x64 full JDK 25 at "%MC_JAVA%".
+    echo An explicitly set JAVA_HOME is used as-is and is not replaced by PATH.
     exit /b 1
 )
-"%JAVA_CMD%" -jar "%MC_JAR%" --install
-
-REM C (2026-09-14): the installer exits non-zero when one or more game classes could
-REM not be patched (they stay vanilla, so the features they carry are missing).
-REM Do not claim success in that case - keep the jar so the user can retry.
+"%MC_JAVA%" -cp "%MC_JAR%" modcore.attach.JdkRequirement
 if errorlevel 1 (
-    echo.
-    echo [ERROR] Installation finished with ERRORS: one or more game classes were NOT patched.
-    echo         The affected features are MISSING. See the messages above and
-    echo         %%USERPROFILE%%\Zomboid\modcore\logs for details.
-    echo         The installer jar was KEPT - fix the cause and run this installer again.
-    pause
+    echo [ERROR] Check 3 failed: the Java above is not a Windows x64 full JDK 25.
     exit /b 1
 )
 
-if not exist "zombie\coreboot.class" (
-    echo.
-    echo [ERROR] Installation failed: bootstrap stub was not created.
-    echo         Check the messages above for details. The jar was kept for retry.
-    pause
-    exit /b 1
+"%MC_JAVA%" -jar "%MC_JAR%" --install-agent --game-dir "%CD%" --user-home "%USERPROFILE%" --yes %*
+set "RESULT=%ERRORLEVEL%"
+if not "%RESULT%"=="0" (
+    echo [ERROR] Installation did not complete. Read the reason above; original game files were not deleted.
+    exit /b %RESULT%
 )
-if not exist "%USERPROFILE%\Zomboid\modcore.bin" (
-    echo.
-    echo [ERROR] Installation failed: encrypted payload was not created.
-    echo         Check the messages above for details. The jar was kept for retry.
-    pause
-    exit /b 1
-)
-
-echo [3/3] Cleaning up installer jar...
-del /f /q "%MC_JAR%"
-if exist "%MC_JAR%" (
-    echo [WARN] Could not delete %MC_JAR% - please delete it manually.
-)
-
-echo.
-echo Installation completed. You can now start the game.
-echo.
-echo   - The installer jar was deleted automatically.
-echo   - Keep THIS install.bat: run it again later (with no jar present)
-echo     to uninstall modcore completely.
-echo   - NEVER delete projectzomboid.jar - that is the game itself!
-echo.
-pause
+rem ???????????????????????????????????
+del /q "modcore-*.jar" >nul 2>nul
+echo [INFO] Installer jar removed. Running this script again will uninstall ModCore.
 exit /b 0
 
-REM ============================================================
-REM   UNINSTALL MODE (no modcore-*.jar in this folder)
-REM ============================================================
-:UNINSTALL
-echo Mode: UNINSTALL (no modcore-*.jar found)
-echo NOTE: Close the game before running this uninstaller.
-echo.
-
-echo [1/5] Removing injected game classes - zombie folder...
-if exist zombie rmdir /s /q zombie
-if exist zombie (
-    echo [ERROR] Could not remove the zombie folder. Close the game and try again.
-    pause
-    exit /b 1
+:UNINSTALL_FLOW
+echo [INFO] No modcore-*.jar here; running the uninstall flow.
+if not exist "%~dp0uninstall.bat" (
+    echo [INFO] uninstall.bat is not here, so there is nothing to run.
+    echo Nothing was changed.
+    exit /b 0
 )
+call "%~dp0uninstall.bat" %*
+exit /b %ERRORLEVEL%
 
-echo [2/5] Removing unpacked modcore folder...
-if exist modcore rmdir /s /q modcore
-if exist modcore (
-    echo [ERROR] Could not remove the modcore folder. Close the game and try again.
-    pause
-    exit /b 1
+:CONSIDER
+rem %1 = full path, %2 = file name without extension
+set "MC_A="
+set "MC_B="
+set "MC_C="
+for /f "tokens=2,3,4 delims=.-" %%a in ("%~2") do (
+    set "MC_A=%%a"
+    set "MC_B=%%b"
+    set "MC_C=%%c"
 )
-
-echo [3/5] Removing encrypted payload - %%USERPROFILE%%\Zomboid\modcore.bin...
-if exist "%USERPROFILE%\Zomboid\modcore.bin" del /f /q "%USERPROFILE%\Zomboid\modcore.bin"
-if exist "%USERPROFILE%\Zomboid\modcore.bin" (
-    echo [WARN] Could not delete modcore.bin - delete it manually later.
-)
-
-echo [4/5] Removing user data - %%USERPROFILE%%\Zomboid\modcore - logs and configs...
-if exist "%USERPROFILE%\Zomboid\modcore" rmdir /s /q "%USERPROFILE%\Zomboid\modcore"
-if exist "%USERPROFILE%\Zomboid\modcore" (
-    echo [WARN] Could not remove it - close the game and try again.
-)
-
-echo [5/5] Removing old-version leftovers - EtherHack / EtherDrive / legacy game-folder logs...
-if exist EtherHack rmdir /s /q EtherHack
-if exist EtherHack (
-    echo [WARN] Could not remove the EtherHack folder - remove it manually later.
-)
-if exist EtherDrive rmdir /s /q EtherDrive
-if exist "logs\modcore_*.log" del /f /q "logs\modcore_*.log" >nul 2>nul
-if exist logs rmdir "logs" >nul 2>nul
-
-echo.
-echo Uninstall completed. The game is now fully vanilla.
-echo.
-echo Settings were preserved encrypted in %%LOCALAPPDATA%%\app_cache.dat
-echo and will be restored automatically on the next install.
-echo Delete that one file too if you want a complete wipe.
-echo You may now delete this install.bat by hand.
-pause
-exit /b 0
+rem The version parts must be plain digits; otherwise this file is not compared.
+for /f "delims=0123456789" %%x in ("%MC_A%%MC_B%%MC_C%") do goto :eof
+if not defined MC_A goto :eof
+if not defined MC_B goto :eof
+if not defined MC_C goto :eof
+if %MC_A% GTR %MC_HA% goto :TAKE
+if %MC_A% LSS %MC_HA% goto :eof
+if %MC_B% GTR %MC_HB% goto :TAKE
+if %MC_B% LSS %MC_HB% goto :eof
+if %MC_C% GTR %MC_HC% goto :TAKE
+if %MC_C% LSS %MC_HC% goto :eof
+:TAKE
+set "MC_JAR=%~1"
+set "MC_HA=%MC_A%"
+set "MC_HB=%MC_B%"
+set "MC_HC=%MC_C%"
+goto :eof

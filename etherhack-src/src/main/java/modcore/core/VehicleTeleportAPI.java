@@ -1,7 +1,9 @@
 package modcore.core;
 
 import org.joml.Quaternionf;
+import org.joml.Vector3f;
 import se.krka.kahlua.integration.annotations.LuaMethod;
+import zombie.characters.IsoGameCharacter;
 import zombie.characters.IsoPlayer;
 import zombie.core.physics.Bullet;
 import zombie.core.physics.WorldSimulation;
@@ -11,6 +13,7 @@ import zombie.iso.IsoGridSquare;
 import zombie.iso.IsoWorld;
 import zombie.vehicles.BaseVehicle;
 import zombie.vehicles.VehicleManager;
+import modcore.utils.Logger;
 
 /**
  * C3 传送原语 (2026-09-14 九十一 探针, 九十四 v3 加固; 见 analysis/DLL分析/C-传送与载具-设计方案(C1-C3已实施).md §C3):
@@ -57,7 +60,7 @@ import zombie.vehicles.VehicleManager;
  *   +1.5 楼层落下"。陆地/建筑上层上两种写法等价 (`zOrig ≈ lvl * 2.44949`), 属零行为变化;
  *   附带修掉"层 ≥1 的车查错层"的旧隐患 (旧写法 `fastfloor(2.44949)` = 2 ≠ 楼层 1)。
  *
- * 本类只提供原语, 不含状态机 (分步推进/等待加载/超时/取消在 Lua 侧 UIMap)。
+ * 本类提供位姿原语与传送/重置共用落地观察；路线分步、加载等待、位移预算仍由 Lua UIMap 管理。
  */
 public final class VehicleTeleportAPI {
 
@@ -65,12 +68,33 @@ public final class VehicleTeleportAPI {
     private static final float PHYSICS_UNITS_PER_LEVEL = 2.44949f;
 
     private static final float[] PHYSICS = new float[27];
+    /** 写体后的回读缓冲 (不覆盖 PHYSICS, 否则 jni 对齐会用到被回读覆盖的值)。 */
+    private static final float[] CHECK = new float[27];
     /** 上一跳前的物理数组存档 (回滚用, 只保一份: 同时只有一辆车在跳)。 */
     private static final float[] SAVED = new float[27];
     private static boolean savedValid = false;
+    private static BaseVehicle savedVehicle;
     private static int savedVehicleId = -1;
-    /** 扶正用四元数 (复用, 免每次分配)。 */
-    private static final Quaternionf UPRIGHT_QUAT = new Quaternionf();
+    private static int savedLevel;
+    private static boolean savedPhysicsActive;
+    private static boolean restorePending;
+    private static boolean restoreWriteAccepted;
+    private static boolean restoreNativeConfirmed;
+    private static long restoreDeadlineMs;
+    private static int restoreFrame;
+    private static String restoreResult = "pending-restore";
+    private static final long RESTORE_CONFIRM_MS = 1000L;
+    /** 本地驾驶车辆独占观察窗；传送与重置不并行占用。 */
+    private static final VehicleLandingState LANDING = new VehicleLandingState();
+    private static BaseVehicle landingVehicle;
+    private static int landingFrame;
+    private static String landingResult = "settling";
+    private static final float POSE_POSITION_EPS = 0.15f;
+    private static final float POSE_PLANE_EPS = 0.5f;
+    /** 位姿与乘车坐标共用缓冲，不在每帧分配。 */
+    private static final Quaternionf POSE_QUAT = new Quaternionf();
+    private static final Quaternionf READ_QUAT = new Quaternionf();
+    private static final Vector3f PASSENGER_POS = new Vector3f();
 
     private VehicleTeleportAPI() {
     }
@@ -94,6 +118,360 @@ public final class VehicleTeleportAPI {
         }
     }
 
+    /** 不改变授权；只接受仍在本地驾驶位、实际由本机模拟的车辆。 */
+    public static String localSimulationState(BaseVehicle vehicle) {
+        if (vehicle == null || vehicle.isRemovedFromWorld() || IsoWorld.instance == null
+            || IsoWorld.instance.currentCell == null || vehicle.getCell() != IsoWorld.instance.currentCell) {
+            return "no vehicle";
+        }
+        IsoPlayer player = IsoPlayer.getInstance();
+        if (player == null || player.isDead() || player.getVehicle() != vehicle || !vehicle.isDriver(player)) {
+            return "no-driver";
+        }
+        if (!vehicle.isLocalPhysicSim()) {
+            return "not-local";
+        }
+        if (vehicle.getVehicleTowing() != null || vehicle.getVehicleTowedBy() != null) {
+            return "towing-linked";
+        }
+        if (vehicle.isWaitingToReattachTowingPartner()) {
+            return "waiting-towing";
+        }
+        return "ok";
+    }
+
+    /** 传送前置状态：未获本机模拟且引擎未转时，明确指向“先启动车辆”。 */
+    public static String teleportSimulationState(BaseVehicle vehicle) {
+        String state = localSimulationState(vehicle);
+        if ("not-local".equals(state)) {
+            try {
+                if (!vehicle.isEngineRunning()) {
+                    return "engine-off";
+                }
+            }
+            catch (Throwable t) {
+                return state;
+            }
+        }
+        return state;
+    }
+
+    /** 原版区块检查清掉过时禁用标记，再有界尝试开启；不在观察中持续强开。 */
+    public static String activateLocalPhysics(BaseVehicle vehicle) {
+        String state = localSimulationState(vehicle);
+        if (!"ok".equals(state)) {
+            return state;
+        }
+        if (!chunkRingLoaded(IsoWorld.instance, vehicle.getX(), vehicle.getY())) {
+            return "chunk-ring-not-loaded";
+        }
+        vehicle.checkSurroundingChunks();
+        vehicle.setPhysicsActive(true);
+        if (vehicle.isPhysicsActive() && (!vehicle.isActive || vehicle.isStatic)) {
+            vehicle.setPhysicsActive(false);
+            vehicle.setPhysicsActive(true);
+        }
+        return vehicle.isPhysicsActive() && vehicle.isActive && !vehicle.isStatic ? "ok" : "physics-off";
+    }
+
+    @LuaMethod(name = "vehicleNativeLandingBegin", global = true)
+    public static boolean nativeLandingBegin(BaseVehicle vehicle) {
+        try {
+            if (!"ok".equals(localSimulationState(vehicle)) || WorldSimulation.instance == null
+                || landingVehicle != null && landingVehicle != vehicle) {
+                return false;
+            }
+            int frame = WorldSimulation.instance.getBulletFrameNo();
+            LANDING.begin(System.nanoTime() / 1_000_000L);
+            landingVehicle = vehicle;
+            landingFrame = frame;
+            landingResult = "settling";
+            return true;
+        }
+        catch (Throwable t) {
+            return false;
+        }
+    }
+
+    @LuaMethod(name = "vehicleNativeLandingEnd", global = true)
+    public static void nativeLandingEnd(BaseVehicle vehicle) {
+        if (landingVehicle == vehicle) {
+            landingVehicle = null;
+        }
+    }
+
+    public static boolean landingInProgress() {
+        return landingVehicle != null;
+    }
+
+    /** 已失败跳步的保存态只允许同一辆车重试恢复，不用新跳覆盖。 */
+    public static boolean hasSavedPose(BaseVehicle vehicle) {
+        return savedValid && savedVehicle == vehicle && savedVehicleId == vehicle.vehicleId;
+    }
+
+    /** 世界切换释放旧引用；失败回滚只在有时限的新物理帧上只读确认。 */
+    public static void discardRemovedVehicleState() {
+        if (savedVehicle != null && (savedVehicle.isRemovedFromWorld()
+            || IsoWorld.instance == null || savedVehicle.getCell() != IsoWorld.instance.currentCell)) {
+            clearSaved(savedVehicle);
+        }
+        if (landingVehicle != null && (landingVehicle.isRemovedFromWorld()
+            || IsoWorld.instance == null || landingVehicle.getCell() != IsoWorld.instance.currentCell)) {
+            landingVehicle = null;
+        }
+        if (savedValid && restorePending) {
+            long now = System.nanoTime() / 1_000_000L;
+            if (now >= restoreDeadlineMs) {
+                restoreResult = "restore-timeout";
+            } else {
+                confirmPendingRestore(savedVehicle, true);
+            }
+        }
+    }
+
+    /** 原生高度 + 垂直速度 + 支撑读数 + 三源一致性，连续观察后才返回 ok。 */
+    @LuaMethod(name = "vehicleNativeLandingPoll", global = true)
+    public static String nativeLandingPoll(BaseVehicle vehicle) {
+        if (landingVehicle != vehicle || vehicle == null) {
+            return "no-observation";
+        }
+        long now = System.nanoTime() / 1_000_000L;
+        try {
+            String state = localSimulationState(vehicle);
+            if (!"ok".equals(state)) {
+                return landingResult = LANDING.waiting(now, state);
+            }
+            if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, PHYSICS) != 0) {
+                return landingResult = LANDING.waiting(now, "no physics");
+            }
+            if (!chunkRingLoaded(IsoWorld.instance, PHYSICS[0], PHYSICS[1])) {
+                return landingResult = LANDING.waiting(now, "chunk-ring-not-loaded");
+            }
+            if (!vehicle.isPhysicsActive() || !vehicle.isActive || vehicle.isStatic) {
+                return landingResult = LANDING.waiting(now, "physics-off");
+            }
+            int frame = WorldSimulation.instance.getBulletFrameNo();
+            if (frame == landingFrame) {
+                return landingResult = LANDING.awaitingSample(now);
+            }
+            landingFrame = frame;
+            float up = vehicle.getUpVectorDot();
+            if (!Float.isFinite(up)) {
+                return landingResult = LANDING.waiting(now, "no-pose");
+            }
+            boolean flipped = up < BaseVehicle.MINIMUM_DOT_UPRIGHT;
+            // 车身碰撞只可触发翻车扶正，不能单独证明正常姿态已接地。
+            String result = LANDING.sample(now, PHYSICS[2], PHYSICS[8],
+                hasSupport(vehicle, PHYSICS) || flipped && vehicle.jniIsCollide,
+                "ok".equals(sourceState(vehicle, PHYSICS)));
+            landingResult = "ok".equals(result) && flipped ? "flipped" : result;
+            return landingResult;
+        }
+        catch (Throwable t) {
+            return landingResult = LANDING.waiting(now, "error");
+        }
+    }
+
+    /** 无可读接地布尔字段；悬架压缩及原版近地判据必须与新物理帧/收敛一起使用。 */
+    private static boolean hasSupport(BaseVehicle vehicle, float[] pose) {
+        int wheels = Math.min(Math.max(0, wheelCount(pose[10])), vehicle.wheelInfo.length);
+        float rest = vehicle.getScript().getSuspensionRestLength();
+        if (wheels > 0 && Float.isFinite(rest) && rest > 0.0f) {
+            for (int i = 0; i < wheels; ++i) {
+                float length = pose[14 + i * 4];
+                float displayed = vehicle.wheelInfo[i].suspensionLength;
+                if (Float.isFinite(length) && Float.isFinite(displayed)
+                    && Math.abs(length - displayed) <= 0.05f && length > 0.0f && length < rest - 0.01f) {
+                    return true;
+                }
+            }
+        }
+        IsoGridSquare sq = vehicle.getSquare();
+        return sq != null && sq.hasFloor()
+            && Math.abs(pose[2] - sq.z * PHYSICS_UNITS_PER_LEVEL) <= 0.2f * PHYSICS_UNITS_PER_LEVEL;
+    }
+
+    private static boolean rotationMatches(float[] pose, Quaternionf rotation) {
+        float norm = pose[3] * pose[3] + pose[4] * pose[4] + pose[5] * pose[5] + pose[6] * pose[6];
+        float otherNorm = rotation.lengthSquared();
+        if (!Float.isFinite(norm) || !Float.isFinite(otherNorm) || norm < 0.5f || otherNorm < 0.5f) {
+            return false;
+        }
+        float dot = pose[3] * rotation.x + pose[4] * rotation.y + pose[5] * rotation.z + pose[6] * rotation.w;
+        return Math.abs(dot) / (float)Math.sqrt(norm * otherNorm) >= 0.999f;
+    }
+
+    /** 原生回读为 N+0.1，原版写体/序列化按截断取轮数，不要求小数部分为零。 */
+    private static int wheelCount(float encoded) {
+        return Float.isFinite(encoded) && encoded >= 0.0f && encoded < 5.0f ? (int)encoded : -1;
+    }
+
+    private static boolean poseMatches(float[] expected, float[] actual) {
+        for (int i = 0; i < 3; ++i) {
+            if (!Float.isFinite(actual[i]) || !Float.isFinite(expected[i])
+                || Math.abs(actual[i] - expected[i]) > POSE_POSITION_EPS) {
+                return false;
+            }
+        }
+        READ_QUAT.set(actual[3], actual[4], actual[5], actual[6]);
+        int wheels = wheelCount(expected[10]);
+        if (!rotationMatches(expected, READ_QUAT) || wheels < 0 || wheelCount(actual[10]) != wheels) {
+            return false;
+        }
+        for (int i = 7; i < 10; ++i) {
+            if (!Float.isFinite(actual[i]) || !Float.isFinite(expected[i])
+                || Math.abs(actual[i] - expected[i]) > 0.1f) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /** 悬架是接触派生值，写体回读可能立即重算；恢复姿态但使用最新轮系读数。 */
+    private static void copyWheelState(float[] target, float[] source) {
+        int wheels = Math.max(0, wheelCount(source[10]));
+        System.arraycopy(source, 11, target, 11, wheels * 4);
+    }
+
+    private static String sourceState(BaseVehicle vehicle, float[] pose) {
+        float x = vehicle.jniTransform.origin.x + WorldSimulation.instance.offsetX;
+        float y = vehicle.jniTransform.origin.z + WorldSimulation.instance.offsetY;
+        float z = vehicle.jniTransform.origin.y;
+        if (!Float.isFinite(x) || !Float.isFinite(y) || !Float.isFinite(z)
+            || !Float.isFinite(pose[0]) || !Float.isFinite(pose[1]) || !Float.isFinite(pose[2])
+            || Math.abs(x - pose[0]) > POSE_POSITION_EPS || Math.abs(y - pose[1]) > POSE_POSITION_EPS
+            || Math.abs(z - pose[2]) > POSE_POSITION_EPS
+            || !rotationMatches(pose, vehicle.jniTransform.getRotation(READ_QUAT))) {
+            return "jni-drift";
+        }
+        if (!Float.isFinite(vehicle.getX()) || !Float.isFinite(vehicle.getY())
+            || Math.abs(vehicle.getX() - pose[0]) > POSE_PLANE_EPS
+            || Math.abs(vehicle.getY() - pose[1]) > POSE_PLANE_EPS) {
+            return "logic-drift";
+        }
+        IsoGridSquare sq = vehicle.getSquare();
+        if (sq == null || sq.chunk == null || vehicle.getCurrentSquare() != sq || vehicle.chunk != sq.chunk
+            || !vehicle.chunk.vehicles.contains(vehicle)) {
+            return "bookkeeping-drift";
+        }
+        for (int seat = 0; seat < vehicle.getMaxPassengers(); ++seat) {
+            IsoGameCharacter chr = vehicle.getCharacter(seat);
+            if (!(chr instanceof IsoPlayer player) || !player.isLocalPlayer() || player.getVehicle() != vehicle) {
+                continue;
+            }
+            Vector3f pos = vehicle.getPassengerWorldPos(seat, PASSENGER_POS);
+            if (pos == null || !Float.isFinite(pos.x) || !Float.isFinite(pos.y) || !Float.isFinite(pos.z)
+                || !Float.isFinite(player.getX()) || !Float.isFinite(player.getY()) || !Float.isFinite(player.getZ())
+                || Math.abs(player.getX() - pos.x) > POSE_PLANE_EPS
+                || Math.abs(player.getY() - pos.y) > POSE_PLANE_EPS || Math.abs(player.getZ() - pos.z) > 0.1f) {
+                return "passenger-drift";
+            }
+        }
+        return "ok";
+    }
+
+    /** 顺序与原版 vehiclePosUpdate / BaseVehicle.update 乘车簿记一致，只更新本机乘员。 */
+    private static void applyPose(BaseVehicle vehicle, float[] pose, IsoGridSquare sq, int level) {
+        vehicle.jniTransform.origin.set(pose[0] - WorldSimulation.instance.offsetX, pose[2],
+            pose[1] - WorldSimulation.instance.offsetY);
+        POSE_QUAT.set(pose[3], pose[4], pose[5], pose[6]).normalize();
+        vehicle.jniTransform.setRotation(POSE_QUAT);
+        vehicle.savedRot.set(POSE_QUAT);
+        vehicle.jniLinearVelocity.set(pose[7], pose[8], pose[9]);
+        vehicle.jniIsCollide = false;
+        int wheels = Math.min(Math.max(0, wheelCount(pose[10])), vehicle.wheelInfo.length);
+        for (int i = 0; i < wheels; ++i) {
+            vehicle.wheelInfo[i].steering = pose[11 + i * 4];
+            vehicle.wheelInfo[i].rotation = pose[12 + i * 4];
+            vehicle.wheelInfo[i].skidInfo = pose[13 + i * 4];
+            vehicle.wheelInfo[i].suspensionLength = pose[14 + i * 4];
+        }
+        VehicleManager.instance.clientUpdateVehiclePos(vehicle, pose[0], pose[1], pose[2], sq);
+        vehicle.setZ(level);
+        for (int seat = 0; seat < vehicle.getMaxPassengers(); ++seat) {
+            IsoGameCharacter chr = vehicle.getCharacter(seat);
+            if (!(chr instanceof IsoPlayer player) || !player.isLocalPlayer() || player.getVehicle() != vehicle) {
+                continue;
+            }
+            Vector3f pos = vehicle.getPassengerWorldPos(seat, PASSENGER_POS);
+            if (pos != null) {
+                player.setX(pos.x);
+                player.setY(pos.y);
+                player.setZ(pos.z);
+                player.setCurrentSquareFromPosition();
+            }
+        }
+        vehicle.polyDirty = true;
+    }
+
+    private static void clearSaved(BaseVehicle vehicle) {
+        if (savedVehicle == vehicle) {
+            savedValid = false;
+            savedVehicle = null;
+            savedVehicleId = -1;
+            restorePending = false;
+            restoreWriteAccepted = false;
+            restoreNativeConfirmed = false;
+            restoreResult = "pending-restore";
+        }
+    }
+
+    /** 不重写原生体；先见到旧位姿，才允许以随后新帧的完整一致状态结束恢复事务。 */
+    private static String confirmPendingRestore(BaseVehicle vehicle, boolean freshFrameOnly) {
+        if (!hasSavedPose(vehicle) || !restorePending) {
+            return "pending-restore";
+        }
+        long now = System.nanoTime() / 1_000_000L;
+        String pending = now >= restoreDeadlineMs ? "restore-timeout" : "pending-restore";
+        try {
+            if (!"ok".equals(localSimulationState(vehicle)) || WorldSimulation.instance == null) {
+                return restoreResult = pending;
+            }
+            int frame = WorldSimulation.instance.getBulletFrameNo();
+            boolean newFrame = frame != restoreFrame;
+            if (freshFrameOnly && !newFrame) {
+                return restoreResult = pending;
+            }
+            restoreFrame = frame;
+            if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, CHECK) != 0) {
+                return restoreResult = pending;
+            }
+            boolean atStart = poseMatches(SAVED, CHECK);
+            if (atStart) {
+                restoreNativeConfirmed = true;
+            }
+            if (!restoreNativeConfirmed || !atStart && (!restoreWriteAccepted || !newFrame)
+                || wheelCount(CHECK[10]) != wheelCount(SAVED[10])) {
+                return restoreResult = pending;
+            }
+            for (int i = 7; i < 10; ++i) {
+                if (!Float.isFinite(CHECK[i])) {
+                    return restoreResult = pending;
+                }
+            }
+            if (!"ok".equals(sourceState(vehicle, CHECK))
+                || atStart && vehicle.getZ() != savedLevel) {
+                return restoreResult = pending;
+            }
+            clearSaved(vehicle);
+            Logger.printLog("[VehTeleport] rollback confirmed, saved pose released");
+            return "ok";
+        }
+        catch (Throwable t) {
+            return restoreResult = pending;
+        }
+    }
+
+    @LuaMethod(name = "vehicleNativeCommit", global = true)
+    public static boolean nativeCommit(BaseVehicle vehicle) {
+        if (vehicle == null || landingVehicle != vehicle || !"ok".equals(landingResult)) {
+            return false;
+        }
+        clearSaved(vehicle);
+        nativeLandingEnd(vehicle);
+        return true;
+    }
+
     /**
      * 读三源坐标 (世界坐标): 逻辑 x/y/z、原生物理体读数、jniTransform.origin (换算回世界),
      * 附控制器物理开关、玩家逻辑坐标、区块图中心与尺寸。纯读取, 无副作用。
@@ -105,12 +483,13 @@ public final class VehicleTeleportAPI {
         }
         float offsetX = WorldSimulation.instance.offsetX;
         float offsetY = WorldSimulation.instance.offsetY;
-        float px = Float.NaN, py = Float.NaN, pz = Float.NaN;
+        float px = Float.NaN, py = Float.NaN, pz = Float.NaN, vy = Float.NaN;
         try {
             if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, PHYSICS) == 0) {
                 px = PHYSICS[0];
                 py = PHYSICS[1];
                 pz = PHYSICS[2];
+                vy = PHYSICS[8];
             }
         }
         catch (Throwable t) {
@@ -144,14 +523,25 @@ public final class VehicleTeleportAPI {
         // (旧写法用它, 车在水面以下时 = -1)。二者不一致就是"传送卡在 no-square"的现场。
         String physLvlPart = Float.isNaN(pz) ? "physLvl=n/a"
             : String.format("physLvl=%d", (int)Math.floor(pz / PHYSICS_UNITS_PER_LEVEL + 0.05f));
+        String simulationPart;
+        try {
+            simulationPart = String.format("auth=%s local=%s ring=%s towingWait=%s vy=%.3f support=%s",
+                vehicle.getAuthorizationDescription(), vehicle.isLocalPhysicSim(),
+                chunkRingLoaded(IsoWorld.instance, Float.isFinite(px) ? px : vehicle.getX(),
+                    Float.isFinite(py) ? py : vehicle.getY()), vehicle.isWaitingToReattachTowingPartner(), vy,
+                Float.isFinite(pz) && hasSupport(vehicle, PHYSICS));
+        }
+        catch (Throwable t) {
+            simulationPart = "simulation=n/a";
+        }
         return String.format(
-            "logic=(%.2f,%.2f,%.2f) phys=(%.2f,%.2f,%.2f) jni=(%.2f,%.2f,%.2f) ctrl=%s lvl=%d %s %s %s",
+            "logic=(%.2f,%.2f,%.2f) phys=(%.2f,%.2f,%.2f) jni=(%.2f,%.2f,%.2f) ctrl=%s lvl=%d %s %s %s %s",
             vehicle.getX(), vehicle.getY(), vehicle.getZ(),
             px, py, pz,
             vehicle.jniTransform.origin.x + offsetX,
             vehicle.jniTransform.origin.z + offsetY,
             vehicle.jniTransform.origin.y,
-            ctrl, levelFor(vehicle), physLvlPart, playerPart, chunkPart);
+            ctrl, levelFor(vehicle), physLvlPart, playerPart, chunkPart, simulationPart);
     }
 
     /**
@@ -169,6 +559,10 @@ public final class VehicleTeleportAPI {
             return "no vehicle";
         }
         try {
+            String state = teleportSimulationState(vehicle);
+            if (!"ok".equals(state)) {
+                return state;
+            }
             if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, PHYSICS) != 0) {
                 return "no physics";
             }
@@ -200,6 +594,56 @@ public final class VehicleTeleportAPI {
         }
     }
 
+    /**
+     * 物理模拟是否在跑 (三百三十)。`setPhysicsActive` 在 3×3 区块环不齐时会被
+     * `disableSimulationDueToLackOfSurroundingChunks` 强制降为 false, 车这时不会下落 ——
+     * Lua 侧据此把"高度从未变化"判为冻结而不是落地。
+     */
+    @LuaMethod(name = "vehicleNativePhysicsActive", global = true)
+    public static boolean nativePhysicsActive(BaseVehicle vehicle) {
+        if (vehicle == null) {
+            return false;
+        }
+        try {
+            return vehicle.isPhysicsActive();
+        }
+        catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * 目的地 3×3 区块环是否全部就绪 —— 复刻 vanilla `BaseVehicle.hasChunksAllAround:4294-4307` 的语义。
+     *
+     * **为什么单块就绪不够 (2026-11-06 三百三十)**: `BaseVehicle.checkSurroundingChunks:4279-4292`
+     * 在 3×3 环未全部加载时置 `disableSimulationDueToLackOfSurroundingChunks = true`,
+     * `setPhysicsActive` 会被强制降为 false —— 车停在抬高点上不会下落 (悬空), 等环加载完成、
+     * 物理恢复时 `WorldSimulation.updateInternal:184-195` 又用原生物理体覆盖 jniTransform
+     * (物理体没真正移动) → 车回到传送前位置。所以起跳前必须要求**目的地**的环也齐。
+     */
+    private static boolean chunkRingLoaded(IsoWorld world, float x, float y) {
+        if (world == null || world.currentCell == null) {
+            return false;
+        }
+        int wx = (int)Math.floor(x) / 8;
+        int wy = (int)Math.floor(y) / 8;
+        for (int dy = -1; dy <= 1; ++dy) {
+            for (int dx = -1; dx <= 1; ++dx) {
+                int cx = wx + dx;
+                int cy = wy + dy;
+                if (!world.getMetaGrid().isValidChunk(cx, cy)) {
+                    continue;                      // 地图边界外的区块: 原版同样放行
+                }
+                IsoChunk chunk = world.currentCell.getChunk(cx, cy);
+                if (chunk != null && chunk.loaded) {
+                    continue;
+                }
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** 目标点判定 (区块 → 格)。区块不在区块图内时连格都取不到, 分两步报便于排障。
      *  @param level **楼层** (不是物理 z) —— 一百零九 起一律由 {@link #levelFor} 提供。 */
     private static String destState(float x, float y, int level) {
@@ -225,6 +669,10 @@ public final class VehicleTeleportAPI {
             // 一百零九: 带层号 —— "层不合法" (车不在目的地地面层) 与"格不存在"是两回事, 排障必须能分
             return "no-square@lvl" + level;
         }
+        // 三百三十: 3×3 环不齐 → 物理会被 checkSurroundingChunks 强制停用, 车会悬在半空。
+        if (!chunkRingLoaded(world, x, y)) {
+            return "chunk-ring-not-loaded";
+        }
         return "ok";
     }
 
@@ -246,7 +694,8 @@ public final class VehicleTeleportAPI {
      * clientUpdateVehiclePos 把车 removeFromWorld)。
      *
      * @param raiseZ 起跳抬升量 (物理单位, 1 楼层 ≈ 2.44949; ≤0 = 不抬高, 旧行为)
-     * @return "ok" / "blocked-no-chunk" / "blocked-no-square@lvl&lt;层&gt;" / "blocked-*" /
+     * @return "ok" / "blocked-no-chunk" / "blocked-no-square@lvl&lt;层&gt;" /
+     *         "blocked-chunk-ring-not-loaded" / "blocked-physics-off" / "physics-rejected(rc=&lt;负返回码&gt;)" /
      *         "no physics" / "error" / "no vehicle"
      */
     @LuaMethod(name = "vehicleNativeHop", global = true)
@@ -255,6 +704,17 @@ public final class VehicleTeleportAPI {
             return "no vehicle";
         }
         try {
+            String simulation = teleportSimulationState(vehicle);
+            if (!"ok".equals(simulation)) {
+                return "blocked-" + simulation;
+            }
+            if (landingVehicle != null) {
+                return "blocked-pending-restore";
+            }
+            if (savedValid && (savedVehicle != vehicle
+                || !"ok".equals(confirmPendingRestore(vehicle, false)))) {
+                return "blocked-" + restoreResult;
+            }
             if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, PHYSICS) != 0) {
                 return "no physics";
             }
@@ -271,10 +731,22 @@ public final class VehicleTeleportAPI {
             if (sq == null) {
                 return "blocked-no-square@lvl" + lvl;     // 与 destState 同参必然一致; 兜底防版本差异
             }
-            // 跳前存档 (供 verify 判下坠基准 + rollback 回退); 存的是抬高前的起跳位姿
+            // 开启前先让原版刷新旧区块禁用标记；失败不占用保存态。
+            boolean wasActive = vehicle.isPhysicsActive();
+            String activated = activateLocalPhysics(vehicle);
+            if (!"ok".equals(activated)) {
+                return "blocked-" + activated;
+            }
             System.arraycopy(PHYSICS, 0, SAVED, 0, PHYSICS.length);
             savedValid = true;
+            savedVehicle = vehicle;
             savedVehicleId = vehicle.vehicleId;
+            savedLevel = lvl;
+            savedPhysicsActive = wasActive;
+            restorePending = false;
+            restoreWriteAccepted = false;
+            restoreNativeConfirmed = false;
+            restoreResult = "pending-restore";
 
             PHYSICS[0] = x;
             PHYSICS[1] = y;
@@ -284,17 +756,49 @@ public final class VehicleTeleportAPI {
                 float base = Math.max(zOrig, lvl * PHYSICS_UNITS_PER_LEVEL);
                 PHYSICS[2] = base + raiseZ;            // 方案A: 抬高落下 (SAVED 已存, 回滚不受影响)
             }
-            Bullet.setOwnVehiclePhysics(vehicle.vehicleId, PHYSICS, false);
-            vehicle.jniTransform.origin.x = x - WorldSimulation.instance.offsetX;
-            vehicle.jniTransform.origin.z = y - WorldSimulation.instance.offsetY;
-            if (raiseZ > 0.0f) {
-                vehicle.jniTransform.origin.y = PHYSICS[2];   // 同帧对齐三源 (物理步下一帧自会覆盖)
+            // 三百三十: 清零线速度 —— 残速会在物理恢复的第一帧把车带飞/带翻。
+            PHYSICS[7] = 0.0f;
+            PHYSICS[8] = 0.0f;
+            PHYSICS[9] = 0.0f;
+
+            int written = Bullet.setOwnVehiclePhysics(vehicle.vehicleId, PHYSICS, false);
+            // 三百四十七 (2026-11-08): 判据由 "!= 0" 改为 "< 0"。反汇编 PZBullet64.dll 的导出
+            // Java_zombie_core_physics_Bullet_setOwnVehiclePhysics 得到的确切语义:
+            //   失败只有负值 —— -1 (WorldSimulation::instance 为空, 同时抛 Java 异常) /
+            //   -2 (GetFloatArrayElements 返回空指针) / -3 (单例二次判空) / -4 (车辆 ID 不在物理表) /
+            //   -5 (数组里的车轮数与车体不符);
+            //   成功路径结尾是 `mov eax,[WorldSimulation+0xa8]` 直接返回该字段, **不保证为 0**。
+            // 旧判据把"成功"当失败: 每次起跳都立刻写回存档 → 车一动没动, 控制台只剩 physics-rejected。
+            // 同一族 JNI 的返回码并不统一 (setVehicleMass/setVehicleParams 成功=0, setVehicleStatic 成功=1),
+            // 因此不能按"0 才是成功"套。
+            if (written < 0) {
+                String rolled = nativeRollback(vehicle);
+                return "physics-rejected(rc=" + written + ",rollback=" + rolled + ")";
             }
-            // clientUpdateVehiclePos 内部 setZ(0), z 参数仅透传; sq 按逻辑层查 (见上注)
-            VehicleManager.instance.clientUpdateVehiclePos(vehicle, x, y, PHYSICS[2], sq);
+            // 回读只重试一次；负返回码仍须报告，未确认写入由落地观察拒绝假成功。
+            int readBack = Bullet.getOwnVehiclePhysics(vehicle.vehicleId, CHECK);
+            if (readBack != 0 || !poseMatches(PHYSICS, CHECK)) {
+                int retried = Bullet.setOwnVehiclePhysics(vehicle.vehicleId, PHYSICS, true);
+                if (retried < 0) {
+                    String rolled = nativeRollback(vehicle);
+                    return "physics-rejected(rc=" + retried + ",rollback=" + rolled + ")";
+                }
+                readBack = Bullet.getOwnVehiclePhysics(vehicle.vehicleId, CHECK);
+                if (readBack != 0 || !poseMatches(PHYSICS, CHECK)) {
+                    Logger.printLog(String.format(
+                        "[VehTeleport] hop write not confirmed (rc=%d read=%d at=%.2f,%.2f,%.2f want=%.2f,%.2f,%.2f)",
+                        written, readBack, CHECK[0], CHECK[1], CHECK[2], x, y, PHYSICS[2]));
+                }
+            }
+            if (readBack == 0) {
+                copyWheelState(PHYSICS, CHECK);
+            }
+            applyPose(vehicle, PHYSICS, sq, lvl);
             return "ok";
         }
         catch (Throwable t) {
+            String rolled = savedValid && savedVehicle == vehicle ? nativeRollback(vehicle) : "no save";
+            Logger.error("[VehTeleport] hop failed (rollback " + rolled + ")", t);
             return "error";
         }
     }
@@ -327,18 +831,32 @@ public final class VehicleTeleportAPI {
             return "no vehicle";
         }
         try {
+            String state = localSimulationState(vehicle);
+            if (!"ok".equals(state)) {
+                return state;
+            }
             boolean flipped;
             try {
                 flipped = vehicle.getUpVectorDot() < BaseVehicle.MINIMUM_DOT_UPRIGHT;
             }
             catch (Throwable t) {
-                return "ok";                       // 姿态读数不可用 → 不动 (宁可不动, 不误扶)
+                return "no-pose";
             }
             if (!flipped) {
                 return "ok";
             }
+            String activated = activateLocalPhysics(vehicle);
+            if (!"ok".equals(activated)) {
+                return activated;
+            }
             if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, PHYSICS) != 0) {
                 return "no physics";
+            }
+            int level = levelFor(vehicle);
+            IsoGridSquare sq = IsoWorld.instance.currentCell.getGridSquare(
+                (double)PHYSICS[0], (double)PHYSICS[1], (double)level);
+            if (sq == null) {
+                return "no-square";
             }
             float qx = PHYSICS[3];
             float qy = PHYSICS[4];
@@ -354,12 +872,15 @@ public final class VehicleTeleportAPI {
             PHYSICS[7] = 0.0f;                     // 线速度清零 (vx/vy/vz): 残速会把车再带翻
             PHYSICS[8] = 0.0f;
             PHYSICS[9] = 0.0f;
-            Bullet.setOwnVehiclePhysics(vehicle.vehicleId, PHYSICS, false);
-            vehicle.jniTransform.origin.x = PHYSICS[0] - WorldSimulation.instance.offsetX;
-            vehicle.jniTransform.origin.y = PHYSICS[2];
-            vehicle.jniTransform.origin.z = PHYSICS[1] - WorldSimulation.instance.offsetY;
-            UPRIGHT_QUAT.set(0.0f, PHYSICS[4], 0.0f, PHYSICS[6]);
-            vehicle.jniTransform.setRotation(UPRIGHT_QUAT);
+            int written = Bullet.setOwnVehiclePhysics(vehicle.vehicleId, PHYSICS, false);
+            if (written < 0) {
+                return "physics-rejected(rc=" + written + ")";
+            }
+            if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, CHECK) != 0 || !poseMatches(PHYSICS, CHECK)) {
+                return "write-unconfirmed";
+            }
+            copyWheelState(PHYSICS, CHECK);
+            applyPose(vehicle, PHYSICS, sq, level);
             return "fixed";
         }
         catch (Throwable t) {
@@ -368,10 +889,8 @@ public final class VehicleTeleportAPI {
     }
 
     /**
-     * 落位校验 (跳后观察窗口结束时调): 逻辑与原生都贴近目标点、且相对跳前没有下坠 → "ok"。
-     * 否则返回原因串 (sinking / logic-drift / phys-drift), 由 Lua 侧决定回滚。
-     *
-     * @param maxSink 允许的原生高度下降量 (世界单位; 平地正常为 0)
+     * 落位校验：先要求共用观察窗确认落地，再检查目标平面漂移与原有极端下沉线。
+     * @param maxSink 允许的总下沉量 (保留原有落水/落谷政策)
      */
     @LuaMethod(name = "vehicleNativeVerify", global = true)
     public static String nativeVerify(BaseVehicle vehicle, float expectX, float expectY, float maxSink) {
@@ -382,7 +901,18 @@ public final class VehicleTeleportAPI {
             if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, PHYSICS) != 0) {
                 return "no physics";
             }
-            if (savedValid && savedVehicleId == vehicle.vehicleId) {
+            String simulation = localSimulationState(vehicle);
+            if (!"ok".equals(simulation)) {
+                return simulation;
+            }
+            if (landingVehicle != vehicle || !"ok".equals(landingResult)
+                || WorldSimulation.instance.getBulletFrameNo() != landingFrame
+                || !Float.isFinite(PHYSICS[8]) || Math.abs(PHYSICS[8]) > 0.1f
+                || !vehicle.isPhysicsActive() || !vehicle.isActive || vehicle.isStatic
+                || !chunkRingLoaded(IsoWorld.instance, PHYSICS[0], PHYSICS[1]) || !hasSupport(vehicle, PHYSICS)) {
+                return "not-landed";
+            }
+            if (savedValid && savedVehicle == vehicle && savedVehicleId == vehicle.vehicleId) {
                 float sink = PHYSICS[2] - SAVED[2];
                 if (sink < -maxSink) {
                     return String.format("sinking(dz=%.2f)", sink);
@@ -398,7 +928,45 @@ public final class VehicleTeleportAPI {
             if (Math.abs(px) > 2.0f || Math.abs(py) > 2.0f) {
                 return String.format("phys-drift(d=%.2f,%.2f)", px, py);
             }
-            return "ok";
+            return sourceState(vehicle, PHYSICS);
+        }
+        catch (Throwable t) {
+            return "error";
+        }
+    }
+
+    /** 嵌地重置只抬到原有逻辑层，走同一个原生数组通道，不把坡上车辆压到零高度。 */
+    public static String liftToLogicalGround(BaseVehicle vehicle) {
+        try {
+            String state = localSimulationState(vehicle);
+            if (!"ok".equals(state)) {
+                return state;
+            }
+            if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, PHYSICS) != 0) {
+                return "no physics";
+            }
+            int level = levelFor(vehicle);
+            float ground = level * PHYSICS_UNITS_PER_LEVEL;
+            if (PHYSICS[2] >= ground - 0.5f) {
+                return "ok";
+            }
+            IsoGridSquare sq = IsoWorld.instance.currentCell.getGridSquare(
+                (double)PHYSICS[0], (double)PHYSICS[1], (double)level);
+            if (sq == null) {
+                return "no-square";
+            }
+            PHYSICS[2] = ground;
+            PHYSICS[7] = PHYSICS[8] = PHYSICS[9] = 0.0f;
+            int written = Bullet.setOwnVehiclePhysics(vehicle.vehicleId, PHYSICS, false);
+            if (written < 0) {
+                return "physics-rejected(rc=" + written + ")";
+            }
+            if (Bullet.getOwnVehiclePhysics(vehicle.vehicleId, CHECK) != 0 || !poseMatches(PHYSICS, CHECK)) {
+                return "write-unconfirmed";
+            }
+            copyWheelState(PHYSICS, CHECK);
+            applyPose(vehicle, PHYSICS, sq, level);
+            return "lifted";
         }
         catch (Throwable t) {
             return "error";
@@ -406,37 +974,77 @@ public final class VehicleTeleportAPI {
     }
 
     /**
-     * 回滚到上一跳前的存档位姿 (落位校验失败时用): 物理体 + jniTransform 一起写回,
-     * 目的地格存在时同步逻辑簿记。返回 "ok" / "no save" / "no vehicle" / "error"。
-     *
-     * 一百零九: 逻辑格同样按**载具逻辑层**查 (旧实现用存档里的物理 z, 车在水面以下时必然查不到格 →
-     * "物理回来了但簿记没回"), 取不到再退一步用存档 z 反推层 (老行为), 都没有就只回物理体。
+     * 回滚到上一跳前的完整原生位姿；未确认写入、显示和簿记前不丢保存态。
+     * 原生回读失败返回明确原因，不把未恢复的画面或乘员坐标当作 ok。
      */
     @LuaMethod(name = "vehicleNativeRollback", global = true)
     public static String nativeRollback(BaseVehicle vehicle) {
         if (vehicle == null) {
             return "no vehicle";
         }
-        if (!savedValid || savedVehicleId != vehicle.vehicleId) {
+        if (!savedValid || savedVehicle != vehicle || savedVehicleId != vehicle.vehicleId) {
             return "no save";
         }
         try {
-            Bullet.setOwnVehiclePhysics(vehicle.vehicleId, SAVED, false);
-            vehicle.jniTransform.origin.x = SAVED[0] - WorldSimulation.instance.offsetX;
-            vehicle.jniTransform.origin.z = SAVED[1] - WorldSimulation.instance.offsetY;
-            int lvl = levelFor(vehicle);
-            IsoGridSquare sq = IsoWorld.instance.currentCell.getGridSquare((double)SAVED[0], (double)SAVED[1], (double)lvl);
-            if (sq == null) {
-                lvl = (int)Math.floor(SAVED[2] / PHYSICS_UNITS_PER_LEVEL + 0.05f);
-                sq = IsoWorld.instance.currentCell.getGridSquare((double)SAVED[0], (double)SAVED[1], (double)lvl);
+            String state = localSimulationState(vehicle);
+            if (!"ok".equals(state)) {
+                return state;
             }
-            if (sq != null) {
-                VehicleManager.instance.clientUpdateVehiclePos(vehicle, SAVED[0], SAVED[1], SAVED[2], sq);
+            if (restorePending && restoreWriteAccepted) {
+                return confirmPendingRestore(vehicle, false);
             }
-            savedValid = false;
+            IsoWorld world = IsoWorld.instance;
+            if (world == null || world.currentCell == null || VehicleManager.instance == null) {
+                return "no-cell";
+            }
+            IsoGridSquare sq = world.currentCell.getGridSquare(
+                (double)SAVED[0], (double)SAVED[1], (double)savedLevel);
+            if (sq == null || sq.chunk == null || !sq.chunk.loaded) {
+                return "restore-square-unloaded";
+            }
+            restorePending = true;
+            restoreWriteAccepted = false;
+            restoreNativeConfirmed = false;
+            restoreDeadlineMs = System.nanoTime() / 1_000_000L + RESTORE_CONFIRM_MS;
+            restoreFrame = WorldSimulation.instance.getBulletFrameNo();
+            restoreResult = "pending-restore";
+            int written = Bullet.setOwnVehiclePhysics(vehicle.vehicleId, SAVED, false);
+            if (written < 0) {
+                return "physics-rejected(rc=" + written + ")";
+            }
+            restoreWriteAccepted = true;
+            int read = Bullet.getOwnVehiclePhysics(vehicle.vehicleId, CHECK);
+            if (read != 0 || !poseMatches(SAVED, CHECK)) {
+                written = Bullet.setOwnVehiclePhysics(vehicle.vehicleId, SAVED, true);
+                if (written < 0) {
+                    return "physics-rejected(rc=" + written + ")";
+                }
+                read = Bullet.getOwnVehiclePhysics(vehicle.vehicleId, CHECK);
+                if (read != 0 || !poseMatches(SAVED, CHECK)) {
+                    return "pending-restore";
+                }
+            }
+            restoreNativeConfirmed = true;
+            // 保存数组保持不变；轮系接触值使用原生恢复后的新读数。
+            applyPose(vehicle, CHECK, sq, savedLevel);
+            vehicle.checkSurroundingChunks();
+            vehicle.setPhysicsActive(savedPhysicsActive);
+            String restored = sourceState(vehicle, SAVED);
+            if (!"ok".equals(restored)) {
+                return "pending-restore";
+            }
+            int confirmed = Bullet.getOwnVehiclePhysics(vehicle.vehicleId, CHECK);
+            if (confirmed != 0 || !poseMatches(SAVED, CHECK)) {
+                return "pending-restore";
+            }
+            if (vehicle.getZ() != savedLevel) {
+                return "pending-restore";
+            }
+            clearSaved(vehicle);
             return "ok";
         }
         catch (Throwable t) {
+            Logger.error("[VehTeleport] rollback failed", t);
             return "error";
         }
     }

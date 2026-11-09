@@ -32,6 +32,9 @@ public final class AutoDriveAPI {
     private AutoDriveAPI() {
     }
 
+    /** 最近一次「车辆重置」结果码 (三百三十), 供 Lua 面板显示明确反馈。 */
+    private static String lastResetResult = "noop";
+
     // ================================================================
     // 命令
     // ================================================================
@@ -81,21 +84,44 @@ public final class AutoDriveAPI {
         return INSTANCE().resumeRoute(vehicle);
     }
 
-    /**
-     * 车辆重置 (宽限期兜底): 嵌墙车 15s 内没开出会被挤进地里 — 此按钮
-     * 续期碰撞豁免 15s + 把车抬回地面高度。返回 false = 不在驾驶位。
-     */
+    /** 重置先返回 checking；结果在既有 OnTick 后续确认，重复点击取消。 */
     @LuaMethod(name = "autoDriveResetVehicle", global = true)
     public static boolean autoDriveResetVehicle() {
-        BaseVehicle vehicle = driverVehicle();
-        if (vehicle == null) {
-            INSTANCE().setMessage("UI_DrivePanel_MsgNoVehicle");
+        if (BulletNoClipHook.isVehicleResetPending()) {
+            BulletNoClipHook.cancelVehicleReset();
+            lastResetResult = "cancelled";
+            Logger.printLog("[AutoDrive] vehicle reset: cancelled");
             return false;
         }
-        INSTANCE().grantNoClipGrace();
-        boolean ok = BulletNoClipHook.resetVehiclePose(vehicle);
-        Logger.printLog("[AutoDrive] vehicle reset: pose=" + ok);
-        return ok;
+        BaseVehicle vehicle = driverVehicle();
+        if (vehicle == null) {
+            lastResetResult = "no-vehicle";
+            INSTANCE().setMessage("UI_DrivePanel_MsgNoVehicle");
+            Logger.printLog("[AutoDrive] vehicle reset: no-vehicle");
+            return false;
+        }
+        if (!modcore.core.VehicleTeleportAPI.landingInProgress()) {
+            INSTANCE().grantNoClipGrace();
+        }
+        lastResetResult = BulletNoClipHook.resetVehiclePoseResult(vehicle);
+        Logger.printLog("[AutoDrive] vehicle reset: pose=" + lastResetResult);
+        return "checking".equals(lastResetResult);
+    }
+
+    /** 观察只推进一次；getter 纯读取，面板关闭也不阻止收尾。 */
+    public static void updateVehicleReset() {
+        if (!BulletNoClipHook.isVehicleResetPending()) {
+            return;
+        }
+        lastResetResult = BulletNoClipHook.pollVehicleReset();
+        if (!"checking".equals(lastResetResult)) {
+            Logger.printLog("[AutoDrive] vehicle reset: pose=" + lastResetResult);
+        }
+    }
+
+    @LuaMethod(name = "autoDriveGetResetResult", global = true)
+    public static String autoDriveGetResetResult() {
+        return lastResetResult;
     }
 
     /** 巡航目标速 km/h, 0 = 自适应 (= 硬顶, 服务端限速×0.95 与车辆极速取小) — 唯一速度旋钮 (§五)。 */

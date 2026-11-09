@@ -62,8 +62,23 @@ val generateLuaSymbols by tasks.registering {
     }
 }
 
+val generateResourceIndex by tasks.registering {
+    inputs.dir(file("src/main/resources/modcore"))
+    outputs.file(file("build/generated/modcore/resources.index"))
+    doLast {
+        val resourceRoot = file("src/main/resources")
+        val names = file("src/main/resources/modcore").walkTopDown().filter { it.isFile }
+            .map { it.relativeTo(resourceRoot).invariantSeparatorsPath }.toMutableList()
+        names.addAll(listOf("modcore/symbols.txt", "modcore/lua-prefix.properties"))
+        val output = file("build/generated/modcore/resources.index")
+        output.parentFile.mkdirs()
+        output.writeText(names.distinct().sorted().joinToString("\n", postfix = "\n"), Charsets.UTF_8)
+    }
+}
+
 tasks.named<ProcessResources>("processResources") {
-    dependsOn(generateLuaSymbols, generateLuaPrefix)
+    dependsOn(generateLuaSymbols, generateLuaPrefix, generateResourceIndex)
+    from(file("build/generated/modcore/resources.index")) { into("modcore") }
     from(file("build/generated/modcore/symbols.txt")) {
         into("modcore")
     }
@@ -94,13 +109,59 @@ dependencies {
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.12.2")
 }
 
+val launcherSource = sourceSets.create("launcher")
+val attachSource = sourceSets.create("attach") {
+    compileClasspath += launcherSource.output
+    runtimeClasspath += launcherSource.output
+}
+sourceSets.main { compileClasspath += attachSource.output }
+sourceSets.test {
+    compileClasspath += launcherSource.output + attachSource.output
+    runtimeClasspath += launcherSource.output + attachSource.output
+}
+
+val launchGateJar by tasks.registering(Jar::class) {
+    destinationDirectory.set(project.file("build/gate"))
+    archiveFileName.set("launch-gate.jar")
+    from(launcherSource.output)
+}
+
+val coordinatorJar by tasks.registering(Jar::class) {
+    destinationDirectory.set(project.file("build/gate"))
+    archiveFileName.set("coordinator.jar")
+    from(attachSource.output)
+    from(launcherSource.output) { exclude("module-info.class", "modcore/launch/LaunchGate*.class") }
+}
+
+tasks.named<Jar>("jar") {
+    dependsOn(launchGateJar, coordinatorJar)
+    from(launchGateJar.map { it.archiveFile }) { into("modcore"); rename { "launch-gate.jar" } }
+    from(coordinatorJar.map { it.archiveFile }) { into("modcore"); rename { "coordinator.jar" } }
+    from(attachSource.output) { include("modcore/attach/JdkRequirement*.class") }
+}
+
 tasks.test {
     useJUnitPlatform()
+    // 三个部署/安装生命周期用例会真实启动进程、复制运行时目录并整套执行补丁准备,
+    // 占测试时间约 85%。-PskipDeploymentTests 供日常迭代跳过它们; 该模式下产出的
+    // jar 只是本机自测件, build.bat 会明确提示"未经完整验证", 不是交付包。
+    if (project.hasProperty("skipDeploymentTests")) {
+        exclude("**/ThreeFileDeploymentTest.class", "**/BatchEntryTest.class",
+            "**/PreparedDeploymentTest.class")
+    }
     val sandbox = rootDir.parentFile.resolve("temp/headshot-tests")
     workingDir(sandbox.resolve("work"))
     systemProperty("user.home", sandbox.resolve("home").absolutePath)
     systemProperty("java.io.tmpdir", sandbox.resolve("tmp").absolutePath)
+    environment("LOCALAPPDATA", sandbox.resolve("appdata").absolutePath)
     systemProperty("headshot.gameJar", file("lib/projectzomboid.jar").absolutePath)
+    systemProperty("agent.testRoot", rootDir.parentFile.resolve("temp/instrumentation-tests").absolutePath)
+    systemProperty("agent.jarFile", file("build/dist/modcore-agent.jar").absolutePath)
+    systemProperty("agent.payloadJar", file("build/slim/modcore-payload.jar").absolutePath)
+    systemProperty("agent.launchScript", file("launch-agent.ps1").absolutePath)
+    systemProperty("agent.installerJar", file("build/modcore-${version}.jar").absolutePath)
+    systemProperty("gate.jarFile", file("build/gate/launch-gate.jar").absolutePath)
+    dependsOn("slimJar", "jar", launchGateJar, coordinatorJar)
     doFirst {
         listOf("work", "home", "tmp").forEach { sandbox.resolve(it).mkdirs() }
     }
@@ -115,6 +176,7 @@ tasks.named<Jar>("jar") {
     }
 
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    exclude("modcore/agent/Launcher*.class", "modcore/agent/PayloadClassLoader*.class")
 
     // L2 随机前缀资源 (generateLuaPrefix 产物)
     from(file("build/generated/modcore")) {
@@ -129,79 +191,65 @@ tasks.named<Jar>("jar") {
         }
     })
 }
-// ============================================================
-// L4b: 存根编译 (先于 jar: coreboot.class 进 jar 资源, install 提取)
-// ============================================================
-val compileCorebootStub by tasks.registering {
-    inputs.file(file("stub/coreboot.template.java"))
-    outputs.file(file("build/stub-out/zombie/coreboot.class"))
-    doLast {
-        val template = file("stub/coreboot.template.java").readText(Charsets.UTF_8)
-        val srcDir = file("build/stub-src").apply { mkdirs() }
-        File(srcDir, "coreboot.java").writeText(template, Charsets.UTF_8)
-        val compiler = javax.tools.ToolProvider.getSystemJavaCompiler()
-            ?: throw GradleException("no system java compiler available")
-        compiler.run(null, null, null,
-            "-encoding", "UTF-8",
-            "-d", file("build/stub-out").absolutePath,
-            file("build/stub-src/coreboot.java").absolutePath
-        )
-    }
-}
-
-tasks.named<ProcessResources>("processResources") {
-    from(compileCorebootStub) {
-        into("modcore")
-    }
-}
-
-// ============================================================
-// L4b: 加密载荷 (packageLoadout, jar 完成后)
-//   1. 读取 build/modcore-<ver>.jar -> AES-256-GCM 加密 (随机密钥)
-//   2. 生成 build/dist/modcore.bin  (32B key + 12B IV + 密文, 见 coreboot 模板)
-// 安装形态: install 时加密安装器自身写 bin + 提取 jar 内 modcore/coreboot.class
-// 游戏目录常驻 = zombie\coreboot.class + %USERPROFILE%\Zomboid\modcore.bin
-// ============================================================
-// ============================================================
-// L4b 载荷瘦身修正 (2026-09-10): 旧实现把整个安装器 fat jar 当载荷加密,
-// 而 fat jar 含 runtimeClasspath 全量解包 (游戏 jar 依赖, 62MB/26337 条目) →
-// modcore.bin 63MB = 完整游戏副本密文, 体积即特征且解包会污染类路径。
-// 修正: 载荷 = slim jar (仅 modcore/* 类+资源), 内嵌安装器 modcore/payload.jar;
-// install 现场从自身提取 slim 载荷再加密 (密钥仍为安装现场随机)。
-// 运行时类零 ASM 引用 (5 个补丁器类只在安装期加载, 不进运行链)。
-// ============================================================
+// The legacy coreboot template is retained for reference, but is not compiled or packaged.
 val slimJar by tasks.registering(Jar::class) {
     destinationDirectory.set(project.file("build/slim"))
     archiveFileName.set("modcore-payload.jar")
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
-    from(sourceSets.main.get().output)
+    from(sourceSets.main.get().output) {
+        include("modcore/**")
+        exclude("modcore/agent/**", "modcore/build/**", "modcore/Main.class", "modcore/GamePatcher*.class",
+            "modcore/utils/Patch*.class", "modcore/core/*Patch*.class", "modcore/drive/*Patch*.class",
+            "modcore/**/coreboot.class", "modcore/coreboot.class")
+    }
 }
 
+val agentJar by tasks.registering(Jar::class) {
+    destinationDirectory.set(project.file("build/dist"))
+    archiveFileName.set("modcore-agent.jar")
+    from(sourceSets.main.get().output) {
+        include("modcore/agent/**")
+        exclude("modcore/agent/Launcher*.class", "modcore/agent/PayloadClassLoader*.class")
+    }
+    manifest {
+        attributes["Agent-Class"] = "modcore.agent.AgentMain"
+    }
+}
+
+tasks.test { dependsOn(agentJar) }
+
 tasks.named<Jar>("jar") {
-    dependsOn(slimJar)
+    dependsOn(slimJar, agentJar)
     from(slimJar.map { it.archiveFile }) {
         into("modcore")
         rename { "payload.jar" }
     }
-}
-
-val packageLoadout by tasks.registering {
-    dependsOn(tasks.named("jar"))
-    doLast {
-        val jarFile = file("build/slim/modcore-payload.jar")
-        if (!jarFile.exists()) throw GradleException("payload jar not found: ${jarFile}")
-
-        val key = ByteArray(32)
-        SecureRandom().nextBytes(key)
-        val cipher = javax.crypto.Cipher.getInstance("AES/GCM/NoPadding")
-        cipher.init(javax.crypto.Cipher.ENCRYPT_MODE, javax.crypto.spec.SecretKeySpec(key, "AES"))
-        val iv = cipher.iv
-        val encrypted = cipher.doFinal(jarFile.readBytes())
-        val outDir = file("build/dist").apply { mkdirs() }
-        File(outDir, "modcore.bin").writeBytes(key + iv + encrypted)
-        println("L4b loadout: build/dist/modcore.bin (payload ${encrypted.size} bytes)")
+    from(agentJar.map { it.archiveFile }) {
+        into("modcore")
+        rename { "agent.jar" }
     }
 }
-tasks.named("assemble") { dependsOn(packageLoadout) }
-// build.bat 跑 "clean jar": jar 完成后自动产出 L4b 载荷 (密文 bin + 存根)
-tasks.named("jar") { finalizedBy(packageLoadout) }
+
+val packageLoadout by tasks.registering(JavaExec::class) {
+    dependsOn(tasks.named("jar"), slimJar, agentJar)
+    classpath = files(tasks.named<Jar>("jar").flatMap { it.archiveFile })
+    mainClass.set("modcore.Main")
+    val sandbox = rootDir.parentFile.resolve("temp/instrumentation-prepare")
+    workingDir(sandbox.resolve("work"))
+    systemProperty("user.home", sandbox.resolve("home").absolutePath)
+    systemProperty("java.io.tmpdir", sandbox.resolve("tmp").absolutePath)
+    environment("LOCALAPPDATA", sandbox.resolve("appdata").absolutePath)
+    args("--prepare-runtime", file("lib/projectzomboid.jar").absolutePath,
+        file("build/slim/modcore-payload.jar").absolutePath, file("build/dist/runtime.jar").absolutePath)
+    doFirst {
+        listOf("work", "home", "tmp").forEach { sandbox.resolve(it).mkdirs() }
+    }
+}
+
+val agentDistribution by tasks.registering(Copy::class) {
+    dependsOn(packageLoadout)
+    from("launch-agent.ps1")
+    into("build/dist")
+}
+
+tasks.named("assemble") { dependsOn(agentDistribution) }

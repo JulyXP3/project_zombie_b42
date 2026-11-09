@@ -109,11 +109,14 @@ public class HeadshotPatchTest {
                 api.isCritMax = crit;
                 player.critChance = crit ? 100 : 0;
                 player.critCalls = 0;
-                player.setCriticalHit(!crit);
+                boolean upstreamCrit = !crit;
+                player.setCriticalHit(upstreamCrit);
                 target.reaction = null;
                 hit.invoke(manager, weapon, player, target);
-                assertEquals(1, player.critCalls, "headshot must not bypass vanilla calculateCritChance");
-                assertEquals(crit, player.isCriticalHit(), "headshot must not replace the critical result");
+                // b42.22 把暴击掷骰搬进 isCriticalHit(), processHit 不再调用它;
+                // 这里守的是"只爆头不得改动上游暴击结论", 不是"必须在本方法内掷".
+                assertEquals(0, player.critCalls, "the critical roll moved out of processHit in b42.22");
+                assertEquals(upstreamCrit, player.isCriticalHit(), "headshot must not touch the upstream critical decision");
                 boolean headReaction = target.reaction != null && target.reaction.startsWith("ShotHead");
                 assertEquals(headshot, headReaction, "headshot only controls the shot body part");
             }
@@ -200,8 +203,8 @@ public class HeadshotPatchTest {
             ClassNode node = readCombat();
             MethodNode hit = method(node, "processHit");
             for (AbstractInsnNode insn : hit.instructions) {
-                if (mutation == 0 && insn instanceof MethodInsnNode call && call.name.equals("setCriticalHit")) {
-                    call.name = "setStaggerBack";
+                if (mutation == 0 && insn instanceof MethodInsnNode call && call.name.equals("processTargetedHit")) {
+                    call.name = "processTargetedHitDrifted";
                     break;
                 }
                 if (mutation == 1 && insn instanceof FieldInsnNode field && field.name.equals("BODYPART_COUNT")) {

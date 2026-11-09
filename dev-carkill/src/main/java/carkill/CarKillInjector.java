@@ -29,7 +29,22 @@ public final class CarKillInjector {
     }
 
     public static void install(Instrumentation inst) {
-        inst.addTransformer(new CarKillTransformer(), true);
+        // JVM-wide guard: a second loadAgent (double-click, two waiting scripts) must not
+        // register a second transformer. The property survives across agent class loaders,
+        // so it also covers a second copy of this class.
+        synchronized (System.getProperties()) {
+            if (System.getProperty(CarKillProtocol.INSTALLED_PROPERTY) != null) {
+                System.out.println("[CarKill] already attached; skipping duplicate install");
+                return;
+            }
+            System.setProperty(CarKillProtocol.INSTALLED_PROPERTY, "1");
+        }
+        try {
+            inst.addTransformer(new CarKillTransformer(), true);
+        } catch (Throwable error) {
+            System.clearProperty(CarKillProtocol.INSTALLED_PROPERTY);
+            throw error;
+        }
         if (!inst.isRetransformClassesSupported()) {
             System.out.println("[CarKill] startup transformer installed");
             return;

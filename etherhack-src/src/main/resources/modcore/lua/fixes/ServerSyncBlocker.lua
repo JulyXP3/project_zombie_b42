@@ -173,84 +173,9 @@ function ServerSyncBlocker.enableGodModeProtection()
 end
 
 --============================================================================
--- Vehicle protection: unconditional hotwire + keyless engine start.
--- Blocks VehicleUpdate downlink so the server cannot revert local hotwire/
--- engine state, keeps the engine running locally, repeatedly replays the
--- hotwire TimedAction to the server until it authorizes hotwired=true, and
--- sends the vanilla startEngine command (server trusts client's haveKey) to
--- authorize the engine. As soon as the engine is confirmed running (hotwired
--- + engine running) the protection auto-disables and the server-authorized
--- state is read; a 30s timeout is kept only as a fallback for when the engine
--- can never start (no fuel/battery), so the toggle never hangs on.
---============================================================================
-
-function ServerSyncBlocker.enableVehicle()
-    if enableVehicleProtection then enableVehicleProtection() end
-    ServerSyncBlocker.vehicleProtection = true
-    ServerSyncBlocker.vehicleConfirming = false
-    ServerSyncBlocker.vehicleConfirmDue = getTimestampMs() + 30000
-    ServerSyncBlocker.vehicleRetryDue = 0
-    print("[modcore] Vehicle protection enabled - hotwire & engine will be kept locally, server authorization in progress")
-    return true
-end
-
-function ServerSyncBlocker.disableVehicle()
-    if disableVehicleProtection then disableVehicleProtection() end
-    ServerSyncBlocker.vehicleProtection = false
-    ServerSyncBlocker.vehicleConfirming = false
-    print("[modcore] Vehicle protection disabled")
-    return true
-end
-
-function ServerSyncBlocker.isVehicleActive()
-    return ServerSyncBlocker.vehicleProtection
-end
-
-local function vehicleAndDriver()
-    local player = getPlayer()
-    if not player then return nil end
-    local vehicle = player:getVehicle()
-    if not vehicle or not vehicle:isDriver(player) then return nil end
-    return vehicle
-end
-
-function ServerSyncBlocker.applyVehicleProtection()
-    local vehicle = vehicleAndDriver()
-    if not vehicle then return end
-    vehicle:setHotwired(true)
-    if not vehicle:isEngineRunning() then
-        vehicle:tryStartEngine(true)
-    end
-    local now = getTimestampMs()
-    if now >= ServerSyncBlocker.vehicleRetryDue then
-        ServerSyncBlocker.vehicleRetryDue = now + 5000
-        ISTimedActionQueue.add(ISHotwireVehicle:new(getPlayer()))
-        sendClientCommand(getPlayer(), "vehicle", "startEngine", {haveKey = true})
-    end
-end
-
-function ServerSyncBlocker.confirmVehicleProtection()
-    ServerSyncBlocker.vehicleConfirmTicks = ServerSyncBlocker.vehicleConfirmTicks + 1
-    if ServerSyncBlocker.vehicleConfirmTicks < 2 then return end
-    local vehicle = vehicleAndDriver()
-    local ok = vehicle ~= nil and vehicle:isHotwired() and vehicle:isEngineRunning()
-    ServerSyncBlocker.vehicleProtection = false
-    ServerSyncBlocker.vehicleConfirming = false
-    if EtherVehiclePanel and EtherVehiclePanel.checkboxByKey then
-        local cb = EtherVehiclePanel.checkboxByKey["UI_Exploit_VehicleProtection"]
-        if cb then cb:setCheked(false); end
-    end
-    if ok then
-        print("[modcore] Vehicle hotwire & engine authorized, protection auto-disabled")
-    else
-        print("[modcore] Vehicle protection auto-disabled (engine did not start / server did not authorize)")
-    end
-end
-
---============================================================================
--- 无条件启动引擎 (VehicleCommands.startEngine 无权限校验, haveKey 由客户端
--- 上传; 服务端 tryStartEngine 仍判油/电/损坏)。开车时引擎未转则周期补发;
--- 引擎转起来即自动取消勾选; 取消勾选立即停止重试 (每 tick 先查开关)。
+-- 任意钥匙点火 (自动重试): 身上任意车钥匙插入目标车点火口, 再走服务端正常
+-- 启动; 服务端仍判油/电/损坏。引擎转起来即自动取消勾选; 取消勾选立即停止。
+-- 每 2 秒重试一次; 没有 30 秒超时, 由用户取消或引擎启动后自动收尾。
 --============================================================================
 function ServerSyncBlocker.updateInstantEngineStart()
     if not (isVehicleInstantStart and isVehicleInstantStart()) then return end
@@ -270,8 +195,10 @@ function ServerSyncBlocker.updateInstantEngineStart()
     end
     local now = getTimestampMs()
     if now < (ServerSyncBlocker.instantStartRetryDue or 0) then return end
-    ServerSyncBlocker.instantStartRetryDue = now + 1000
-    sendClientCommand(player, "vehicle", "startEngine", {haveKey = true})
+    ServerSyncBlocker.instantStartRetryDue = now + 2000
+    if type(vehicleIgnitionStart) == "function" then
+        vehicleIgnitionStart()
+    end
 end
 
 -- Register for OnTick to periodically reapply values
@@ -281,22 +208,6 @@ local function onTick()
         ServerSyncBlocker.reapply()
     end
     ServerSyncBlocker.updateInstantEngineStart()
-    if ServerSyncBlocker.vehicleProtection then
-        if ServerSyncBlocker.vehicleConfirming then
-            ServerSyncBlocker.confirmVehicleProtection()
-        else
-            ServerSyncBlocker.applyVehicleProtection()
-            -- 引擎一旦转起来即进入收尾(释放下行阻断并读授权结果); 30s 仅作兜底,
-            -- 防止引擎因缺油/没电永远起不来时开关一直挂着。
-            local v = vehicleAndDriver()
-            local engineOk = v ~= nil and v:isHotwired() and v:isEngineRunning()
-            if engineOk or getTimestampMs() >= ServerSyncBlocker.vehicleConfirmDue then
-                if disableVehicleProtection then disableVehicleProtection() end
-                ServerSyncBlocker.vehicleConfirming = true
-                ServerSyncBlocker.vehicleConfirmTicks = 0
-            end
-        end
-    end
 end
 
 -- Hook into game events

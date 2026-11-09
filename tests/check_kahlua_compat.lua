@@ -19,10 +19,14 @@ for _, path in ipairs(arg) do
     local content = f:read("*a")
     f:close()
     for line in content:gmatch("[^\r\n]*") do
-        for pattern, why in pairs(BANNED) do
-            if line:find(pattern, 1, true) then
-                n = n + 1
-                print(string.format("%s: banned %q -> %s", path, pattern, why))
+        -- 跳过整行注释: 文档/反向说明里会出现 next()/getParts() 等字样,
+        -- 它们不是真实调用, 扫进来会产生假阳性。
+        if not line:match("^%s*%-%-") then
+            for pattern, why in pairs(BANNED) do
+                if line:find(pattern, 1, true) then
+                    n = n + 1
+                    print(string.format("%s: banned %q -> %s", path, pattern, why))
+                end
             end
         end
     end

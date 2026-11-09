@@ -1,15 +1,12 @@
 require "ISUI/ISPanel"
 
 --*********************************************************
---* 战利品重掷 + 刷弹药 + 钓竿生成 面板 (clearContainerExplore POC, multiplayer)
---* 服务端 object.clearContainerExplore 无权限/距离校验:
---* 任意客户端可清空容器「已探索」标记 + 房间程序化生成记录,
---* 之后打开容器由服务端按容器类型表重新 roll 战利品
---* (枪柜/军用包等表含武器弹药)。
---* 复用 EtherContainerPOC (UIItemTables.lua 定义, F10 同入口)。
---* 下半: 生成模式 (FishingSpawn / CorpseSpawn / TakeSpawn / BoxPoison,
+--* 战利品页: 刷弹药 + 物品生成 (FishingSpawn / CorpseSpawn / BoxPoison / WornSpawn,
 --*   仅自建服务器): 全物品列表 + 名称/ID 搜索 + 单次生成 (风格对齐物品生成)
---*   (穿戴注入已下架: 实测证伪进包, 产物为穿戴幽灵, 见物品生成-穿戴注入(不实现))
+--*   (穿戴生成的换装与掉落必须等服务端确认；代码路径存在不等于联机验收通过)
+--*   (重置战利品已下架: b42.22 服务端需要 Capability.AddItem, 普通角色会被
+--*    服务端拒绝并可能被服务器反作弊踢出; 计时生成同样下架, 因为 b42.22 的
+--*    ISTakeBricks 只产固定 pallet 产物, 无法生成任意物品)
 --*********************************************************
 EtherLootRollPanel = ISPanel:derive("EtherLootRollPanel");
 
@@ -124,8 +121,8 @@ function EtherLootRollPanel:render()
     -- 长消息按可用宽度折行, 且结果缓存 (render 每帧调用, 不能每帧测量)
     local src = EtherFishSpawn;
     if self.spawnMode == "corpse" then src = EtherCorpseSpawn;
-    elseif self.spawnMode == "take" then src = EtherTakeSpawn;
-    elseif self.spawnMode == "poison" then src = EtherBoxPoison; end
+    elseif self.spawnMode == "poison" then src = EtherBoxPoison;
+    elseif self.spawnMode == "worn" then src = EtherWornSpawn; end
     local fishStatus = tostring((src and src.message) or "")
     if fishStatus ~= "" and self.statusX ~= nil then
         if self.statusCacheText ~= fishStatus or self.statusCacheW ~= self.statusW then
@@ -149,18 +146,9 @@ end
 --* 生成模式切换 UI 状态: 当前模式按钮禁用 (视觉区分 + 防重复点击)
 --*********************************************************
 function EtherLootRollPanel:updateSpawnModeUI()
-    -- 模式选择已改为下拉框 (选中即状态, 无需禁用当前项); 这里只管条件控件显隐:
-    -- 加速开关仅计时模式可见。
-    if self.accelBtn ~= nil then
-        self.accelBtn:setVisible(self.spawnMode == "take");
-        if self.spawnMode == "take" then
-            self:updateAccelBtnText();
-        end
-    end
-
     -- 数量输入框: 只有钓竿生成不用数量 (EtherFishSpawn.trigger 无数量参数, 一次抛竿
     -- 只出一件) —— 该模式下隐藏标签与输入框, 避免用户以为能一次生成多件。
-    local needCount = self.spawnMode ~= "fish";
+    local needCount = self.spawnMode ~= "fish" and self.spawnMode ~= "worn";
     if self.countBox ~= nil then
         self.countBox:setVisible(needCount);
         self.countBox:setEditable(needCount);
@@ -173,22 +161,12 @@ function EtherLootRollPanel:updateSpawnModeUI()
     -- 但非空时保留可点 —— 否则用户在开盒模式里无法清空清单, 「请先清空清单」的
     -- 提示就没法就地执行。
     if self.addBtn ~= nil then
-        self.addBtn:setEnable(self.spawnMode ~= "poison")
+        self.addBtn:setEnable(self.spawnMode ~= "poison" and self.spawnMode ~= "worn")
     end
     if self.queueBtn ~= nil then
         local hasItems = EtherSpawnQueue ~= nil and EtherSpawnQueue.count() > 0;
-        self.queueBtn:setEnable(self.spawnMode ~= "poison" or hasItems)
+        self.queueBtn:setEnable((self.spawnMode ~= "poison" and self.spawnMode ~= "worn") or hasItems)
     end
-end
-
---*********************************************************
---* 加速开关按钮文字 (一百三十一)
---*********************************************************
-function EtherLootRollPanel:updateAccelBtnText()
-    if self.accelBtn == nil then return end
-    local on = EtherTakeSpawn ~= nil and EtherTakeSpawn.accelerate;
-    self.accelBtn.title = getTranslate("UI_TakeSpawn_Accel") .. ": "
-        .. getTranslate(on and "UI_TakeSpawn_On" or "UI_TakeSpawn_Off");
 end
 
 --*********************************************************
@@ -208,8 +186,8 @@ end
 
 function EtherLootRollPanel:addCheckedToQueue()
     if self.datas == nil or self.datas.items == nil then return end
-    if self.spawnMode == "poison" then
-        -- 开盒生成不做多选 (用户拍板): 只提示, 不入清单
+    if self.spawnMode == "poison" or self.spawnMode == "worn" then
+        -- 开盒/穿戴不做多选: 只提示, 不入清单
         EtherSpawnQueue.message = getTranslate("UI_SpawnQueue_ModeUnsupported");
         return
     end
@@ -336,6 +314,9 @@ function EtherLootRollPanel.onListMouseDown(list, x, y)
                     list.checked[full] = nil;
                 else
                     list.checked[full] = it.text or full;
+                    -- 勾选与行选中联动: 勾上时把"当前选中"切到这一行, 取消勾选时不动它。
+                    -- 这样不会出现"选中 A、却勾着 B"的两套状态并存, 点生成时不会误生成 A。
+                    list.selected = row;
                 end
                 return true;
             end
@@ -404,63 +385,9 @@ function EtherLootRollPanel:createChildren()
     self.groups = {};
     self.texts = {};
 
-    -- ================= 分组1: 重置战利品 =================
+    -- ================= 分组1: 刷弹药 =================
     local g1y = 12;
     local cy = g1y + IP;
-    self:_header(innerX, cy, getTranslate("UI_LootRoll_SectionReset"), innerW);
-    cy = cy + fhS + GAP;
-
-    -- 半径: 标签 + 输入框 + 重置按钮 (同排, 输入行高 entryH; 按钮在其中竖直居中)
-    local radiusText = getTranslate("UI_LootRoll_RadiusLabel");
-    self:_text(innerX, cy + EtherTheme.entryLabelDY, radiusText, EtherTheme.text, UIFont.Small);
-    local rbX = innerX + tm:MeasureStringX(UIFont.Small, radiusText) + GAP;
-    local rbW = 70;
-    self.radiusBox = ISTextEntryBox:new(tostring(EtherContainerPOC.radius), rbX, cy, rbW, EtherTheme.entryH);
-    EtherTheme.styleEntry(self.radiusBox);
-    self.radiusBox:initialise();
-    self.radiusBox:instantiate();
-    self.radiusBox:setClearButton(false);
-    self:addChild(self.radiusBox);
-
-    local resetTitle = getTranslate("UI_LootRoll_Button");
-    local resetW = UIButton.measureWidth(resetTitle);
-    local maxResetW = (innerX + innerW) - (rbX + rbW + GAP);
-    if resetW > maxResetW then resetW = maxResetW; end
-    self.resetBtn = UIButton:new(rbX + rbW + GAP, cy + EtherTheme.entryBtnDY, resetW, ctrlH, resetTitle,
-    function()
-        if not isMultiplayer() then
-            print("[ContainerPOC] multiplayer only (use your own dedicated server)")
-            return
-        end
-        local r = tonumber(self.radiusBox:getInternalText());
-        if r ~= nil and r >= 1 and r <= 100 then
-            EtherContainerPOC.radius = math.floor(r);
-        end
-        EtherContainerPOC.reset();
-    end, resetW);
-    self.resetBtn:initialise();
-    self.resetBtn:instantiate();
-    self.resetBtn.isOnlyInGame = true;
-    self:addChild(self.resetBtn);
-    cy = cy + EtherTheme.entryH + GAP;
-
-    -- 提示 (按内宽折行, 防俄语等长文案越过右缘; 说明文字按 hintScale 缩小绘制)
-    local hintLines = EtherTheme.wrapHint(getTranslate("UI_LootRoll_Hint"), innerW);
-    for i = 1, #hintLines do
-        self:_text(innerX, cy, hintLines[i], EtherTheme.textDim, nil, true);
-        cy = cy + EtherTheme.fontHgtHint;
-    end
-    -- 留痕警告 (红字): 每次重置都会进服务器日志且带玩家名, 提醒仅自建服使用
-    local warnLines = EtherTheme.wrapHint(getTranslate("UI_LootRoll_TraceWarn"), innerW);
-    for i = 1, #warnLines do
-        self:_text(innerX, cy, warnLines[i], EtherTheme.statusRed, nil, true);
-        cy = cy + EtherTheme.fontHgtHint;
-    end
-    self:_group(PAD, g1y, boxW, (cy - g1y) + IP);
-
-    -- ================= 分组2: 刷弹药 =================
-    local g2y = cy + IP + GGAP;
-    cy = g2y + IP;
     self:_header(innerX, cy, getTranslate("UI_LootRoll_SectionFarm"), innerW);
     cy = cy + fhS + GAP;
 
@@ -522,11 +449,11 @@ function EtherLootRollPanel:createChildren()
     self.ammoFarmBox:setClearButton(false);
     self:addChild(self.ammoFarmBox);
     cy = cy + EtherTheme.entryH;
-    self:_group(PAD, g2y, boxW, (cy - g2y) + IP);
+    self:_group(PAD, g1y, boxW, (cy - g1y) + IP);
 
-    -- ================= 分组3: 生成模式 (占据剩余高度) =================
-    -- 四模式共用物品列表与搜索: 钓竿 (FishingSpawn) / 尸体 (CorpseSpawn) /
-    -- 计时 (TakeSpawn) / 开箱投毒 (BoxPoison)
+    -- ================= 分组2: 生成模式 (占据剩余高度) =================
+    -- 三模式共用物品列表与搜索: 钓竿 (FishingSpawn) / 尸体 (CorpseSpawn) /
+    -- 开箱投毒 (BoxPoison)
     local g3y = cy + IP + GGAP;
     -- 矮屏(窗口被钳制)时必须压缩本组而不是兜底撑高: 强制最小高度会把
     -- 盒底推出面板, 组内列表与搜索行全部越界 (实机多轮 "search food 重叠" 根因)。
@@ -539,13 +466,12 @@ function EtherLootRollPanel:createChildren()
     cy = cy + EtherTheme.fontHgtSmall + GAP;
 
     -- 模式切换行: [生成方式 下拉框........] [数量 输入框]
-    -- 五模式挤不进一排按钮 (3 钮时代的等宽算法已到极限, 5 钮 EN/RU 必溢出),
-    -- 改原生 ISComboBox 下拉: 高度常量, 宽度按最长文案 + 箭头取, 数量区保留右侧。
+    -- 三模式的下拉框与数量区: 下拉按最长文案 + 箭头取宽, 数量区保留右侧。
     local modeDefs = {
         { mode = "fish",   key = "UI_SpawnMode_Fish" },
         { mode = "corpse", key = "UI_SpawnMode_Corpse" },
-        { mode = "take",   key = "UI_SpawnMode_Take" },
         { mode = "poison", key = "UI_SpawnMode_Poison" },
+        { mode = "worn",   key = "UI_SpawnMode_Worn" },
     };
     local countLabelT = getTranslate("UI_TrapSpawn_Count");
     local cntW = 56;
@@ -584,23 +510,6 @@ function EtherLootRollPanel:createChildren()
     end
     self:addChild(self.modeCombo);
 
-    -- 加速开关 (一百三十一): 挪到模式行, 仅"计时生成"可见 —— 页脚那行要放
-    -- 生成/加入清单/清单 + 状态文字, 俄语长文案下塞不下第 4 个按钮 (三百一十)。
-    local accelTitle = getTranslate("UI_TakeSpawn_Accel") .. ": " .. getTranslate("UI_TakeSpawn_Off");
-    local accelW = UIButton.measureWidth(accelTitle);
-    local accelX = innerX + comboW + GAP;
-    local accelLimit = (showCountLabel and (cntX - labelW - GAP * 2) or (cntX - GAP)) - accelX;
-    if accelW > accelLimit then accelW = accelLimit; end
-    if accelW < 70 then accelW = 70; end
-    self.accelBtn = UIButton:new(accelX, cy + EtherTheme.entryBtnDY, accelW, ctrlH, accelTitle,
-    function()
-        EtherTakeSpawn.accelerate = not EtherTakeSpawn.accelerate;
-        self:updateAccelBtnText();
-    end, accelW)
-    self.accelBtn:initialise();
-    self.accelBtn:instantiate();
-    self.accelBtn.isOnlyInGame = true;
-    self:addChild(self.accelBtn);
     if showCountLabel then
         self.countLabel = self:_text(cntX - labelW - math.floor(GAP / 2),
             cy + EtherTheme.entryLabelDY, countLabelT, EtherTheme.text, UIFont.Small);
@@ -665,13 +574,13 @@ function EtherLootRollPanel:createChildren()
     local hintLinesC = EtherTheme.wrapHint(getTranslate("UI_CorpseSpawn_Hint"), innerW);
     -- 尸体生成无红字警告 (2026-09-05 用户决策): corpse +1 行与正常拾取/搬运尸体物品
     -- 同形同频, 单行/频次均不可区分, 配对分析属理论取证手段, 不值得 UI 级警示
-    local hintLinesD = EtherTheme.wrapHint(getTranslate("UI_TakeSpawn_Hint"), innerW);
     -- 尸体生成也加红字留痕警告 (一百四十五 用户: 与钓竿生成同规格)
     local warnLinesC = EtherTheme.wrapHint(getTranslate("UI_CorpseSpawn_TraceWarn"), innerW);
     local hintLinesP = EtherTheme.wrapHint(getTranslate("UI_BoxPoison_Hint"), innerW);
+    local hintLinesW = EtherTheme.wrapHint(getTranslate("UI_WornSpawn_Hint"), innerW);
+    local warnLinesW = EtherTheme.wrapHint(getTranslate("UI_WornSpawn_TraceWarn"), innerW);
     local notesMax = math.max(#hintLinesF + #warnLinesF,
-        math.max(#hintLinesC + #warnLinesC,
-        math.max(#hintLinesD, #hintLinesP)));
+        math.max(math.max(#hintLinesC + #warnLinesC, #hintLinesP), #hintLinesW + #warnLinesW));
     -- 说明/警告是附注: 空间不够时**先砍它们的行** (红字警告优先于灰字提示),
     -- 保证列表至少 30px 且不压到生成按钮行 —— 窄窗口/长翻译实测 (620x620 fh19:
     -- 固定行数会把列表挤到 30px 下限, 直接盖在按钮上)。
@@ -726,10 +635,14 @@ function EtherLootRollPanel:createChildren()
         -- 三百零八: 生成统一走这一个按钮 —— 清单非空时按清单串行生成, 为空时生成当前选中行
         local qn = EtherSpawnQueue ~= nil and EtherSpawnQueue.count() or 0;
         if qn > 0 then
-            if self.spawnMode == "poison" then
-                -- 开盒生成不支持多选: 只提示先清空清单 (不执行生成)
-                EtherBoxPoison.message = getTranslate("UI_SpawnQueue_ClearFirst");
-                print("[SpawnQueue] clear the list before using unbox spawn");
+            if self.spawnMode == "poison" or self.spawnMode == "worn" then
+                -- 开盒/穿戴不支持多选: 只提示先清空清单 (不执行生成)
+                if self.spawnMode == "worn" then
+                    EtherWornSpawn.message = getTranslate("UI_SpawnQueue_ClearFirst");
+                else
+                    EtherBoxPoison.message = getTranslate("UI_SpawnQueue_ClearFirst");
+                end
+                print("[SpawnQueue] clear the list before using this mode");
                 return;
             end
             EtherSpawnQueue.start(self.spawnMode);
@@ -746,14 +659,13 @@ function EtherLootRollPanel:createChildren()
             -- 尸体生成: 预填最近僵尸背包, 击杀后搜尸取物
             local count = tonumber(self.countBox:getInternalText()) or 1;
             EtherCorpseSpawn.trigger(item:getFullName(), count);
-        elseif self.spawnMode == "take" then
-            -- 计时生成: 原版 ISTakeBricks 动作 (服务端校验 → 完成时 AddItems + 上行 = 真物品)
-            local count = tonumber(self.countBox:getInternalText()) or 1;
-            EtherTakeSpawn.trigger(item:getFullName(), count, EtherTakeSpawn.accelerate);
         elseif self.spawnMode == "poison" then
             -- 开盒生成: 给背包载体 modData 写投毒键并上行, 再正常跑对应合成即出物
             local count = tonumber(self.countBox:getInternalText()) or 1;
             EtherBoxPoison.trigger(item:getFullName(), count);
+        elseif self.spawnMode == "worn" then
+            -- 穿戴生成: 造穿戴幽灵 -> 食物临时压重 -> 服务端换装掉落 -> 捡起
+            EtherWornSpawn.trigger(item:getFullName());
         else
             if not isMultiplayer() then
                 print("[FishSpawn] multiplayer only (use your own dedicated server)")
@@ -768,7 +680,7 @@ function EtherLootRollPanel:createChildren()
     self:addChild(self.spawnBtn);
 
     -- 多选入口 (三百零三): [加入清单] 把勾选行按当前数量加进待生成清单,
-    -- [清单 (N)] 打开清单弹窗 (改数量/删除/开始/停止)。支持: 钓竿/尸体/计时三种;
+    -- [清单 (N)] 打开清单弹窗 (改数量/删除/开始/停止)。支持: 钓竿/尸体两种;
     -- 开盒生成不支持, 弹窗里点开始会提示。
     local addTitle = getTranslate("UI_SpawnQueue_Add");
     local queueTitleProbe = tr("UI_SpawnQueue_Open", { n = "00" });
@@ -834,13 +746,11 @@ function EtherLootRollPanel:createChildren()
     end
     regModeBlock(hintLinesF, warnLinesF, "fish");
     regModeBlock(hintLinesC, warnLinesC, "corpse");
-    regModeBlock(hintLinesD, {}, "take");
     regModeBlock(hintLinesP, {}, "poison");
+    regModeBlock(hintLinesW, warnLinesW, "worn");
 
     -- 状态文字区域 (按钮行右侧): 只显示动态状态消息 (生成中/已生成/失败),
     -- 空闲时留空 —— 使用提示已改为底部静态注册, 不再在此兜底。
-    -- 三百零七: 状态区宽度在布局时**预留给加速按钮**, 不再事后按 accelW 反推 ——
-    -- 旧算式把状态区起点算到了加速按钮内部, 生成成功日志直接压在按钮/提示上。
     self.statusX = innerX + spawnW + GAP * 3 + addW + queueW;
     self.statusY = bottomY + labelDY;
     self.statusW = (innerX + innerW) - self.statusX;

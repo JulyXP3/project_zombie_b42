@@ -14,7 +14,7 @@ import modcore.utils.Rendering;
  * Rendering 的静态绘制方法没有 @LuaMethod, Lua 无法直接调用; 而走
  * SafeEtherLuaMethods 的保护代理 (protectionManager.invokeFunction) 每次调用
  * 要做保护名单线性扫描 + UUID 校验, 不适合逐帧逐标记的频率 —— 因此按
- * FishingSpawnAPI/TrapSpawnAPI 同款模式直接全局暴露 (SafeExposer.exposeRenderingAPI)。
+ * FishingSpawnAPI 同款模式直接全局暴露 (SafeExposer.exposeRenderingAPI)。
  *
  * 2026-10-18 批量原语 (探鱼雷达性能设计, 详见 FishRadarAPI 类头与方案文档):
  *   Lua 逐帧把世界图元一次性交给 Java, 避免逐图元跨界调用 + 逐图元世界→屏幕

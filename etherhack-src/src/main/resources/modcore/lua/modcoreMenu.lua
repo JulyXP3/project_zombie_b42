@@ -39,9 +39,9 @@ local etherModules = {
     "modcore/lua/components/ui/EtherPerfectFish.lua",
     "modcore/lua/components/ui/EtherAutoFishingNet.lua",
     "modcore/lua/components/ui/EtherFishRadar.lua",
-    "modcore/lua/components/ui/EtherTakeSpawn.lua",
     "modcore/lua/components/ui/EtherSpawnQueue.lua",
     "modcore/lua/components/ui/EtherBoxPoison.lua",
+    "modcore/lua/components/ui/EtherWornSpawn.lua",
     "modcore/lua/components/ui/EtherBuildSpawn.lua",
     "modcore/lua/components/ui/BuildCatalogCustom.lua",
     "modcore/lua/components/ui/EtherExchange.lua",
@@ -78,7 +78,9 @@ local etherModules = {
 }
 
 for _, module in ipairs(etherModules) do
-    loadModuleScript(module);
+    if loadModuleScript(module) ~= true then
+        error("Required module failed: " .. module);
+    end
 end
 
 --*********************************************************
@@ -129,12 +131,19 @@ local function stopMainPanelPosWatch()
     EtherMain.doSavePos();
 end
 
+local function cancelWornSpawn()
+    if EtherWornSpawn ~= nil then
+        EtherWornSpawn.cancel();
+    end
+end
+
 --*********************************************************
 --* Закрытие окна по нажатию кнопки UI
 --* 主菜单收起时联动收起子面板 (按键绑定等): 否则菜单键切换主面板后,
 --* 子面板悬空在游戏画面上, 主次结构断裂 (实测反馈)
 --*********************************************************
 function EtherMain:close()
+    cancelWornSpawn();
     stopMainPanelPosWatch();
 	EtherMain.instance:setVisible(false);
     EtherMain.instance:removeFromUIManager();
@@ -220,7 +229,7 @@ function EtherMain:render()
     -- 署名与开源声明已移到"信息"选项卡 (EtherInfoPanel), 页眉只保留标题,
     -- 因此不再需要右侧文本块 / 折行缓存 / 省略号截断那套逻辑。
     -- 标题是常量, 宽度只测一次 (MeasureStringX 不便宜, 不放每帧路径)。
-    local title = "ETHER HACK // B42";
+    local title = "ETHER HACK // B42  " .. getProjectLaunchId();
     if EtherMain.titleW == nil then
         EtherMain.titleW = tm:MeasureStringX(EtherTheme.fontTitle, title);
     end
@@ -239,6 +248,7 @@ function EtherMain.toggleMenu()
     -- Если панель уже существует, переключаем видимость (состояние вкладок/прокрутки сохраняется)
     if EtherMain.instance ~= nil then
         if EtherMain.instance:getIsVisible() then
+            cancelWornSpawn();
             stopMainPanelPosWatch();
             EtherMain.instance:setVisible(false);
             EtherMain.instance:removeFromUIManager();
@@ -252,6 +262,7 @@ function EtherMain.toggleMenu()
             Events.EveryTenMinutes.Remove(EtherMain.savePos);
             EtherMain.lastPosSaveMs = getTimestampMs();
             Events.EveryTenMinutes.Add(EtherMain.savePos);
+            recordProjectUIOpened();
         end
         return
     end
@@ -270,6 +281,7 @@ function EtherMain.toggleMenu()
     Events.EveryTenMinutes.Remove(EtherMain.savePos);
     EtherMain.lastPosSaveMs = getTimestampMs();
     Events.EveryTenMinutes.Add(EtherMain.savePos);
+    recordProjectUIOpened();
 end
 
 --*********************************************************
@@ -345,18 +357,6 @@ end
 
 Events.OnGameStart.Add(onGameStart);
 
-
-
---*********************************************************
---* F9: 重置附近容器战利品 (与「战利品重掷」选项卡同入口)
---*********************************************************
-function EtherMain.OnKeyPressed(key)
-    if key == Keyboard.KEY_F9 and getPlayer() ~= nil and isMultiplayer() then
-        EtherContainerPOC.reset();
-    end
-end
-
-Events.OnKeyPressed.Add(EtherMain.OnKeyPressed);
 -- 呼出菜单改走绑定框架 (默认 Insert=210, 可在设置页改绑/还原)
 if type(EtherKeyBinds.register) == "function" then
     EtherKeyBinds.register("menu", "UI_KeyBind_Menu", function()

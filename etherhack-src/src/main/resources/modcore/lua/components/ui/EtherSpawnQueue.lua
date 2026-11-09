@@ -1,9 +1,8 @@
 --*********************************************************
 --* EtherSpawnQueue: 物品生成待办清单 + 串行执行器 (三百零三)
 --*
---* 三种生成方式的多选统一在这里排队:
+--* 两种生成方式的多选统一在这里排队:
 --*   尸体生成 — 整个清单合成一次调用, 一具尸体装多件 (同一条 AddCorpseToMapPacket);
---*   计时生成 — 逐件串行, 等客户端动作从 ActionManager 消失 + 背包数量增量;
 --*   钓竿生成 — 逐件串行, 等 EtherFishSpawn 状态机结束 (busy / epoch / lastResult)。
 --*
 --* 规则:
@@ -26,9 +25,7 @@ EtherSpawnQueue.message = ""
 EtherSpawnQueue.stepStartedAt = 0
 EtherSpawnQueue.maxTotal = 300      -- 与 Java 侧 MAX_TOTAL_ITEMS 一致
 
-local GRACE_MS = 3000               -- 动作结束到背包同步之间的宽限
 local ITEM_INTERVAL_MS = 1000       -- 相邻两件之间的最小间隔 (降低连续发包的日志频次)
-local TAKE_MIN_TIMEOUT_MS = 15000
 local FISH_TIMEOUT_MS = 60000
 
 local function nowMs()
@@ -125,7 +122,7 @@ end
 --*********************************************************
 function EtherSpawnQueue.start(mode)
     if EtherSpawnQueue.running then return false end
-    if mode == nil or mode == "poison" then return false end
+    if mode ~= "fish" and mode ~= "corpse" then return false end
     if #EtherSpawnQueue.rows == 0 then return false end
     if not isMultiplayer() then
         EtherSpawnQueue.message = getTranslate("UI_FishSpawn_MultiplayerOnly")
@@ -161,9 +158,6 @@ function EtherSpawnQueue.stop()
     EtherSpawnQueue.activeIndex = 0
     EtherSpawnQueue.running = false
     EtherSpawnQueue.message = getTranslate("UI_SpawnQueue_Stopped")
-    if EtherSpawnQueue.mode == "take" and type(takeSpawnCancel) == "function" then
-        pcall(takeSpawnCancel)          -- 立即还原加速件, 不等 3 秒硬超时
-    end
 end
 
 --*********************************************************
@@ -219,7 +213,7 @@ function EtherSpawnQueue.runCorpseBatch()
 end
 
 --*********************************************************
---* 逐件派发 (计时 / 钓竿)
+--* 逐件派发 (钓竿)
 --*********************************************************
 function EtherSpawnQueue.dispatchNext()
     local idx = nil
@@ -244,20 +238,9 @@ function EtherSpawnQueue.dispatchNext()
     r.status = "running"
     r.reason = ""
     r.startedAt = nowMs()
-    r.graceAt = 0
     r.before = EtherSpawnQueue.itemCount(r.fullName)
 
-    if EtherSpawnQueue.mode == "take" then
-        local accelerate = EtherTakeSpawn ~= nil and EtherTakeSpawn.accelerate == true
-        r.timeoutMs = accelerate
-            and TAKE_MIN_TIMEOUT_MS
-            or math.floor(10000 * r.count * 1.2 + 5000)
-        local ok, started = pcall(EtherTakeSpawn.trigger, r.fullName, r.count, accelerate)
-        if not ok or not started then
-            local why = ok and (EtherTakeSpawn.message or "start failed") or tostring(started)
-            EtherSpawnQueue.finishRow(idx, false, why)
-        end
-    elseif EtherSpawnQueue.mode == "fish" then
+    if EtherSpawnQueue.mode == "fish" then
         r.timeoutMs = FISH_TIMEOUT_MS
         r.epoch = (EtherFishSpawn ~= nil and EtherFishSpawn.epoch) or 0
         local ok, started = pcall(EtherFishSpawn.trigger, r.fullName)
@@ -279,9 +262,6 @@ function EtherSpawnQueue.finishRow(idx, ok, reason)
     if not ok then
         EtherSpawnQueue.running = false
         EtherSpawnQueue.message = reason or "failed"
-        if EtherSpawnQueue.mode == "take" and type(takeSpawnCancel) == "function" then
-            pcall(takeSpawnCancel)
-        end
         return
     end
     -- 成功: 交给 tick 在最小间隔后派发下一件 (不在这里直接连发)
@@ -320,21 +300,7 @@ function EtherSpawnQueue.tick()
         return
     end
 
-    if EtherSpawnQueue.mode == "take" then
-        local alive = true
-        if type(takeSpawnActionAlive) == "function" then
-            alive = takeSpawnActionAlive()
-        end
-        if not alive then
-            if (r.graceAt or 0) == 0 then
-                r.graceAt = now
-            elseif now - r.graceAt >= GRACE_MS then
-                EtherSpawnQueue.finishRow(idx, false, getTranslate("UI_SpawnQueue_NoItem"))
-            end
-        else
-            r.graceAt = 0
-        end
-    elseif EtherSpawnQueue.mode == "fish" then
+    if EtherSpawnQueue.mode == "fish" then
         if EtherFishSpawn == nil or not EtherFishSpawn.busy then
             local epoch = (EtherFishSpawn ~= nil and EtherFishSpawn.epoch) or 0
             if epoch ~= (r.epoch or 0) then
@@ -473,7 +439,6 @@ function EtherSpawnQueuePopup:prerender()
     local tc = EtherTheme.text
     local title = getTranslate("UI_SpawnQueue_Title")
     local modeKey = self.mode == "corpse" and "UI_SpawnMode_Corpse"
-        or self.mode == "take" and "UI_SpawnMode_Take"
         or self.mode == "fish" and "UI_SpawnMode_Fish"
         or nil
     if modeKey ~= nil then

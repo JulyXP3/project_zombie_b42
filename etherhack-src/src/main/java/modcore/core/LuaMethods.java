@@ -277,7 +277,7 @@ public class LuaMethods {
     public static ArrayList<String> getConfigList() {
         ArrayList<String> configFiles = new ArrayList<String>();
         try {
-            Path configFolderPath = Paths.get("modcore/config", new String[0]);
+            Path configFolderPath = CoreAPI.configDir().toPath();
             if (!Files.exists(configFolderPath, new LinkOption[0])) {
                 Files.createDirectories(configFolderPath, new FileAttribute[0]);
                 return configFiles;
@@ -1548,25 +1548,27 @@ public class LuaMethods {
         return CoreMain.getInstance().CoreAPI.isUnlimitedCarry;
     }
 
+    /** 读取本机 ServerOptions 副本的启用状态；原版策略 4=禁用，其余合法值均启用。 */
     @LuaMethod(name="getFlagState12", global=true)
     public static boolean getAntiCheat12Status() {
         try {
             if (ServerOptions.instance == null || ServerOptions.instance.antiCheatPermission == null) {
                 return false;
             }
-            return ServerOptions.instance.antiCheatPermission.getValue() > 0;
+            return ServerOptions.instance.antiCheatPermission.getValue() != 4;
         }
         catch (Exception e) {
             return false;
         }
     }
 
+    /** 读取本机 ServerOptions 副本的启用状态；原版策略 4=禁用，其余合法值均启用。 */
     @LuaMethod(name="getFlagState8", global=true)
     public static boolean getAntiCheat8Status() {
         try {
             return ServerOptions.instance != null
                 && ServerOptions.instance.antiCheatSpeed != null
-                && ServerOptions.instance.antiCheatSpeed.getValue() > 0;
+                && ServerOptions.instance.antiCheatSpeed.getValue() != 4;
         }
         catch (Exception e) {
             return false;
@@ -1877,14 +1879,24 @@ public class LuaMethods {
     }
 
     @LuaMethod(name="loadModuleScript", global=true)
-    public static void requireExtra(String file) {
+    public static boolean requireExtra(String file) {
         try {
-            Object luaFile = file.endsWith(".lua") ? file : file + ".lua";
-            LuaLoader.load((String)luaFile);
+            LuaLoader.loadRequired(file.endsWith(".lua") ? file : file + ".lua");
+            return true;
+        } catch (Exception e) {
+            Logger.error("Required module failed: " + file, e);
+            return false;
         }
-        catch (Exception e) {
-            Logger.error("Error in requireExtra", e);
-        }
+    }
+
+    @LuaMethod(name="recordProjectUIOpened", global=true)
+    public static void recordProjectUIOpened() {
+        RuntimeBootstrap.uiOpened();
+    }
+
+    @LuaMethod(name="getProjectLaunchId", global=true)
+    public static String getProjectLaunchId() {
+        return RuntimeBootstrap.launchId();
     }
 
     /*
@@ -1901,7 +1913,7 @@ public class LuaMethods {
             if (textureCache.containsKey(path)) {
                 return textureCache.get(path);
             }
-            try (FileInputStream fis = new FileInputStream(Paths.get(path, new String[0]).toFile());){
+            try (java.io.InputStream fis = modcore.utils.RuntimeResources.require(path)) {
                 Texture texture;
                 try (BufferedInputStream bis = new BufferedInputStream(fis);){
                     Texture texture2 = new Texture(path, bis, false);
