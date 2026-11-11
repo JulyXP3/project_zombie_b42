@@ -2,7 +2,7 @@
 
 ## [3.2.8] - Current
 
-- Improved: auto-repair restores part condition in stages, with a short pause after each installation; leaving or changing vehicles stops the job immediately, and fuel tanks are excluded.
+- Improved: auto-repair restores each eligible part to condition 95; the engine, fuel tank, trunk, glove box and lightbar are excluded. Each step waits for the server result before continuing, and the job stops instead of resending when a result cannot be confirmed. Cancelling or leaving the vehicle does not keep processing in the background.
 
 - Added: a Research Tests group on the Loot page, with Attach to nearest zombie, Check attached item and Scan forage pool controls, for verification on your own multiplayer test server only.
 

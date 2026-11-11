@@ -77,7 +77,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Vehicles
 
 - **Engine & starting**: start with any key (single shot / auto-retry) - any car key in your inventory can be inserted into the target vehicle's ignition; keyless start and guaranteed hotwire are not yet repaired and fuel/battery/engine condition still apply.
-- **Repair**: auto-repair restores eligible vehicle parts in stages without repair items; it excludes the engine, fuel tank, trunk, glove box and other unsupported parts. Success depends on the character's skill level, with automatic retries and current-part, condition and attempt-count displays. Stay in the same vehicle throughout; leaving or changing vehicles stops the job (multiplayer only).
+- **Repair**: auto-repair restores eligible vehicle parts to condition 95 without repair items; it excludes the engine, fuel tank, trunk, glove box, lightbar and other unsupported parts. Success depends on the character's skill level, with automatic retries and current-part, condition and attempt-count displays. Each action waits for the server result before the next step; if the result cannot be confirmed the job stops instead of resending. Stay in the same vehicle throughout; leaving or changing vehicles stops the job (multiplayer only).
 - **Navigation mode**: auto-drive along the road network — get in the driver's seat, start the engine, press M and right-click "navigate here"; re-anchor while driving to reroute; cruise speed is adaptive (95% of the server speed limit) or set manually (honored as-is; going over the server limit counts as speeding on strict servers); any driving key takes over instantly; ends on arrival / exit / engine stall
 
 ### Farming

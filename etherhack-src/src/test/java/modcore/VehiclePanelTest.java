@@ -54,6 +54,12 @@ class VehiclePanelTest {
                     table.insert(commands, { module = module, command = command, args = args })
                 end
                 function isVehicleInstantStart() return false end
+                function vehicleRepairSessionState() return "ready" end
+                function vehicleRepairRelease() return "released" end
+                function vehicleRepairQuarantine() end
+                function vehicleRepairClaim() return "ready" end
+                function vehicleRepairActionStatus() return "idle" end
+                function vehicleRepairFinishAction() return "ready" end
                 UICheckbox = { new = function(self, x, y, title, checked, callback)
                     local control = { x=x, y=y, title=title, callback=callback, checked=checked }
                     control.setCheked = function(self, checked) self.checked = checked end

@@ -29,83 +29,26 @@ local function currentVehicle()
 end
 
 --*********************************************************
---* 修理 (2026-11-09 改): 直发原版网络计时动作, 不走本地动作队列、不走位、不下车。
---*
---* 为什么能整车修: b42.22 的 ISUninstallVehiclePart 成功拆卸只把部件物品摘下来放进背包,
---*   **不扣部件条件**; 拆下的物品在背包里(可解析容器), 用 vehicleRepairSyncItemCondition
---*   把耐久抬到本段目标(服务端 SyncItemFields 直接采用客户端给的值); 再 ISInstallVehiclePart
---*   装回, 服务端 complete 会把部件条件写成物品耐久, 且原零件(刹车力/胎压/悬挂/电瓶电量/
---*   油量/消声)全部保留。
---* 失败代价: 拆卸失败扣部件耐久 5-10、安装失败扣物品耐久 5-10, 都可重试; 装回成功时部件
---*   条件被覆盖成目标值, 所以技能只影响尝试次数, 不影响结果。
---* 服务端不调用 isValid(ActionManager.start 不调, NetTimedAction.isValid 恒 false), 所以
---*   不需要下车/走位/把零件放进背包; 客户端只负责发包与轮询部件状态。
---* 引擎/后备箱容器/手套箱/加热器/乘客舱没有 table install, 拆装链覆盖不到, 直接跳过;
---*   灯光条没有安装表, 走原版 ISRepairLightbar(不看技能), 过账件仍取本车容器物品。
+--* 修理: 每件修至 95。回执与物品归属分别确认, 同时只允许一笔动作在途。
+--* 等待超时只停止, 不按固定时间重发; 取消期间仍保留目标零件隔离。
 --*********************************************************
-local ETHER_REPAIR_TICK_MS = 150;        -- 状态机节流
-local ETHER_REPAIR_STEP_MAX_MS = 1200;   -- 单个阶段(拆/装/灯光条一发)等待上限
-local ETHER_REPAIR_JOB_MAX_MS = 1200000; -- 整单上限 (分段修理按每件最多 3 段放宽)
---* 分段修理 (2026-11-11): 服务端采样会把"同一部件一次跳变 >=50 且修后 >=98"记为突然修复。
---* 每段只把耐久抬到 当前+40 (最多 3 段覆盖 0~100), 装回后留在车内等采样看到中间值;
---* 拆下 GasTank 期间容量为 0 会让燃油百分比算成 0/0, 该部件直接跳过。
-local ETHER_REPAIR_STAGE_STEP = 40;
-local ETHER_REPAIR_STAGE_HOLD_MS = 3000;
---* 每个网络动作的时长 (maxTime, 20/s): 20 = 0.4 秒/发。服务端只按这个值算 endTime, 不校验。
---* 失败重试只扣物品耐久, 拉满即可, 所以时长只影响总耗时。
+local ETHER_REPAIR_TARGET = 95;
+local ETHER_REPAIR_TICK_MS = 150;
+local ETHER_REPAIR_ACTION_MAX_MS = 15000;
+local ETHER_REPAIR_SYNC_MAX_MS = 10000;
+local ETHER_REPAIR_JOB_MAX_MS = 1200000;
 local ETHER_REPAIR_ACTION_TIME = 20;
-EtherRepairJob = nil;                    -- 当前修理单 (状态机数据)
+EtherRepairJob = nil;
 
---* 收尾 (一百七十六): 单一出口清单 + 自动取消勾选。状态机所有终止点
---* (完成/超时/卡住/无件/被踢/玩家车没了) 一律走这里, 复选框与任务状态
---* 永远一致: 勾选 = 有单在跑, 未勾选 = 没单。
-local function endRepairJob()
-    EtherRepairJob = nil;
+local function setRepairChecked(checked)
     local cbs = EtherVehiclePanel.checkboxByKey;
     local cb = cbs ~= nil and cbs["UI_VehiclePanel_RepairAuto"] or nil;
-    if cb ~= nil then pcall(function() cb:setCheked(false); end); end
-end
---* 取"过账件": 服务端 complete() 对该件只做 inventory:Remove(item) ——
---* 若该件**不在玩家背包**里, Remove 是**空操作** (ItemContainer.Remove:1940 遍历不到即返回,
---* 无任何副作用) → 条件照修、东西不消耗。
---* 能被服务端解析的前提 = 该物品有个能编码的容器 (PZNetKahluaTableImpl.saveInventoryItem
---* → ContainerID)。**可行**: 载具部件容器 (ContainerType.Vehicle —— VehicleParts:304 建的容器
---* parent 就是载具 ✓)、物件容器/箱柜 (ObjectContainer/IsoObject ✓)、背包与背包内袋 ✓。
---* **不可行 (实测取证)**: ① 装在部件上的那个件 —— VehiclePart.setInventoryItem:170 只存
---* this.item, 没有容器; ② **地上的物品** —— IsoWorldInventoryObject 构造里就
---* item.setContainer(null) (:82), 落地即无容器 → 服务端一律解析成 null → complete 直接
---* return false 且不报错 (菜单提示 "No packet-resolvable item found outside player
---* root inventories" 就是踩的这类坑)。
---* 优先级 (2026-09-14 九十一 用户裁定): ① 本车后备箱 (TruckBed/TruckBedOpen/TrailerTrunk) →
---*   ② 本车手套箱 (GloveBox) → ③ 本车座椅容器 (Seat*) —— 全部**免费**。
---*   不再使用周围车辆容器/附近箱柜/背包; 本车内一件都没有 = 停止并头顶红字提示。
---* (部件 ID 取自游戏 vehicle 模板: template_trunk.txt / template_glovebox.txt / template_seat.txt)
-local TRUNK_TOKEN_PARTS = { TruckBed = true, TruckBedOpen = true, TrailerTrunk = true };
-
-local function tokenInVehicleParts(vehicle, match)
-    for i = 0, vehicle:getPartCount() - 1 do
-        local part = vehicle:getPartByIndex(i);
-        local partId = part and part:getId();
-        if partId ~= nil and match(partId) then
-            local container = part:getItemContainer();
-            if container ~= nil then
-                local items = container:getItems();
-                if items ~= nil and items:size() > 0 then
-                    return items:get(0), partId;
-                end
-            end
-        end
-    end
-    return nil, nil;
+    if cb ~= nil then pcall(function() cb:setCheked(checked); end); end
 end
 
-local function repairTokenFor(vehicle)
-    local item, partId = tokenInVehicleParts(vehicle,
-        function(id) return TRUNK_TOKEN_PARTS[id] == true; end);
-    if item ~= nil then return item, partId; end
-    item, partId = tokenInVehicleParts(vehicle, function(id) return id == "GloveBox"; end);
-    if item ~= nil then return item, partId; end
-    return tokenInVehicleParts(vehicle, function(id) return string.sub(id, 1, 4) == "Seat"; end);
+local function endRepairJob()
+    EtherRepairJob = nil;
+    setRepairChecked(false);
 end
 
 
@@ -130,16 +73,10 @@ local function repairFloat(player, key, params, isError)
 end
 
 --*********************************************************
---* 状态机 (2026-11-09 改): 直发原版网络计时动作, 不走本地动作队列、不走位、不下车。
---* 每件三步: 拆(ISUninstallVehiclePart) → 把拆下的零件耐久抬到本段目标(vehicleRepairSyncItemCondition)
---* → 装回(ISInstallVehiclePart)。安装/拆卸失败只扣物品耐久, 抬回目标再试; 装回成功时部件条件
---* 被写成物品耐久, 且原零件(刹车力/胎压/悬挂/电瓶电量/油量/消声)全部保留。
---* 2026-11-11 分段: 每段最多 +40, 装回后停留等采样, 避免服务端把一次抬满记成异常修复;
---*   GasTank 跳过(拆下时容量 0 会让燃油百分比变 NaN)。
---* 灯光条没有安装表, 走 ISRepairLightbar(原版动作不看技能)。
---* 服务端不调用 isValid, 所以不需要下车、走位或把零件放进背包。
+--* 两阶段结果: 原版动作完成回执 + 对应的部件/根背包更新。
+--* 失败安装会移除旧物品再下发新对象; 不能拿原对象仍在背包当作失败回执。
 --*********************************************************
-local ETHER_REPAIR_MAX_TRIES = 80;        -- 单件最多重试 (车门 20%/次, 80 次失败概率可忽略)
+local ETHER_REPAIR_MAX_TRIES = 80;
 
 local function partHasInstall(part)
     local ok, tbl = pcall(function() return part:getTable("install") end);
@@ -149,7 +86,7 @@ end
 local function findDamagedPart(vehicle, skip)
     for i = 0, vehicle:getPartCount() - 1 do
         local part = vehicle:getPartByIndex(i);
-        if part ~= nil and part:getCondition() < 100 then
+        if part ~= nil and part:getCondition() < ETHER_REPAIR_TARGET then
             local id = part:getId();
             if id ~= nil and not skip[id] then
                 return part;
@@ -192,13 +129,92 @@ end
 local function repairSkip(job, part, key)
     local id = part and part:getId() or "?";
     job.skip[id] = true;
-    job.stageTarget = nil;
     job.skipCount = job.skipCount + 1;
-    job.target, job.phase = nil, nil;
-    if key ~= nil then
-        repairFloat(job.player, key, { part = partDisplayName(part) }, true);
+    if key ~= nil then repairFloat(job.player, key, { part = partDisplayName(part) }, false); end
+end
+
+local function repairAbort(job, key, quarantine)
+    if quarantine then
+        vehicleRepairQuarantine();
+    elseif vehicleRepairRelease() ~= "released" then
+        vehicleRepairQuarantine();
     end
-    print("[VehiclePanel] skip " .. tostring(id) .. " (" .. tostring(key or "unsupported") .. ")");
+    repairFloat(job.player, key, { part = partDisplayName(job.target) }, true);
+    endRepairJob();
+end
+
+local function requestRepairStop(job, key)
+    if job.stopping then return; end
+    job.stopping = true;
+    setRepairChecked(false);
+    repairFloat(job.player, key, nil, true);
+    if job.phase == nil then
+        if vehicleRepairRelease() ~= "released" then vehicleRepairQuarantine(); end
+        endRepairJob();
+    end
+end
+
+local function repairItemInRoot(job)
+    local item = repairItemById(job.player, job.itemId);
+    if item == nil then return nil, false; end
+    local inventory = job.player:getInventory();
+    return item, item:getContainer() == inventory and inventory:getItemWithID(job.itemId) == item;
+end
+
+local function sameRepairItem(job, item)
+    return item ~= nil and item:getID() == job.itemId and item:getFullType() == job.itemType;
+end
+
+local function finishRepairAction(job)
+    if vehicleRepairFinishAction() ~= "ready" then
+        repairAbort(job, "UI_VehiclePanel_RepairFloatUncertain", true);
+        return false;
+    end
+    job.phase = nil;
+    job.receiptAt = nil;
+    return true;
+end
+
+local function releaseRepairTarget(job)
+    if vehicleRepairRelease() ~= "released" then
+        repairAbort(job, "UI_VehiclePanel_RepairFloatUncertain", true);
+        return false;
+    end
+    job.target, job.itemId, job.itemType, job.sentItem = nil, nil, nil, nil;
+    return true;
+end
+
+local function sendRepairAction(job, phase, item, nowMs)
+    if job.stopping then return; end
+    if job.attempts >= ETHER_REPAIR_MAX_TRIES then
+        repairAbort(job, "UI_VehiclePanel_RepairFloatSkipped", false);
+        return;
+    end
+    local result;
+    if phase == "install" then
+        if item == nil or item:getConditionMax() < ETHER_REPAIR_TARGET then
+            repairAbort(job, "UI_VehiclePanel_RepairFloatConflict", false);
+            return;
+        end
+        result = vehicleRepairSyncItemCondition(item, ETHER_REPAIR_TARGET);
+        if result ~= "sent" then
+            repairAbort(job, "UI_VehiclePanel_RepairFloatSyncFailed", false);
+            return;
+        end
+        result = vehicleRepairSendInstall(job.target, item, ETHER_REPAIR_ACTION_TIME);
+    else
+        result = vehicleRepairSendUninstall(job.target, ETHER_REPAIR_ACTION_TIME);
+    end
+    if result ~= "sent" then
+        repairAbort(job, "UI_VehiclePanel_RepairFloatSyncFailed", false);
+        return;
+    end
+    job.phase = phase;
+    job.sentItem = item;
+    job.beforeCondition = job.target:getCondition();
+    job.actionSentAt = nowMs;
+    job.receiptAt = nil;
+    job.attempts = job.attempts + 1;
 end
 
 local function repairTick()
@@ -208,244 +224,172 @@ local function repairTick()
     if job.nextCheckMs ~= nil and nowMs < job.nextCheckMs then return; end
     job.nextCheckMs = nowMs + ETHER_REPAIR_TICK_MS;
 
+    local session = vehicleRepairSessionState();
+    if session == "offline" then endRepairJob(); return; end
+    if session == "quarantined" then
+        repairAbort(job, "UI_VehiclePanel_RepairFloatUncertain", true);
+        return;
+    end
     local player, vehicle = job.player, job.vehicle;
-    job.tries = job.tries or 0;
-    job.sends = job.sends or 0;
     if player == nil or player:isDead() or vehicle == nil or vehicle:getScript() == nil then
-        print("[VehiclePanel] repair job ended (player or vehicle gone)");
-        endRepairJob();
-        return;
+        requestRepairStop(job, "UI_VehiclePanel_RepairFloatAborted");
+    elseif player:getVehicle() ~= vehicle then
+        requestRepairStop(job, "UI_VehiclePanel_RepairFloatLeftVehicle");
+    elseif nowMs > job.deadline then
+        requestRepairStop(job, "UI_VehiclePanel_RepairFloatAborted");
     end
-    if nowMs > job.deadline then
-        repairFloat(player, "UI_VehiclePanel_RepairFloatAborted", nil, true);
-        print("[VehiclePanel] repair job timeout - " .. tostring(job.steps) .. " step(s) done");
-        endRepairJob();
-        return;
-    end
-    -- 离车或换车先收尾, 等待间隔不能延后取消检查 (二轮回归: 原顺序在 hold 早退后
-    -- 收不到离车, "等待期间离车/换车立即停止"两项用例抓住了它)
-    if job.requireSeated and player:getVehicle() ~= vehicle then
-        repairFloat(player, "UI_VehiclePanel_RepairFloatLeftVehicle", nil, true);
-        print("[VehiclePanel] repair stopped: player left the vehicle");
-        endRepairJob();
-        return;
-    end
-    -- 分段装回后的等待只是客户端间隔, 不是服务端采样回执
-    if job.holdUntilMs ~= nil and nowMs < job.holdUntilMs then return; end
+    if EtherRepairJob == nil then return; end
 
-    -- 拆卸阶段: 等部件物品变 nil
-    if job.phase == "uninstall" then
-        local part = job.target;
-        if part == nil then job.phase = nil; return; end
-        if part:getInventoryItem() == nil then
-            job.phase = "install";
-            job.tries = 0;
-            job.sends = 0;
-            -- 给服务端的 AddItem 回包留一点时间, 但不空等整个重试窗口
-            job.phaseDeadline = nowMs + 400;
+    if job.phase ~= nil then
+        local receipt = vehicleRepairActionStatus();
+        if receipt == "missing" or receipt == "idle" then
+            repairAbort(job, "UI_VehiclePanel_RepairFloatUncertain", true);
             return;
         end
-        if nowMs < job.phaseDeadline then return; end
-        if job.tries >= ETHER_REPAIR_MAX_TRIES then
-            repairSkip(job, part);
+        if receipt == "rejected" then
+            if finishRepairAction(job) then repairAbort(job, "UI_VehiclePanel_RepairFloatRejected", false); end
             return;
         end
-        if job.sends > 0 then
-            repairFloat(player, "UI_VehiclePanel_RepairFloatUninstallFail",
-                { part = partDisplayName(part), cond = part:getCondition(), n = job.sends }, true);
-            print("[VehiclePanel] uninstall failed: " .. tostring(part:getId())
-                .. " cond " .. string.format("%.0f", part:getCondition()) .. " (try " .. tostring(job.sends) .. ")");
+        if receipt ~= "done" then
+            if nowMs - job.actionSentAt > ETHER_REPAIR_ACTION_MAX_MS then
+                repairAbort(job, "UI_VehiclePanel_RepairFloatUncertain", true);
+            end
+            return;
         end
-        job.tries = job.tries + 1;
-        job.sends = job.sends + 1;
-        vehicleRepairSendUninstall(part, ETHER_REPAIR_ACTION_TIME);
-        job.phaseDeadline = nowMs + ETHER_REPAIR_STEP_MAX_MS;
-        return;
-    end
-
-    -- 安装阶段: 等部件条件变 100 且物品回来
-    if job.phase == "install" then
+        if job.receiptAt == nil then job.receiptAt = nowMs; end
         local part = job.target;
-        if part == nil then job.phase = nil; return; end
-        local target = job.stageTarget or 100;
-        if part:getInventoryItem() ~= nil and part:getCondition() >= target then
-            if target >= 100 then
+        local installed = part:getInventoryItem();
+        local item, inRoot = repairItemInRoot(job);
+        if (installed ~= nil and not sameRepairItem(job, installed))
+                or (item ~= nil and (not sameRepairItem(job, item) or not inRoot)) then
+            repairAbort(job, "UI_VehiclePanel_RepairFloatConflict", true);
+            return;
+        end
+
+        if job.phase == "uninstall" then
+            if installed == nil and inRoot then
+                if not finishRepairAction(job) then return; end
+                if job.stopping then
+                    if releaseRepairTarget(job) then endRepairJob(); end
+                else
+                    job.attempts = 0;
+                    sendRepairAction(job, "install", item, nowMs);
+                end
+                return;
+            end
+            if sameRepairItem(job, installed) and item == nil and part:getCondition() < job.beforeCondition then
+                if not finishRepairAction(job) then return; end
+                if job.stopping then
+                    if releaseRepairTarget(job) then endRepairJob(); end
+                else
+                    repairFloat(player, "UI_VehiclePanel_RepairFloatUninstallFail",
+                        { part = partDisplayName(part), cond = part:getCondition(), n = job.attempts }, true);
+                    sendRepairAction(job, "uninstall", installed, nowMs);
+                end
+                return;
+            end
+        else
+            if sameRepairItem(job, installed) and item == nil then
+                if not finishRepairAction(job) then return; end
+                if part:getCondition() ~= ETHER_REPAIR_TARGET then
+                    repairAbort(job, "UI_VehiclePanel_RepairFloatConflict", false);
+                    return;
+                end
+                job.steps = job.steps + 1;
                 repairFloat(player, "UI_VehiclePanel_RepairFloatPartDone",
                     { part = partDisplayName(part), to = part:getCondition() }, false);
-                print("[VehiclePanel] repaired " .. tostring(part:getId()) .. " -> 100");
-                job.steps = job.steps + 1;
-            else
-                -- 中间段: 留时间给服务端采样, 避免被当成一次跳满
-                repairFloat(player, "UI_VehiclePanel_RepairFloatStage",
-                    { part = partDisplayName(part), to = target }, false);
-                print("[VehiclePanel] staged " .. tostring(part:getId()) .. " -> "
-                    .. tostring(target) .. " (hold for sampling)");
-                job.stageCount = (job.stageCount or 0) + 1;
-                job.holdUntilMs = nowMs + ETHER_REPAIR_STAGE_HOLD_MS;
+                if releaseRepairTarget(job) and job.stopping then endRepairJob(); end
+                return;
             end
-            job.target, job.phase, job.stageTarget = nil, nil, nil;
-            return;
+            -- 安装失败会下发新物品对象; 原引用仍在 = 更新尚未到齐, 不是重试许可。
+            if installed == nil and inRoot and item ~= job.sentItem then
+                if not finishRepairAction(job) then return; end
+                if job.stopping then
+                    if releaseRepairTarget(job) then endRepairJob(); end
+                else
+                    repairFloat(player, "UI_VehiclePanel_RepairFloatInstallFail",
+                        { part = partDisplayName(part), cond = item:getCondition(), n = job.attempts }, true);
+                    sendRepairAction(job, "install", item, nowMs);
+                end
+                return;
+            end
         end
-        if nowMs < job.phaseDeadline then return; end
-        local item = repairItemById(player, job.itemId);
-        if item == nil then
-            -- 背包满时拆卸会把零件丢到地上, 找不到就不再碰这件
-            repairSkip(job, part, "UI_VehiclePanel_RepairFloatNoPartItem");
-            return;
+        if nowMs - job.receiptAt > ETHER_REPAIR_SYNC_MAX_MS then
+            repairAbort(job, "UI_VehiclePanel_RepairFloatUncertain", true);
         end
-        if job.tries >= ETHER_REPAIR_MAX_TRIES then
-            repairSkip(job, part);
-            return;
-        end
-        if job.sends > 0 then
-            repairFloat(player, "UI_VehiclePanel_RepairFloatInstallFail",
-                { part = partDisplayName(part), cond = item:getCondition(), n = job.sends }, true);
-            print("[VehiclePanel] install failed: " .. tostring(part:getId())
-                .. " item cond " .. string.format("%.0f", item:getCondition()) .. " (try " .. tostring(job.sends) .. ")");
-        end
-        job.tries = job.tries + 1;
-        job.sends = job.sends + 1;
-        -- 先把耐久拉到本段目标再装 (失败时服务端只扣物品耐久, 下一轮再拉回)
-        -- conditionMax 为 0 的异常物品不写, 否则会把部件装成 0 耐久
-        local maxCond = item:getConditionMax();
-        local target = job.stageTarget or 100;
-        if maxCond ~= nil and maxCond > 0 and target > maxCond then target = maxCond; end
-        if type(vehicleRepairSyncItemCondition) == "function" and maxCond ~= nil and maxCond > 0 then
-            vehicleRepairSyncItemCondition(item, target);
-        end
-        vehicleRepairSendInstall(part, item, ETHER_REPAIR_ACTION_TIME);
-        job.phaseDeadline = nowMs + ETHER_REPAIR_STEP_MAX_MS;
         return;
     end
 
-    -- 灯光条: 原版动作逐发加耐久 (15 + 机械学 - 引擎修理等级), 过账件取自本车容器
-    if job.phase == "lightbar" then
-        local part = job.target;
-        if part == nil then job.phase = nil; return; end
-        if part:getCondition() >= 100 then
-            repairFloat(player, "UI_VehiclePanel_RepairFloatPartDone",
-                { part = partDisplayName(part), to = part:getCondition() }, false);
-            job.steps = job.steps + 1;
-            job.target, job.phase = nil, nil;
-            return;
-        end
-        if nowMs < job.phaseDeadline then return; end
-        if job.tries >= ETHER_REPAIR_MAX_TRIES then
-            repairSkip(job, part);
-            return;
-        end
-        local token = repairTokenFor(vehicle);
-        if token == nil then
-            repairSkip(job, part, "UI_VehiclePanel_RepairFloatNoToken");
-            return;
-        end
-        job.tries = job.tries + 1;
-        vehicleRepairSendLightbar(part, token, ETHER_REPAIR_ACTION_TIME);
-        job.phaseDeadline = nowMs + ETHER_REPAIR_STEP_MAX_MS;
+    if job.stopping then
+        if releaseRepairTarget(job) then endRepairJob(); end
         return;
     end
-
-    -- 挑下一件
     local part = findDamagedPart(vehicle, job.skip);
     if part == nil then
         repairFloat(player, "UI_VehiclePanel_RepairFloatFinished",
             { done = job.steps, skipped = job.skipCount }, false);
-        print("[VehiclePanel] repair finished (" .. tostring(job.steps) .. " repaired, "
-            .. tostring(job.skipCount) .. " skipped)");
         endRepairJob();
         return;
     end
-
     local id = part:getId();
-    if id == "GasTank" then
-        -- 油箱拆下后容量回退到模板值 0, 燃油百分比会算成 0/0; 跳过它即可避免该中间态
-        repairSkip(job, part);
+    if id == "GasTank" or id == "lightbar" then
+        repairSkip(job, part, "UI_VehiclePanel_RepairFloatExcluded");
         return;
     end
-    if id == "lightbar" then
-        job.target, job.phase, job.tries, job.sends = part, "lightbar", 0, 0;
-        job.stageTarget = nil;
-        job.phaseDeadline = nowMs + ETHER_REPAIR_STEP_MAX_MS;
-        repairFloat(player, "UI_VehiclePanel_RepairFloatWorking",
-            { part = partDisplayName(part), cond = part:getCondition(), extra = "" }, false);
-        return;
-    end
-    if not partHasInstall(part) then
-        -- 引擎/后备箱容器/手套箱/加热器/乘客舱: 没有安装表, 拆装链覆盖不到
-        repairSkip(job, part);
-        return;
-    end
+    if not partHasInstall(part) then repairSkip(job, part); return; end
     local item = part:getInventoryItem();
-    if item == nil then
-        -- 部件已经空着(例如被打碎的车窗): 没有可拆的零件
-        repairSkip(job, part);
+    if item == nil or item:getConditionMax() < ETHER_REPAIR_TARGET then repairSkip(job, part); return; end
+    local claim = vehicleRepairClaim(part);
+    if claim == "unsupported" then repairSkip(job, part); return; end
+    if claim ~= "ready" then
+        repairAbort(job, "UI_VehiclePanel_RepairFloatUncertain", true);
         return;
     end
-
     job.target = part;
-    -- 冻结本段目标: 拆卸失败会扣部件耐久, 目标不能随之下调
-    job.stageTarget = math.min(100, math.floor(part:getCondition()) + ETHER_REPAIR_STAGE_STEP);
     job.itemId = item:getID();
-    job.tries = 1;
-    job.sends = 1;
-    job.phase = "uninstall";
-    job.phaseDeadline = nowMs + ETHER_REPAIR_STEP_MAX_MS;
-    local chance = installChance(part, player);
+    job.itemType = item:getFullType();
+    job.attempts = 0;
     repairFloat(player, "UI_VehiclePanel_RepairFloatWorking",
-        { part = partDisplayName(part), cond = part:getCondition(), extra = chanceText(chance) }, false);
-    print("[VehiclePanel] repair " .. tostring(id) .. " cond "
-        .. string.format("%.0f", part:getCondition()) .. " (uninstall, chance "
-        .. tostring(chance == nil and "?" or chance) .. "%)");
-    vehicleRepairSendUninstall(part, ETHER_REPAIR_ACTION_TIME);
+        { part = partDisplayName(part), cond = part:getCondition(), extra = chanceText(installChance(part, player)) }, false);
+    sendRepairAction(job, "uninstall", item, nowMs);
 end
 Events.OnTick.Add(repairTick);
 
---* 修理启停 (一百七十六: 按钮改复选框; 2026-11-09 改直发动作) ——
---*   勾选 = 必须坐在驾驶位、车停稳才开工 (否则拒绝并回弹未勾选); 开工后**不下车**,
---*   逐件直发拆/装动作并轮询部件状态;
---*   取消勾选 = 立刻停 (清队列 + 收尾); 修完/超时/被踢一律自动取消勾选。
 local function repairStop()
     if EtherRepairJob ~= nil then
-        if type(ISTimedActionQueue) == "table" then
-            ISTimedActionQueue.clear(EtherRepairJob.player);
-        end
-        print("[VehiclePanel] repair job cancelled");
+        requestRepairStop(EtherRepairJob, "UI_VehiclePanel_RepairFloatStopping");
+    else
+        setRepairChecked(false);
     end
-    endRepairJob();
 end
 
 local function repairStart()
+    if EtherRepairJob ~= nil then
+        setRepairChecked(not EtherRepairJob.stopping);
+        return;
+    end
     local player = getPlayer();
     if player == nil then endRepairJob(); return; end
-    -- 拆装链依赖服务端跑 complete; 单机没有网络动作, 直接拒绝而不是空转
-    if not isMultiplayer() then
-        print("[VehiclePanel] repair chain requires multiplayer (server-side actions)");
+    if not isMultiplayer() or type(vehicleRepairSessionState) ~= "function" then
         endRepairJob();
+        return;
+    end
+    if vehicleRepairSessionState() ~= "ready" then
+        repairFloat(player, "UI_VehiclePanel_RepairFloatUncertain", nil, true);
+        setRepairChecked(false);
         return;
     end
     local vehicle = player:getVehicle();
-    if vehicle == nil or not vehicle:isDriver(player) then
-        print("[VehiclePanel] sit in the driver seat first");
-        endRepairJob();
-        return;
-    end
-    if not vehicle:isStopped() then
-        print("[VehiclePanel] wait for the vehicle to stop before repairing");
+    if vehicle == nil or not vehicle:isDriver(player) or not vehicle:isStopped() then
         endRepairJob();
         return;
     end
     local nowMs = getTimestampMs();
     EtherRepairJob = {
-        player = player,
-        vehicle = vehicle,
-        deadline = nowMs + ETHER_REPAIR_JOB_MAX_MS,
-        nextCheckMs = nowMs,
-        steps = 0,
-        skip = {},
-        skipCount = 0,
-        requireSeated = true,   -- 分段修理依赖"玩家在车内"的服务端采样
+        player = player, vehicle = vehicle, deadline = nowMs + ETHER_REPAIR_JOB_MAX_MS,
+        nextCheckMs = nowMs, steps = 0, skip = {}, skipCount = 0, stopping = false,
     };
-    print("[VehiclePanel] repair job started (staged uninstall -> reset item condition -> reinstall)");
+    setRepairChecked(true);
 end
 
 --*********************************************************

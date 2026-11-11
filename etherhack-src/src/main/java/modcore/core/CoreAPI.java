@@ -870,6 +870,9 @@ public class CoreAPI {
         if ((this.isAutoRepairItems || this.isRepairClothing) && (var7 = var1.getInventory().getItems()) != null && !var7.isEmpty()) {
             boolean anyClothingChanged = false;
             for (InventoryItem var5 : var7) {                if (var5 == null) continue;
+                // 车辆修理正在占用该零件: 在本流程完成归属确认前不改其耐久, 避免与本条
+                // 自动修复互相覆盖 (用户开关不变, 其它物品照常处理)。
+                if (VehicleRepairAPI.isItemReserved(var5)) continue;
                 boolean isClothingTarget = this.isRepairClothing && var5 instanceof Clothing && var5.getVisual() instanceof ItemVisual;
                 boolean conditionChanged = (this.isAutoRepairItems || isClothingTarget) && var5.getCondition() != var5.getConditionMax();
                 // 头部状况(斧/锤类第二耐久条)与 condition 独立: 归零时 vanilla 级联 setCondition(0)
