@@ -64,7 +64,6 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Loot
 
 - **Ammo farming**: nested-bag magazine farm (multiplayer only; hold an empty magazine-fed firearm and place a loaded matching magazine inside an unequipped bag/toolbox in your main inventory)
-- **Research tests**: attach an existing item to the nearest zombie, check nearby inventories for it, or scan available forage records; these controls are for verification on your own multiplayer test server, not a confirmed item-duplication feature.
 - **Item Spawn (MP)**: with a fishing rod equipped, spawn any listed item into your inventory (~5-8s; a failed spawn leaves a log entry on the server; multiplayer only)
 - **Corpse spawn**: spawn a corpse at your feet carrying the chosen items and loot it (multiplayer only; **it leaves a log entry on the server - use with caution**)
 - **Unbox spawn**: keep a carrier (jar box / log stack x2-x4 / firewood bundle) in your backpack, pick a target and count, then spawn; craft the matching unpack recipe once to release any listed items (multiplayer only)

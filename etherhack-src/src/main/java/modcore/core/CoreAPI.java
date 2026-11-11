@@ -29,7 +29,6 @@ package modcore.core;
 
 import modcore.core.ChatAPI;
 import modcore.core.CorpseSpawnAPI;
-import modcore.core.ZombieAttachAPI;
 import modcore.core.ZombieGatherAPI;
 import modcore.core.LuaMethods;
 import modcore.core.CoreMain;
@@ -603,8 +602,6 @@ public class CoreAPI {
         this.exposer.exposeServerSyncBlocker();
             this.exposer.exposeFishingSpawn();
             this.exposer.exposeCorpseSpawn();
-            // 2026-11-11 研判探针: 僵尸挂载单发 (自建服核实"搬移还是重复引用")
-            this.exposer.exposeZombieAttach();
             // 一百九十 万象天引: B 聚集原语
             this.exposer.exposeZombieGather();
             this.exposer.exposeRadioXp();
@@ -1747,20 +1744,6 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, ZombieGatherAPI.class, method, name);
                 Logger.printLog("Exposed ZombieGatherAPI method: " + name);
-            }
-        }
-
-        // 2026-11-11 研判探针: 僵尸挂载单发 (GameCharacterAttachedItemPacket 手动上行)
-        public void exposeZombieAttach() {
-            for (Method method : ZombieAttachAPI.class.getMethods()) {
-                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
-                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
-                String name = annotation.name();
-                if (name == null || name.isEmpty()) {
-                    name = method.getName();
-                }
-                this.exposeGlobalClassFunction(LuaManager.env, ZombieAttachAPI.class, method, name);
-                Logger.printLog("Exposed ZombieAttachAPI method: " + name);
             }
         }
 

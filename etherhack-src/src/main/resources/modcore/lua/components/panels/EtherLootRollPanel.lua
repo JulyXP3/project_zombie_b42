@@ -161,20 +161,6 @@ function EtherLootRollPanel:render()
                 self.ammoStatusY + (i - 1) * EtherTheme.fontHgtHint, EtherTheme.textDim, 0.9);
         end
     end
-
-    -- 研判探针状态 —— 同款折行缓存
-    local probeMsg = tostring((EtherResearchProbe and EtherResearchProbe.message) or "");
-    if probeMsg ~= "" and self.probeStatusX ~= nil then
-        if self.probeStatusCacheText ~= probeMsg or self.probeStatusCacheW ~= self.probeStatusW then
-            self.probeStatusLines = EtherTheme.wrapHint(probeMsg, self.probeStatusW);
-            self.probeStatusCacheText = probeMsg;
-            self.probeStatusCacheW = self.probeStatusW;
-        end
-        for i = 1, #self.probeStatusLines do
-            EtherTheme.drawHintText(self, self.probeStatusLines[i], self.probeStatusX,
-                self.probeStatusY + (i - 1) * EtherTheme.fontHgtHint, EtherTheme.textDim, 0.9);
-        end
-    end
 end
 
 --*********************************************************
@@ -457,64 +443,6 @@ function EtherLootRollPanel:createChildren()
     self.ammoStatusW = innerW;
     cy = cy + EtherTheme.fontHgtHint * 2;
     self:_group(PAD, g1y, boxW, (cy - g1y) + IP);
-
-    -- ================= 分组1b: 研判测试 (挂载/搜寻池探针, 仅多人) =================
-    local g2y = cy + IP + GGAP;
-    cy = g2y + IP;
-    self:_header(innerX, cy, getTranslate("UI_LootRoll_SectionProbe"), innerW);
-    cy = cy + fhS + GAP;
-
-    local probeHint = getTranslate("UI_ResearchProbe_Hint");
-    local probeLines = EtherTheme.wrapHint(probeHint, innerW);
-    for i = 1, #probeLines do
-        self:_text(innerX, cy + (i - 1) * EtherTheme.fontHgtHint, probeLines[i],
-            EtherTheme.textDim, UIFont.Small, true);
-    end
-    cy = cy + #probeLines * EtherTheme.fontHgtHint + GAP;
-
-    local probeDefs = {
-        { key = "UI_ResearchProbe_Attach", cb = function() EtherResearchProbe.attachNearest(); end },
-        { key = "UI_ResearchProbe_Check",  cb = function() EtherResearchProbe.checkAttached(); end },
-        { key = "UI_ResearchProbe_Scan",   cb = function() EtherResearchProbe.scanPool(); end },
-    };
-    local probeWs = {};
-    local probeTotal = GAP * (#probeDefs - 1);
-    for i = 1, #probeDefs do
-        probeWs[i] = UIButton.measureWidth(getTranslate(probeDefs[i].key));
-        probeTotal = probeTotal + probeWs[i];
-    end
-    self.probeBtns = {};
-    if probeTotal > innerW then
-        for i = 1, #probeDefs do
-            local w = math.min(probeWs[i], innerW);
-            local b = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, w, ctrlH,
-                getTranslate(probeDefs[i].key), probeDefs[i].cb, w);
-            b:initialise();
-            b:instantiate();
-            b:setEnable(isClient());
-            self:addChild(b);
-            table.insert(self.probeBtns, b);
-            cy = cy + EtherTheme.entryH + GAP;
-        end
-    else
-        local bx = innerX;
-        for i = 1, #probeDefs do
-            local b = UIButton:new(bx, cy + EtherTheme.entryBtnDY, probeWs[i], ctrlH,
-                getTranslate(probeDefs[i].key), probeDefs[i].cb, probeWs[i]);
-            b:initialise();
-            b:instantiate();
-            b:setEnable(isClient());
-            self:addChild(b);
-            table.insert(self.probeBtns, b);
-            bx = bx + probeWs[i] + GAP;
-        end
-        cy = cy + EtherTheme.entryH + GAP;
-    end
-    self.probeStatusX = innerX;
-    self.probeStatusY = cy;
-    self.probeStatusW = innerW;
-    cy = cy + EtherTheme.fontHgtHint * 2;
-    self:_group(PAD, g2y, boxW, (cy - g2y) + IP);
 
     -- ================= 分组2: 生成模式 (占据剩余高度) =================
     -- 三模式共用物品列表与搜索: 钓竿 (FishingSpawn) / 尸体 (CorpseSpawn) /

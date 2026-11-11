@@ -4,7 +4,6 @@
 
 - Improved: auto-repair restores each eligible part to condition 95; the engine, fuel tank, trunk, glove box and lightbar are excluded. Each step waits for the server result before continuing, and the job stops instead of resending when a result cannot be confirmed. Cancelling or leaving the vehicle does not keep processing in the background.
 
-- Added: a Research Tests group on the Loot page, with Attach to nearest zombie, Check attached item and Scan forage pool controls, for verification on your own multiplayer test server only.
 
 - Changed: rolled back ammunition changes that failed in-game checks. Unlimited ammo and Increase Fire Rate are deprecated and removed from the panel. The ammo-farming panel is now the nested-bag magazine farm only (multiplayer; hold an empty magazine-fed firearm and place a loaded matching magazine inside an unequipped bag/toolbox in your main inventory); the single-player auto-farm / set-ammo controls and the one-shot test entry were removed. 90% Critical Chance remains independent.
 
