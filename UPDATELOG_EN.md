@@ -2,6 +2,14 @@
 
 ## [3.2.8] - Current
 
+- Improved: auto-repair restores part condition in stages, with a short pause after each installation; leaving or changing vehicles stops the job immediately, and fuel tanks are excluded.
+
+- Added: a Research Tests group on the Loot page, with Attach to nearest zombie, Check attached item and Scan forage pool controls, for verification on your own multiplayer test server only.
+
+- Changed: rolled back ammunition changes that failed in-game checks. Unlimited ammo and Increase Fire Rate are deprecated and removed from the panel. The ammo-farming panel is now the nested-bag magazine farm only (multiplayer; hold an empty magazine-fed firearm and place a loaded matching magazine inside an unequipped bag/toolbox in your main inventory); the single-player auto-farm / set-ammo controls and the one-shot test entry were removed. 90% Critical Chance remains independent.
+
+- Changed: "Increase Critical Chance" is now "90% Critical Chance" for your ordinary weapon attacks against zombies, preserving shoves, unarmed attacks and special weapon rules. "Increase Fire Rate" no longer grants an extra critical-chance boost.
+
 - Fixed: long hint text on the Build page could run past the panel edge; it now wraps and keeps a right margin.
 
 - Fixed: some Chinese hints and vehicle descriptions could display with missing characters; they now use fully displayable wording.

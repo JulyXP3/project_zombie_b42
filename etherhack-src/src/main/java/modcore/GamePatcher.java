@@ -1587,6 +1587,7 @@ public class GamePatcher {
         this.patchLuaManager();
         this.patchAntiCheatSystem();
         this.patchHeadshotOnly();
+        modcore.core.CriticalChancePatch.install();
         this.patchAlwaysHit();
         // 超级群攻: maxHit 扩容 + 全向扇面 + 属主命中包抑制 + 群攻全额伤害 (研判 §三A/§五/§六/§九)
         this.patchSuperMultiHit();
@@ -1688,6 +1689,7 @@ public class GamePatcher {
         steps.put("patchLuaManager", this::patchLuaManager);
         steps.put("patchAntiCheatSystem", this::patchAntiCheatSystem);
         steps.put("patchHeadshotOnly", this::patchHeadshotOnly);
+        steps.put("CriticalChancePatch", modcore.core.CriticalChancePatch::install);
         steps.put("patchAlwaysHit", this::patchAlwaysHit);
         steps.put("patchSuperMultiHit", this::patchSuperMultiHit);
         steps.put("patchSuperMultiHitSuppression", this::patchSuperMultiHitSuppression);

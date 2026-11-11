@@ -78,6 +78,13 @@ function EtherLootRollPanel:prerender()
         end
     end
 
+    -- 袋内弹匣刷取按钮标题随运行态切换
+    if self.bagFarmBtn ~= nil then
+        local want = (EtherAmmoFarm.bagFarm ~= nil)
+            and getTranslate("UI_AmmoFarm_Stop") or getTranslate("UI_AmmoFarm_Start");
+        if self.bagFarmBtn.title ~= want then self.bagFarmBtn.title = want end
+    end
+
     for i = 1, #self.groups do
         local g = self.groups[i];
         EtherTheme.drawTileBox(self, g.x, g.y, g.w, g.h, false, 8);
@@ -138,6 +145,34 @@ function EtherLootRollPanel:render()
         for i = 1, n do
             EtherTheme.drawHintText(self, self.statusLines[i], self.statusX,
                 y0 + (i - 1) * fhH, td, 0.9);
+        end
+    end
+
+    -- 刷取状态 (空闲时无消息) —— 与生成状态同款折行缓存
+    local farmMsg = tostring((EtherAmmoFarm and EtherAmmoFarm.message) or "");
+    if farmMsg ~= "" and self.ammoStatusX ~= nil then
+        if self.ammoStatusCacheText ~= farmMsg or self.ammoStatusCacheW ~= self.ammoStatusW then
+            self.ammoStatusLines = EtherTheme.wrapHint(farmMsg, self.ammoStatusW);
+            self.ammoStatusCacheText = farmMsg;
+            self.ammoStatusCacheW = self.ammoStatusW;
+        end
+        for i = 1, #self.ammoStatusLines do
+            EtherTheme.drawHintText(self, self.ammoStatusLines[i], self.ammoStatusX,
+                self.ammoStatusY + (i - 1) * EtherTheme.fontHgtHint, EtherTheme.textDim, 0.9);
+        end
+    end
+
+    -- 研判探针状态 —— 同款折行缓存
+    local probeMsg = tostring((EtherResearchProbe and EtherResearchProbe.message) or "");
+    if probeMsg ~= "" and self.probeStatusX ~= nil then
+        if self.probeStatusCacheText ~= probeMsg or self.probeStatusCacheW ~= self.probeStatusW then
+            self.probeStatusLines = EtherTheme.wrapHint(probeMsg, self.probeStatusW);
+            self.probeStatusCacheText = probeMsg;
+            self.probeStatusCacheW = self.probeStatusW;
+        end
+        for i = 1, #self.probeStatusLines do
+            EtherTheme.drawHintText(self, self.probeStatusLines[i], self.probeStatusX,
+                self.probeStatusY + (i - 1) * EtherTheme.fontHgtHint, EtherTheme.textDim, 0.9);
         end
     end
 end
@@ -385,71 +420,101 @@ function EtherLootRollPanel:createChildren()
     self.groups = {};
     self.texts = {};
 
-    -- ================= 分组1: 刷弹药 =================
+    -- ================= 分组1: 刷弹药 (嵌套背包弹匣, 仅多人) =================
     local g1y = 12;
     local cy = g1y + IP;
     self:_header(innerX, cy, getTranslate("UI_LootRoll_SectionFarm"), innerW);
     cy = cy + fhS + GAP;
 
-    -- 三行竖排 (用户实测反馈: "自动开"文案带退弹提示较长, 与"自动关"并排时
-    -- 被钳到半行宽, 文字溢出按钮框 —— 图1):
-    --   行1: [自动刷(开)] 独占整行
-    --   行2: [自动刷(关)] 独占整行
-    --   行3: [设置弹药数] [弹药数输入框 占余宽]
-    -- 各按钮按自身文案取宽、钳到整行内宽; 仍放不下的极端语言/字体档
-    -- 由 UIButton:render 的缩字兜底保证不越出按钮框。
-    -- 必须传 maxWidth 防 UIButton:new 的自动加宽还原钳制。
-    local farmTitles = {
-        getTranslate("UI_CharacterPanel_AmmoFarmAuto"),
-        getTranslate("UI_CharacterPanel_AmmoFarmStop"),
-        getTranslate("UI_CharacterPanel_AmmoFarmSet"),
-    };
-    local farmActions = {
-        function()
-            local n = tonumber(self.ammoFarmBox:getInternalText());
-            if n and n > 0 then setAmmoFarmCount(n) end
-            farmSetAmmo();
-            EtherAmmoFarm.enabled = true;
-        end,
-        function()
-            EtherAmmoFarm.enabled = false;
-        end,
-        function()
-            local n = tonumber(self.ammoFarmBox:getInternalText());
-            if n and n > 0 then setAmmoFarmCount(n) end
-            farmSetAmmo();
-        end,
-    };
-
-    local fw = {};
-    for i = 1, 3 do
-        fw[i] = math.min(UIButton.measureWidth(farmTitles[i]), innerW);
+    -- 前提说明 (按内宽折行)
+    local hintT = getTranslate("UI_AmmoFarm_Hint");
+    local hintLines = EtherTheme.wrapHint(hintT, innerW);
+    for i = 1, #hintLines do
+        self:_text(innerX, cy + (i - 1) * EtherTheme.fontHgtHint, hintLines[i],
+            EtherTheme.textDim, UIFont.Small, true);
     end
+    cy = cy + #hintLines * EtherTheme.fontHgtHint + GAP;
 
-    for i = 1, 2 do
-        local btn = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, fw[i], ctrlH, farmTitles[i], farmActions[i], fw[i]);
-        btn:initialise();
-        btn:instantiate();
-        self:addChild(btn);
+    -- 同一按钮起停; 标题按运行态切换
+    local runT = getTranslate("UI_AmmoFarm_Start");
+    local stopT = getTranslate("UI_AmmoFarm_Stop");
+    local farmW = math.min(math.max(UIButton.measureWidth(runT), UIButton.measureWidth(stopT)), innerW);
+    self.bagFarmBtn = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, farmW, ctrlH, runT,
+        function()
+            if EtherAmmoFarm.bagFarm ~= nil then
+                EtherAmmoFarm.stopBagFarm()
+            else
+                EtherAmmoFarm.startBagFarm()
+            end
+        end, farmW);
+    self.bagFarmBtn:initialise();
+    self.bagFarmBtn:instantiate();
+    self.bagFarmBtn:setEnable(isClient());
+    self:addChild(self.bagFarmBtn);
+    cy = cy + EtherTheme.entryH + GAP;
+    self.ammoStatusX = innerX;
+    self.ammoStatusY = cy;
+    self.ammoStatusW = innerW;
+    cy = cy + EtherTheme.fontHgtHint * 2;
+    self:_group(PAD, g1y, boxW, (cy - g1y) + IP);
+
+    -- ================= 分组1b: 研判测试 (挂载/搜寻池探针, 仅多人) =================
+    local g2y = cy + IP + GGAP;
+    cy = g2y + IP;
+    self:_header(innerX, cy, getTranslate("UI_LootRoll_SectionProbe"), innerW);
+    cy = cy + fhS + GAP;
+
+    local probeHint = getTranslate("UI_ResearchProbe_Hint");
+    local probeLines = EtherTheme.wrapHint(probeHint, innerW);
+    for i = 1, #probeLines do
+        self:_text(innerX, cy + (i - 1) * EtherTheme.fontHgtHint, probeLines[i],
+            EtherTheme.textDim, UIFont.Small, true);
+    end
+    cy = cy + #probeLines * EtherTheme.fontHgtHint + GAP;
+
+    local probeDefs = {
+        { key = "UI_ResearchProbe_Attach", cb = function() EtherResearchProbe.attachNearest(); end },
+        { key = "UI_ResearchProbe_Check",  cb = function() EtherResearchProbe.checkAttached(); end },
+        { key = "UI_ResearchProbe_Scan",   cb = function() EtherResearchProbe.scanPool(); end },
+    };
+    local probeWs = {};
+    local probeTotal = GAP * (#probeDefs - 1);
+    for i = 1, #probeDefs do
+        probeWs[i] = UIButton.measureWidth(getTranslate(probeDefs[i].key));
+        probeTotal = probeTotal + probeWs[i];
+    end
+    self.probeBtns = {};
+    if probeTotal > innerW then
+        for i = 1, #probeDefs do
+            local w = math.min(probeWs[i], innerW);
+            local b = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, w, ctrlH,
+                getTranslate(probeDefs[i].key), probeDefs[i].cb, w);
+            b:initialise();
+            b:instantiate();
+            b:setEnable(isClient());
+            self:addChild(b);
+            table.insert(self.probeBtns, b);
+            cy = cy + EtherTheme.entryH + GAP;
+        end
+    else
+        local bx = innerX;
+        for i = 1, #probeDefs do
+            local b = UIButton:new(bx, cy + EtherTheme.entryBtnDY, probeWs[i], ctrlH,
+                getTranslate(probeDefs[i].key), probeDefs[i].cb, probeWs[i]);
+            b:initialise();
+            b:instantiate();
+            b:setEnable(isClient());
+            self:addChild(b);
+            table.insert(self.probeBtns, b);
+            bx = bx + probeWs[i] + GAP;
+        end
         cy = cy + EtherTheme.entryH + GAP;
     end
-
-    local b3 = UIButton:new(innerX, cy + EtherTheme.entryBtnDY, fw[3], ctrlH,
-        farmTitles[3], farmActions[3], fw[3]);
-    b3:initialise();
-    b3:instantiate();
-    self:addChild(b3);
-
-    local ax = innerX + fw[3] + GAP;
-    self.ammoFarmBox = ISTextEntryBox:new(tostring(getAmmoFarmCount()),
-        ax, cy, (innerX + innerW) - ax, EtherTheme.entryH);
-    EtherTheme.styleEntry(self.ammoFarmBox);
-    self.ammoFarmBox:initialise();
-    self.ammoFarmBox:instantiate();
-    self.ammoFarmBox:setClearButton(false);
-    self:addChild(self.ammoFarmBox);
-    cy = cy + EtherTheme.entryH;
-    self:_group(PAD, g1y, boxW, (cy - g1y) + IP);
+    self.probeStatusX = innerX;
+    self.probeStatusY = cy;
+    self.probeStatusW = innerW;
+    cy = cy + EtherTheme.fontHgtHint * 2;
+    self:_group(PAD, g2y, boxW, (cy - g2y) + IP);
 
     -- ================= 分组2: 生成模式 (占据剩余高度) =================
     -- 三模式共用物品列表与搜索: 钓竿 (FishingSpawn) / 尸体 (CorpseSpawn) /

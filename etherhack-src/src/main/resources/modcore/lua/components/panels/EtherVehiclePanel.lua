@@ -33,11 +33,11 @@ end
 --*
 --* 为什么能整车修: b42.22 的 ISUninstallVehiclePart 成功拆卸只把部件物品摘下来放进背包,
 --*   **不扣部件条件**; 拆下的物品在背包里(可解析容器), 用 vehicleRepairSyncItemCondition
---*   把耐久拉满(服务端 SyncItemFields 直接采用客户端给的值); 再 ISInstallVehiclePart 装回,
---*   服务端 complete 会把部件条件写成物品耐久 → 100, 且原零件(刹车力/胎压/悬挂/电瓶电量/
+--*   把耐久抬到本段目标(服务端 SyncItemFields 直接采用客户端给的值); 再 ISInstallVehiclePart
+--*   装回, 服务端 complete 会把部件条件写成物品耐久, 且原零件(刹车力/胎压/悬挂/电瓶电量/
 --*   油量/消声)全部保留。
 --* 失败代价: 拆卸失败扣部件耐久 5-10、安装失败扣物品耐久 5-10, 都可重试; 装回成功时部件
---*   条件被覆盖成 100, 所以技能只影响尝试次数, 不影响结果。
+--*   条件被覆盖成目标值, 所以技能只影响尝试次数, 不影响结果。
 --* 服务端不调用 isValid(ActionManager.start 不调, NetTimedAction.isValid 恒 false), 所以
 --*   不需要下车/走位/把零件放进背包; 客户端只负责发包与轮询部件状态。
 --* 引擎/后备箱容器/手套箱/加热器/乘客舱没有 table install, 拆装链覆盖不到, 直接跳过;
@@ -45,7 +45,12 @@ end
 --*********************************************************
 local ETHER_REPAIR_TICK_MS = 150;        -- 状态机节流
 local ETHER_REPAIR_STEP_MAX_MS = 1200;   -- 单个阶段(拆/装/灯光条一发)等待上限
-local ETHER_REPAIR_JOB_MAX_MS = 600000;  -- 整单上限
+local ETHER_REPAIR_JOB_MAX_MS = 1200000; -- 整单上限 (分段修理按每件最多 3 段放宽)
+--* 分段修理 (2026-11-11): 服务端采样会把"同一部件一次跳变 >=50 且修后 >=98"记为突然修复。
+--* 每段只把耐久抬到 当前+40 (最多 3 段覆盖 0~100), 装回后留在车内等采样看到中间值;
+--* 拆下 GasTank 期间容量为 0 会让燃油百分比算成 0/0, 该部件直接跳过。
+local ETHER_REPAIR_STAGE_STEP = 40;
+local ETHER_REPAIR_STAGE_HOLD_MS = 3000;
 --* 每个网络动作的时长 (maxTime, 20/s): 20 = 0.4 秒/发。服务端只按这个值算 endTime, 不校验。
 --* 失败重试只扣物品耐久, 拉满即可, 所以时长只影响总耗时。
 local ETHER_REPAIR_ACTION_TIME = 20;
@@ -126,9 +131,11 @@ end
 
 --*********************************************************
 --* 状态机 (2026-11-09 改): 直发原版网络计时动作, 不走本地动作队列、不走位、不下车。
---* 每件三步: 拆(ISUninstallVehiclePart) → 把拆下的零件耐久拉满(vehicleRepairSyncItemCondition)
---* → 装回(ISInstallVehiclePart)。安装/拆卸失败只扣物品耐久, 拉满再试; 装回成功时部件条件
+--* 每件三步: 拆(ISUninstallVehiclePart) → 把拆下的零件耐久抬到本段目标(vehicleRepairSyncItemCondition)
+--* → 装回(ISInstallVehiclePart)。安装/拆卸失败只扣物品耐久, 抬回目标再试; 装回成功时部件条件
 --* 被写成物品耐久, 且原零件(刹车力/胎压/悬挂/电瓶电量/油量/消声)全部保留。
+--* 2026-11-11 分段: 每段最多 +40, 装回后停留等采样, 避免服务端把一次抬满记成异常修复;
+--*   GasTank 跳过(拆下时容量 0 会让燃油百分比变 NaN)。
 --* 灯光条没有安装表, 走 ISRepairLightbar(原版动作不看技能)。
 --* 服务端不调用 isValid, 所以不需要下车、走位或把零件放进背包。
 --*********************************************************
@@ -185,6 +192,7 @@ end
 local function repairSkip(job, part, key)
     local id = part and part:getId() or "?";
     job.skip[id] = true;
+    job.stageTarget = nil;
     job.skipCount = job.skipCount + 1;
     job.target, job.phase = nil, nil;
     if key ~= nil then
@@ -214,6 +222,16 @@ local function repairTick()
         endRepairJob();
         return;
     end
+    -- 离车或换车先收尾, 等待间隔不能延后取消检查 (二轮回归: 原顺序在 hold 早退后
+    -- 收不到离车, "等待期间离车/换车立即停止"两项用例抓住了它)
+    if job.requireSeated and player:getVehicle() ~= vehicle then
+        repairFloat(player, "UI_VehiclePanel_RepairFloatLeftVehicle", nil, true);
+        print("[VehiclePanel] repair stopped: player left the vehicle");
+        endRepairJob();
+        return;
+    end
+    -- 分段装回后的等待只是客户端间隔, 不是服务端采样回执
+    if job.holdUntilMs ~= nil and nowMs < job.holdUntilMs then return; end
 
     -- 拆卸阶段: 等部件物品变 nil
     if job.phase == "uninstall" then
@@ -249,12 +267,23 @@ local function repairTick()
     if job.phase == "install" then
         local part = job.target;
         if part == nil then job.phase = nil; return; end
-        if part:getInventoryItem() ~= nil and part:getCondition() >= 100 then
-            repairFloat(player, "UI_VehiclePanel_RepairFloatPartDone",
-                { part = partDisplayName(part), to = part:getCondition() }, false);
-            print("[VehiclePanel] repaired " .. tostring(part:getId()) .. " -> 100");
-            job.steps = job.steps + 1;
-            job.target, job.phase = nil, nil;
+        local target = job.stageTarget or 100;
+        if part:getInventoryItem() ~= nil and part:getCondition() >= target then
+            if target >= 100 then
+                repairFloat(player, "UI_VehiclePanel_RepairFloatPartDone",
+                    { part = partDisplayName(part), to = part:getCondition() }, false);
+                print("[VehiclePanel] repaired " .. tostring(part:getId()) .. " -> 100");
+                job.steps = job.steps + 1;
+            else
+                -- 中间段: 留时间给服务端采样, 避免被当成一次跳满
+                repairFloat(player, "UI_VehiclePanel_RepairFloatStage",
+                    { part = partDisplayName(part), to = target }, false);
+                print("[VehiclePanel] staged " .. tostring(part:getId()) .. " -> "
+                    .. tostring(target) .. " (hold for sampling)");
+                job.stageCount = (job.stageCount or 0) + 1;
+                job.holdUntilMs = nowMs + ETHER_REPAIR_STAGE_HOLD_MS;
+            end
+            job.target, job.phase, job.stageTarget = nil, nil, nil;
             return;
         end
         if nowMs < job.phaseDeadline then return; end
@@ -276,11 +305,13 @@ local function repairTick()
         end
         job.tries = job.tries + 1;
         job.sends = job.sends + 1;
-        -- 先把耐久拉满再装 (失败时服务端只扣物品耐久, 下一轮再拉满)
+        -- 先把耐久拉到本段目标再装 (失败时服务端只扣物品耐久, 下一轮再拉回)
         -- conditionMax 为 0 的异常物品不写, 否则会把部件装成 0 耐久
         local maxCond = item:getConditionMax();
+        local target = job.stageTarget or 100;
+        if maxCond ~= nil and maxCond > 0 and target > maxCond then target = maxCond; end
         if type(vehicleRepairSyncItemCondition) == "function" and maxCond ~= nil and maxCond > 0 then
-            vehicleRepairSyncItemCondition(item, maxCond);
+            vehicleRepairSyncItemCondition(item, target);
         end
         vehicleRepairSendInstall(part, item, ETHER_REPAIR_ACTION_TIME);
         job.phaseDeadline = nowMs + ETHER_REPAIR_STEP_MAX_MS;
@@ -326,8 +357,14 @@ local function repairTick()
     end
 
     local id = part:getId();
+    if id == "GasTank" then
+        -- 油箱拆下后容量回退到模板值 0, 燃油百分比会算成 0/0; 跳过它即可避免该中间态
+        repairSkip(job, part);
+        return;
+    end
     if id == "lightbar" then
         job.target, job.phase, job.tries, job.sends = part, "lightbar", 0, 0;
+        job.stageTarget = nil;
         job.phaseDeadline = nowMs + ETHER_REPAIR_STEP_MAX_MS;
         repairFloat(player, "UI_VehiclePanel_RepairFloatWorking",
             { part = partDisplayName(part), cond = part:getCondition(), extra = "" }, false);
@@ -346,6 +383,8 @@ local function repairTick()
     end
 
     job.target = part;
+    -- 冻结本段目标: 拆卸失败会扣部件耐久, 目标不能随之下调
+    job.stageTarget = math.min(100, math.floor(part:getCondition()) + ETHER_REPAIR_STAGE_STEP);
     job.itemId = item:getID();
     job.tries = 1;
     job.sends = 1;
@@ -404,8 +443,9 @@ local function repairStart()
         steps = 0,
         skip = {},
         skipCount = 0,
+        requireSeated = true,   -- 分段修理依赖"玩家在车内"的服务端采样
     };
-    print("[VehiclePanel] repair job started (uninstall -> reset item condition -> reinstall)");
+    print("[VehiclePanel] repair job started (staged uninstall -> reset item condition -> reinstall)");
 end
 
 --*********************************************************

@@ -641,20 +641,6 @@ public class LuaMethods {
         saveConfig("startup");
     }
 
-    @LuaMethod(name="isNoRecoil", global=true)
-    public static boolean isNoRecoil() {
-        return CoreMain.getInstance().CoreAPI.isNoRecoil;
-    }
-
-    @LuaMethod(name="toggleNoRecoil", global=true)
-    public static void toggleNoRecoil(boolean var0) {
-        CoreMain.getInstance().CoreAPI.isNoRecoil = var0;
-        saveConfig("startup");
-        if (!var0) {
-            CoreMain.getInstance().CoreAPI.resetCritChance();
-        }
-    }
-
     @LuaMethod(name="isNoJam", global=true)
     public static boolean isNoJam() {
         return CoreMain.getInstance().CoreAPI.isNoJam;
@@ -928,9 +914,6 @@ public class LuaMethods {
     public static void toggleCritMax(boolean var0) {
         CoreMain.getInstance().CoreAPI.isCritMax = var0;
         saveConfig("startup");
-        if (!var0) {
-            CoreMain.getInstance().CoreAPI.resetCritChance();
-        }
     }
 
     @LuaMethod(name="isCritMax", global=true)
@@ -1291,35 +1274,6 @@ public class LuaMethods {
     @LuaMethod(name="isUnlimitedEndurance", global=true)
     public static boolean isUnlimitedEndurance() {
         return CoreMain.getInstance().CoreAPI.isUnlimitedEndurance;
-    }
-
-    @LuaMethod(name="toggleUnlimitedAmmo", global=true)
-    public static void toggleUnlimitedAmmo(boolean var0) {
-        CoreMain.getInstance().CoreAPI.isUnlimitedAmmo = var0;
-        saveConfig("startup");
-    }
-
-    @LuaMethod(name="isUnlimitedAmmo", global=true)
-    public static boolean isUnlimitedAmmo() {
-        return CoreMain.getInstance().CoreAPI.isUnlimitedAmmo;
-    }
-
-    @LuaMethod(name="getAmmoFarmCount", global=true)
-    public static int getAmmoFarmCount() {
-        return CoreMain.getInstance().CoreAPI.ammoFarmCount;
-    }
-
-    @LuaMethod(name="setAmmoFarmCount", global=true)
-    public static void setAmmoFarmCount(int var0) {
-        if (var0 > 0) {
-            CoreMain.getInstance().CoreAPI.ammoFarmCount = var0;
-            saveConfig("startup");
-        }
-    }
-
-    @LuaMethod(name="farmSetAmmo", global=true)
-    public static void farmSetAmmo() {
-        CoreMain.getInstance().CoreAPI.farmSetWeaponAmmo();
     }
 
     @LuaMethod(name="toggleDisableFatigue", global=true)

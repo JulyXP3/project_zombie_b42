@@ -55,6 +55,7 @@ local etherModules = {
     "modcore/lua/components/panels/EtherInfoPanel.lua",
     "modcore/lua/components/panels/EtherCharacterPanel.lua",
     "modcore/lua/components/ui/EtherTempWeapon.lua",
+    "modcore/lua/components/ui/EtherResearchProbe.lua",
     "modcore/lua/components/panels/EtherCombatPanel.lua",
     "modcore/lua/components/panels/EtherItemCreator.lua",
     "modcore/lua/components/panels/EtherRadarPanel.lua",

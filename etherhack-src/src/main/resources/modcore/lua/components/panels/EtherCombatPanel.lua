@@ -4,7 +4,7 @@ require "ISUI/ISPanel"
 --* EtherCombatPanel: 战斗页 (2026-09-05 用户立项: 战斗功能自「角色」页拆出,
 --* 「角色」页同名更改为「生存」—— 只留生存/状态类作弊)
 --*
---*   - 战斗强化 (自角色页整组迁入): 攻速倍率/攻击距离加成 + 秒杀/提高暴击率/
+--*   - 战斗强化 (自角色页整组迁入): 攻速倍率/攻击距离加成 + 秒杀/暴击率90%/
 --*     枪械只爆头/百发百中/免后座/群攻/无限弹药/不卡壳;
 --*     新增「超级群攻」数值行 (研判 超级群攻-研判(未实现).md §五.4):
 --*     输入=每次挥击命中上限 (10-20, 即时钳制仅存值); [应用]=生效 (恒全向扇面,
@@ -161,9 +161,7 @@ function EtherCombatPanel:build()
         { key = "UI_CharacterPanel_CritMax",          on = toggleCritMax,        get = isCritMax },
         { key = "UI_CharacterPanel_HeadshotOnly",     on = toggleHeadshotOnly,   get = isHeadshotOnly },
         { key = "UI_CharacterPanel_AlwaysHit",        on = toggleAlwaysHit,      get = getAlwaysHit },
-        { key = "UI_CharacterPanel_DisableRecoil",    on = toggleNoRecoil,       get = isNoRecoil },
         { key = "UI_CharacterPanel_MultiHitZombies",  on = toggleMultiHitZombies, get = isMultiHitZombies },
-        { key = "UI_CharacterPanel_UnlimitedAmmo",    on = toggleUnlimitedAmmo,  get = isUnlimitedAmmo },
         { key = "UI_CharacterPanel_NoJam",            on = toggleNoJam,          get = isNoJam },
         -- 关窗射击 (二百一十七): 手持枪械时关着完好车窗也可车内瞄准开火 (仅枪械;
         -- 门控为 IsoPlayer 车内攻击分支的读取点, 随时开关即时生效)

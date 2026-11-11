@@ -29,6 +29,7 @@ package modcore.core;
 
 import modcore.core.ChatAPI;
 import modcore.core.CorpseSpawnAPI;
+import modcore.core.ZombieAttachAPI;
 import modcore.core.ZombieGatherAPI;
 import modcore.core.LuaMethods;
 import modcore.core.CoreMain;
@@ -107,7 +108,6 @@ public class CoreAPI {
     private SafeExposer exposer;
     final ConcurrentHashMap<String, Texture> textureCache = new ConcurrentHashMap();
     private final ConcurrentHashMap<String, float[]> originalWeaponStats = new ConcurrentHashMap();
-    private final ConcurrentHashMap<String, Float> critChanceSnapshot = new ConcurrentHashMap();
     public Color mainUIAccentColor;
     public Color vehiclesUIColor;
     public Color zombiesUIColor;
@@ -122,8 +122,6 @@ public class CoreAPI {
     public boolean isEnableInvisible;
     public boolean isEnableNightVision;
     public boolean isZombieDontAttack;
-    public boolean isNoRecoil;
-    private HandWeapon recoilStompedWeapon;
     public boolean isHeadshotOnly;
     public boolean isAlwaysHit;
     public boolean isSuperMultiHit;
@@ -135,8 +133,6 @@ public class CoreAPI {
     public boolean isConnectFlags;
     public boolean isUnlimitedCondition;
     public boolean isUnlimitedEndurance;
-    public boolean isUnlimitedAmmo;
-    public int ammoFarmCount = 30;
     public boolean isCritMax;
     public float combatSpeedMultiplier = 1.0f;
     public float attackRangeBonus = 0.0f;
@@ -246,12 +242,12 @@ public class CoreAPI {
             {"isExtraDamage", "k03"}, {"isTimedActionCheat", "k04"},
             {"isEnableGodMode", "k05"}, {"isEnableNoclip", "k06"},
             {"isEnableInvisible", "k07"}, {"isEnableNightVision", "k08"},
-            {"isZombieDontAttack", "k09"}, {"isNoRecoil", "k10"},
+            {"isZombieDontAttack", "k09"},
             {"isHeadshotOnly", "k11"}, {"isAlwaysHit", "k12"},
             {"isSuperMultiHit", "k13"}, {"superMultiHitCount", "k14"},
             {"isBypassDebugMode", "k15"}, {"isUnlimitedCarry", "k16"},
             {"isUnlimitedEndurance", "k18"},
-            {"isUnlimitedAmmo", "k19"}, {"ammoFarmCount", "k20"},
+            // 2026-11-11: k10(提高枪械射速)、k19(无限弹药)、k20(单人刷弹药数量) 退休, 空号禁止复用。
             {"isCritMax", "k21"}, {"combatSpeedMultiplier", "k22"},
             {"attackRangeBonus", "k23"}, {"isAutoRepairItems", "k24"},
             {"isRepairClothing", "k25"}, {"isPadClothing", "k26"},
@@ -333,7 +329,6 @@ public class CoreAPI {
         var3.setProperty("isEnableInvisible", Boolean.toString(this.isEnableInvisible));
         var3.setProperty("isEnableNightVision", Boolean.toString(this.isEnableNightVision));
         var3.setProperty("isZombieDontAttack", Boolean.toString(this.isZombieDontAttack));
-        var3.setProperty("isNoRecoil", Boolean.toString(this.isNoRecoil));
         var3.setProperty("isHeadshotOnly", Boolean.toString(this.isHeadshotOnly));
         var3.setProperty("isAlwaysHit", Boolean.toString(this.isAlwaysHit));
         var3.setProperty("isSuperMultiHit", Boolean.toString(this.isSuperMultiHit));
@@ -342,8 +337,6 @@ public class CoreAPI {
         var3.setProperty("isUnlimitedCarry", Boolean.toString(this.isUnlimitedCarry));
         var3.setProperty("isConnectFlags", Boolean.toString(this.isConnectFlags));
         var3.setProperty("isUnlimitedEndurance", Boolean.toString(this.isUnlimitedEndurance));
-        var3.setProperty("isUnlimitedAmmo", Boolean.toString(this.isUnlimitedAmmo));
-        var3.setProperty("ammoFarmCount", Integer.toString(this.ammoFarmCount));
         var3.setProperty("isCritMax", Boolean.toString(this.isCritMax));
         var3.setProperty("combatSpeedMultiplier", Float.toString(this.combatSpeedMultiplier));
         var3.setProperty("attackRangeBonus", Float.toString(this.attackRangeBonus));
@@ -465,7 +458,6 @@ public class CoreAPI {
         this.isEnableInvisible = ConfigUtils.getBooleanFromConfig(var3, "isEnableInvisible", false);
         this.isEnableNightVision = ConfigUtils.getBooleanFromConfig(var3, "isEnableNightVision", false);
         this.isZombieDontAttack = ConfigUtils.getBooleanFromConfig(var3, "isZombieDontAttack", false);
-        this.isNoRecoil = ConfigUtils.getBooleanFromConfig(var3, "isNoRecoil", false);
         this.isHeadshotOnly = ConfigUtils.getBooleanFromConfig(var3, "isHeadshotOnly", false);
         this.isAlwaysHit = ConfigUtils.getBooleanFromConfig(var3, "isAlwaysHit", false);
         this.isSuperMultiHit = ConfigUtils.getBooleanFromConfig(var3, "isSuperMultiHit", false);
@@ -474,8 +466,6 @@ public class CoreAPI {
         this.isUnlimitedCarry = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedCarry", false);
         this.isConnectFlags = ConfigUtils.getBooleanFromConfig(var3, "isConnectFlags", false);
         this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedEndurance", false);
-        this.isUnlimitedAmmo = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedAmmo", false);
-        this.ammoFarmCount = ConfigUtils.getIntFromConfig(var3, "ammoFarmCount", 30);
         this.isCritMax = ConfigUtils.getBooleanFromConfig(var3, "isCritMax", false);
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var3, "combatSpeedMultiplier", 1.0f);
         this.attackRangeBonus = ConfigUtils.getFloatFromConfig(var3, "attackRangeBonus", 0.0f);
@@ -613,6 +603,8 @@ public class CoreAPI {
         this.exposer.exposeServerSyncBlocker();
             this.exposer.exposeFishingSpawn();
             this.exposer.exposeCorpseSpawn();
+            // 2026-11-11 研判探针: 僵尸挂载单发 (自建服核实"搬移还是重复引用")
+            this.exposer.exposeZombieAttach();
             // 一百九十 万象天引: B 聚集原语
             this.exposer.exposeZombieGather();
             this.exposer.exposeRadioXp();
@@ -709,94 +701,8 @@ public class CoreAPI {
         }
     }
 
-    public void resetCritChance() {
-        if (this.isCritMax || this.isNoRecoil) {
-            return;
-        }
-        IsoPlayer player = IsoPlayer.getInstance();
-        if (player != null) {
-            ArrayList<InventoryItem> items = player.getInventory().getItems();
-            if (items != null) {
-                for (InventoryItem item : items) {
-                    if (!(item instanceof HandWeapon)) {
-                        continue;
-                    }
-                    HandWeapon weapon = (HandWeapon)item;
-                    String weaponType = weapon.getFullType();
-                    if (this.critChanceSnapshot.containsKey(weaponType)) {
-                        weapon.setCriticalChance(this.critChanceSnapshot.get(weaponType));
-                    }
-                }
-            }
-        }
-        this.critChanceSnapshot.clear();
-    }
-
-    private void applyUnlimitedAmmo(IsoPlayer player, InventoryItem item) {
-        if (item == null || !item.getStringItemType().equals("RangedWeapon") || item.getContainer() == null || item.getMaxAmmo() <= 0) {
-            return;
-        }
-        boolean changed = false;
-        if (item.getCurrentAmmoCount() != item.getMaxAmmo()) {
-            item.setCurrentAmmoCount(item.getMaxAmmo());
-            changed = true;
-        }
-        // B42 的枪有两个状态: 弹匣计数 + 膛内那一发 (roundChambered)。
-        // 只补计数时弹匣满了但膛是空的, 而上膛动作要求弹匣有弹, 空枪会卡在"打不出也上不了膛";
-        // 这里把膛内那发一并补上, 空枪也能直接击发。
-        if (item instanceof HandWeapon weapon && weapon.haveChamber() && !weapon.isRoundChambered()) {
-            weapon.setRoundChambered(true);
-            changed = true;
-        }
-        if (changed) {
-            INetworkPacket.send(PacketTypes.PacketType.SyncItemFields, player, item);
-        }
-    }
-
-    // 无限弹药(背包弹匣扩展): 弹匣 = 非武器且 getMaxAmmo()>0 的物品(InventoryItem:836
-    // 官方 tooltip 同款判定)。背包内弹匣打空自动回满 + SyncItemFields 上行
-    // (服务端 processServer 零校验采纳 currentAmmoCount), 免去手动装填;
-    // 与手持锁同款"变化才发", 静止时零包。
-    private void applyUnlimitedAmmoToInventory(IsoPlayer player) {
-        ArrayList<InventoryItem> items = player.getInventory().getItems();
-        if (items == null || items.isEmpty()) {
-            return;
-        }
-        for (InventoryItem item : items) {
-            if (item == null || item instanceof HandWeapon || item.getContainer() == null || item.getMaxAmmo() <= 0) {
-                continue;
-            }
-            if (item.getCurrentAmmoCount() != item.getMaxAmmo()) {
-                item.setCurrentAmmoCount(item.getMaxAmmo());
-                INetworkPacket.send(PacketTypes.PacketType.SyncItemFields, player, item);
-            }
-        }
-    }
-
-    public void farmSetWeaponAmmo() {
-        IsoPlayer player = IsoPlayer.getInstance();
-        if (player == null) {
-            return;
-        }
-        this.farmSetHandWeapon(player, player.getPrimaryHandItem());
-        this.farmSetHandWeapon(player, player.getSecondaryHandItem());
-    }
-
-    private void farmSetHandWeapon(IsoPlayer player, InventoryItem item) {
-        if (!(item instanceof HandWeapon)) {
-            return;
-        }
-        HandWeapon weapon = (HandWeapon)item;
-        if (!weapon.getStringItemType().equals("RangedWeapon") || weapon.getContainer() == null) {
-            return;
-        }
-        weapon.setCurrentAmmoCount(this.ammoFarmCount);
-        String magazineType = weapon.getMagazineType();
-        if (magazineType != null && !magazineType.isEmpty()) {
-            weapon.setContainsClip(true);
-        }
-        INetworkPacket.send(PacketTypes.PacketType.SyncHandWeaponFields, player, weapon);
-    }
+    // 2026-11-11: 单人「设置弹药数 / 自动刷」面板入口已移除, 对应 farm 方法与
+    // ammoFarmCount 配置一并退休; k20 空号禁止复用。
 
     /** 二百七十七 (J6): MultiHitZombies 选项引用缓存 (见 updateLocalPlayerFeatures)。 */
     private SandboxOptions.SandboxOption multiHitOption;
@@ -827,14 +733,6 @@ public class CoreAPI {
             var3.setExtraDamage(100000.0f);
             var3.setMaxDamage(1000000.0f);
             var3.setMinDamage(1000000.0f);
-        }
-        if (this.isCritMax && var2 != null && (var2.getStringItemType().equals("RangedWeapon") || var2.getStringItemType().equals("MeleeWeapon")) && var2 instanceof HandWeapon) {
-            var3 = (HandWeapon)var2;
-            String critWeaponType = var3.getFullType();
-            if (!this.critChanceSnapshot.containsKey(critWeaponType)) {
-                this.critChanceSnapshot.put(critWeaponType, var3.getCriticalChance());
-            }
-            var3.setCriticalChance(100.0f);
         }
         // 二百七十七 (J6): 选项引用缓存 — 原每帧 getOptionByName 按名查表
         if (this.multiHitOption == null) {
@@ -895,50 +793,8 @@ public class CoreAPI {
         // 根因, 且关调试会连带触发 Core.debug 运行时切换导致重启。改由 GamePatcher 注入
         // IsoZombie.getShouldAttack (攻击唯一裁决门) 拦截本机玩家, SP/MP 通用、无需调试、无重启。
         // 参见 GamePatcher.patchZombieShouldAttack。
-        // 提高枪械射速 (原"神枪手模式"): 射速门只看玩家侧 recoilDelay (AttemptAttack 前置
-        // getRecoilDelay()<=0 才可击发)。分两档处理:
-        //  · 半自动/单发: 只每帧清玩家侧 recoilDelay, 武器字段不动 => recoilVarX/singleShootSpeed
-        //    全 vanilla (无模型扭曲/动画卡死), 射速由射击动画自然限速, 远高于单发 150ms AC 阈值。
-        //  · 全自动: 把武器侧 recoilDelay 压到 6 (比旧值 8 更激进, 保留安全冗余) —— 玩家侧每帧衰减
-        //    0.625, 每发后取按瞄准/力量缩放的 getRecoilDelay(owner) (双满级最低 ×0.5625), 故实弹间隔
-        //    ≈ ceil(6×0.5625/0.625)=6 帧: <400fps 一律 >15ms 全自动阈值 (60fps=100ms / 240fps=25ms
-        //    冗余); 值非零 => recoilVarX 未满, 姿势/动画仅轻微加速不扭曲。切非全自动/关功能/换枪时一律
-        //    还原脚本 recoilDelay, 防加速值残留把单发打穿 150ms 阈值。
-        if (this.isNoRecoil && var2 != null && var2.getStringItemType().equals("RangedWeapon") && var2 instanceof HandWeapon) {
-            var3 = (HandWeapon)var2;
-            String norecoilWeaponType = var3.getFullType();
-            if (!this.critChanceSnapshot.containsKey(norecoilWeaponType)) {
-                this.critChanceSnapshot.put(norecoilWeaponType, var3.getCriticalChance());
-            }
-            var3.setCriticalChance(100.0f);
-            var3.setAimingTime(0);
-            if ("Auto".equals(var3.getFireMode())) {
-                if (this.recoilStompedWeapon != null && this.recoilStompedWeapon != var3 && this.recoilStompedWeapon.getScriptItem() != null) {
-                    this.recoilStompedWeapon.setRecoilDelay(this.recoilStompedWeapon.getScriptItem().recoilDelay);
-                }
-                var3.setRecoilDelay(6);
-                this.recoilStompedWeapon = var3;
-            } else {
-                if (this.recoilStompedWeapon != null && this.recoilStompedWeapon.getScriptItem() != null) {
-                    this.recoilStompedWeapon.setRecoilDelay(this.recoilStompedWeapon.getScriptItem().recoilDelay);
-                }
-                this.recoilStompedWeapon = null;
-                var1.setRecoilDelay(0.0f);
-            }
-        } else {
-            if (this.recoilStompedWeapon != null && this.recoilStompedWeapon.getScriptItem() != null) {
-                this.recoilStompedWeapon.setRecoilDelay(this.recoilStompedWeapon.getScriptItem().recoilDelay);
-            }
-            this.recoilStompedWeapon = null;
-            if (this.isNoRecoil) {
-                var1.setRecoilDelay(0.0f);
-            }
-        }
-        if (this.isUnlimitedAmmo) {
-            this.applyUnlimitedAmmo(var1, var1.getPrimaryHandItem());
-            this.applyUnlimitedAmmo(var1, var1.getSecondaryHandItem());
-            this.applyUnlimitedAmmoToInventory(var1);
-        }
+        // 2026-11-11: 提高枪械射速 (isNoRecoil) 与无限弹药 (isUnlimitedAmmo) 已按用户要求弃用,
+        // 相关每帧踩值/发包与配置字段一并移除; k10/k19 空号禁止复用。
         if (this.isUnlimitedCondition && var2 != null) {
             if (var2.getHaveBeenRepaired() > 1) {
                 var2.setHaveBeenRepaired(1);
@@ -1888,6 +1744,20 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, ZombieGatherAPI.class, method, name);
                 Logger.printLog("Exposed ZombieGatherAPI method: " + name);
+            }
+        }
+
+        // 2026-11-11 研判探针: 僵尸挂载单发 (GameCharacterAttachedItemPacket 手动上行)
+        public void exposeZombieAttach() {
+            for (Method method : ZombieAttachAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) {
+                    name = method.getName();
+                }
+                this.exposeGlobalClassFunction(LuaManager.env, ZombieAttachAPI.class, method, name);
+                Logger.printLog("Exposed ZombieAttachAPI method: " + name);
             }
         }
 

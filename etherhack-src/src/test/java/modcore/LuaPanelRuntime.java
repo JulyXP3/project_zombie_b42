@@ -89,8 +89,7 @@ final class LuaPanelRuntime {
                 }
                 function getAllItems() return { size = function() return 0 end } end
                 string.sort = function(a, b) return a > b end
-                function getAmmoFarmCount() return 30 end
-                EtherAmmoFarm = { enabled = false }
+                EtherAmmoFarm = { bagFarm = nil, message = "" }
                 EtherSpawnQueue = { running = false, count = function() return 0 end }
                 EtherFishSpawn = {}; EtherCorpseSpawn = {}; EtherBoxPoison = {}
                 """);

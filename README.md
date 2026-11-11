@@ -25,8 +25,8 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Combat
 
-- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / Increase Critical Chance (raises weapon critical chance; does not guarantee a critical hit) / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / Increase Fire Rate / Infinite ammo (refills firearms and inventory magazines while enabled; normal consumption resumes when disabled) / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
-- **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; the vanilla damage falloff across targets is removed, so every zombie takes full damage — combine with Increase Critical Chance / One-Shot Kill)
+- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / 90% Critical Chance (your ordinary weapon attacks against zombies; shoves, unarmed attacks and special weapon rules are excluded) / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
+- **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; the vanilla damage falloff across targets is removed, so every zombie takes full damage — combine with 90% Critical Chance / One-Shot Kill)
 - **Temp Weapon**: locally spawn a firearm and swap it into your hands (searchable full firearm list + swap/restore)
 
 ### Items (SP)
@@ -63,7 +63,8 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Loot
 
-- **Ammo farming**: spawn ammo per magazine/weapon type
+- **Ammo farming**: nested-bag magazine farm (multiplayer only; hold an empty magazine-fed firearm and place a loaded matching magazine inside an unequipped bag/toolbox in your main inventory)
+- **Research tests**: attach an existing item to the nearest zombie, check nearby inventories for it, or scan available forage records; these controls are for verification on your own multiplayer test server, not a confirmed item-duplication feature.
 - **Item Spawn (MP)**: with a fishing rod equipped, spawn any listed item into your inventory (~5-8s; a failed spawn leaves a log entry on the server; multiplayer only)
 - **Corpse spawn**: spawn a corpse at your feet carrying the chosen items and loot it (multiplayer only; **it leaves a log entry on the server - use with caution**)
 - **Unbox spawn**: keep a carrier (jar box / log stack x2-x4 / firewood bundle) in your backpack, pick a target and count, then spawn; craft the matching unpack recipe once to release any listed items (multiplayer only)
@@ -76,7 +77,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Vehicles
 
 - **Engine & starting**: start with any key (single shot / auto-retry) - any car key in your inventory can be inserted into the target vehicle's ignition; keyless start and guaranteed hotwire are not yet repaired and fuel/battery/engine condition still apply.
-- **Repair**: auto-repair covers the whole vehicle (except engine/trunk/glove box and other parts without install tables) without items; success depends on the character's skill level, failures are harmless and one success restores full condition; low skill auto-retries and shows the current part, remaining condition and attempt count (multiplayer only).
+- **Repair**: auto-repair restores eligible vehicle parts in stages without repair items; it excludes the engine, fuel tank, trunk, glove box and other unsupported parts. Success depends on the character's skill level, with automatic retries and current-part, condition and attempt-count displays. Stay in the same vehicle throughout; leaving or changing vehicles stops the job (multiplayer only).
 - **Navigation mode**: auto-drive along the road network — get in the driver's seat, start the engine, press M and right-click "navigate here"; re-anchor while driving to reroute; cruise speed is adaptive (95% of the server speed limit) or set manually (honored as-is; going over the server limit counts as speeding on strict servers); any driving key takes over instantly; ends on arrival / exit / engine stall
 
 ### Farming
