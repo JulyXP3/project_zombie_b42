@@ -102,6 +102,7 @@ import zombie.network.ZomboidNetData;
 import zombie.popman.animal.AnimalInstanceManager;
 import zombie.scripting.objects.VehicleScript;
 import zombie.vehicles.BaseVehicle;
+import zombie.vehicles.VehiclePart;
 
 public class CoreAPI {
     private SafeExposer exposer;
@@ -180,6 +181,8 @@ public class CoreAPI {
     public boolean isVisualDrawLineToAnimals;
     public boolean isAnimalSpeciesAll = true;
     public String animalSpeciesFilter = "";
+    /** 多选追踪清单 (2026-11-12): 分号分隔的物品全名, 只存选择, 不统计数量。 */
+    public String watchlist = "";
     /** 多选集合解析缓存 (逐帧渲染路径; 键 = 参与切分的原串)。 */
     private String animalSpeciesSetKey;
     private java.util.HashSet<String> animalSpeciesSet;
@@ -223,6 +226,19 @@ public class CoreAPI {
             throw new IllegalStateException("Cannot create user configuration directory: " + dir);
         }
         return dir;
+    }
+
+    /** 载具 ESP 默认颜色: 亮粉色 (2026-11-12 用户要求, 替换不醒目的旧紫色)。 */
+    private static Color defaultVehicleUIColor() {
+        return new Color(255, 60, 170);
+    }
+
+    /** 旧默认紫色 (150,150,200): 仅用于把未自定义过的配置迁移到新默认。 */
+    private static boolean isLegacyVehicleColor(Color color) {
+        return color != null
+                && Math.round(color.r * 255.0f) == 150
+                && Math.round(color.g * 255.0f) == 150
+                && Math.round(color.b * 255.0f) == 200;
     }
 
     /*
@@ -293,6 +309,7 @@ public class CoreAPI {
             {"animalSpeciesFilter", "k84"},
             {"isVisualsTrailersEnable", "k85"},
             {"isAnimalSpeciesAll", "k86"},
+            {"watchlist", "k87"},
         };
         for (String[] e : m) {
             CONFIG_KEY_CODES.put(e[0], e[1]);
@@ -378,6 +395,7 @@ public class CoreAPI {
         var3.setProperty("isVisualsTrailersEnable", Boolean.toString(this.isVisualsTrailersEnable));
         var3.setProperty("animalSpeciesFilter", this.animalSpeciesFilter == null ? "" : this.animalSpeciesFilter);
         var3.setProperty("isAnimalSpeciesAll", Boolean.toString(this.isAnimalSpeciesAll));
+        var3.setProperty("watchlist", this.watchlist == null ? "" : this.watchlist);
         var3.setProperty("isVisualEnable360Vision", Boolean.toString(this.isVisualEnable360Vision));
         var3.setProperty("isMapDrawLocalPlayer", Boolean.toString(this.isMapDrawLocalPlayer));
         var3.setProperty("isMapDrawAllPlayers", Boolean.toString(this.isMapDrawAllPlayers));
@@ -444,7 +462,12 @@ public class CoreAPI {
 
     private void applyConfig(Properties var3) {
         this.mainUIAccentColor = ConfigUtils.getColorFromConfig(var3, "mainUIAccentColor", new Color(72, 216, 168));
-        this.vehiclesUIColor = ConfigUtils.getColorFromConfig(var3, "vehiclesUIColor", new Color(150, 150, 200));
+        this.vehiclesUIColor = ConfigUtils.getColorFromConfig(var3, "vehiclesUIColor", CoreAPI.defaultVehicleUIColor());
+        // 2026-11-12: 旧默认紫色 (150,150,200) 不够醒目, 统一升级为亮粉色;
+        // 只迁移"仍是旧默认值"的配置, 用户自定义颜色保持不变。
+        if (CoreAPI.isLegacyVehicleColor(this.vehiclesUIColor)) {
+            this.vehiclesUIColor = CoreAPI.defaultVehicleUIColor();
+        }
         this.zombiesUIColor = ConfigUtils.getColorFromConfig(var3, "zombiesUIColor", new Color(255, 150, 100));
         this.playersUIColor = ConfigUtils.getColorFromConfig(var3, "playersUIColor", new Color(255, 50, 100));
         this.animalsUIColor = ConfigUtils.getColorFromConfig(var3, "animalsUIColor", new Color(140, 230, 140));
@@ -515,6 +538,7 @@ public class CoreAPI {
             this.isAnimalSpeciesAll = this.animalSpeciesFilter.isEmpty();
         }
         this.isVisualEnable360Vision = ConfigUtils.getBooleanFromConfig(var3, "isVisualEnable360Vision", true);
+        this.watchlist = CoreAPI.normalizeWatchlist(ConfigUtils.getStringFromConfig(var3, "watchlist", ""));
         this.isMapDrawLocalPlayer = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawLocalPlayer", true);
         this.isMapDrawAllPlayers = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawAllPlayers", false);
         this.isMapDrawVehicles = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawVehicles", false);
@@ -563,7 +587,7 @@ public class CoreAPI {
         File startupFile = new File(configDir(), "startup.properties");
         if (!startupFile.exists()) {
             this.mainUIAccentColor = new Color(72, 216, 168);
-            this.vehiclesUIColor = new Color(150, 150, 200);
+            this.vehiclesUIColor = CoreAPI.defaultVehicleUIColor();
             this.zombiesUIColor = new Color(255, 150, 100);
             this.playersUIColor = new Color(255, 50, 100);
             this.animalsUIColor = new Color(140, 230, 140);
@@ -1135,6 +1159,7 @@ public class CoreAPI {
     // 二百七十五 (J4/J5): ESP 文本值变化才重建 (WeakHashMap 随实体回收 — 帧内恒定的
     // 字符串不再每实体每帧拼接分配) + 拖车/载具合并单趟遍历 (原两趟全量 + 每车部件线性扫)
     private static final java.util.Map<BaseVehicle, Object[]> VEHICLE_STAT_TEXT = new java.util.WeakHashMap<>();
+    private static final java.util.Map<BaseVehicle, Object[]> VEHICLE_EXTRA_TEXT = new java.util.WeakHashMap<>();
     private static final java.util.Map<BaseVehicle, Object[]> VEHICLE_NAME_TEXT = new java.util.WeakHashMap<>();
     private static final java.util.Map<BaseVehicle, Boolean> VEHICLE_HAS_TRAILER_PART = new java.util.WeakHashMap<>();
     private static final java.util.Map<IsoZombie, Object[]> ZOMBIE_HP_TEXT = new java.util.WeakHashMap<>();
@@ -1158,6 +1183,9 @@ public class CoreAPI {
                 // 翻译键为常量, 提到循环外查一次 (getTranslate 每次都走语言解析+映射查找, 逐实体重复查表纯浪费)
                 String vehiclePowerLabel = this.isVisualsVehiclesEnable ? CoreMain.getInstance().LuaTranslator.getTranslate("UI_VisualsDraws_VehiclePower") : null;
                 String vehicleSpeedLabel = this.isVisualsVehiclesEnable ? CoreMain.getInstance().LuaTranslator.getTranslate("UI_VisualsDraws_VehicleSpeed") : null;
+                String vehicleFuelLabel = this.isVisualsVehiclesEnable ? CoreMain.getInstance().LuaTranslator.getTranslate("UI_VisualsDraws_VehicleFuel") : null;
+                String vehicleBatteryLabel = this.isVisualsVehiclesEnable ? CoreMain.getInstance().LuaTranslator.getTranslate("UI_VisualsDraws_VehicleBattery") : null;
+                String vehicleEngineLabel = this.isVisualsVehiclesEnable ? CoreMain.getInstance().LuaTranslator.getTranslate("UI_VisualsDraws_VehicleEngine") : null;
                 for (BaseVehicle var10 : var2) {
                     float var11 = VehicleUtils.getScreenPositionX(var10);
                     float var12 = VehicleUtils.getScreenPositionY(var10);
@@ -1173,6 +1201,35 @@ public class CoreAPI {
                         }
                         Rendering.drawEspTextCenter((String)statCached[1], scale, var11, var12, var6, var7, var8, var5);
                         Rendering.drawEspTextCenter((String)statCached[3], scale, var11, var12 + (float)lineH, var6, var7, var8, var5);
+
+                        // 油/电/引擎耐久: 三项合并一行; 缺件或非有限值不算 0, 由格式化类省略/显示未知。
+                        // 油箱缺失时原版百分比返回 0, 这里先判部件存在, 避免把"没油箱"显示成 0%。
+                        VehiclePart gasTankPart = var10.getPartById("GasTank");
+                        Float fuelPct = gasTankPart == null ? null : var10.getRemainingFuelPercentage();
+                        VehiclePart batteryPart = var10.getPartById("Battery");
+                        InventoryItem batteryItem = batteryPart == null ? null : batteryPart.getInventoryItem();
+                        Integer batteryUses = batteryItem == null ? null : batteryItem.getCurrentUses();
+                        Integer batteryMax = batteryItem == null ? null : batteryItem.getMaxUses();
+                        VehiclePart enginePart = var10.getPartById("Engine");
+                        Integer engineCondition = enginePart == null ? null : enginePart.getCondition();
+                        Object[] extraCached = VEHICLE_EXTRA_TEXT.get(var10);
+                        if (extraCached == null
+                                || Float.compare((Float)extraCached[0], fuelPct) != 0
+                                || !Objects.equals(extraCached[1], batteryUses)
+                                || !Objects.equals(extraCached[2], batteryMax)
+                                || !Objects.equals(extraCached[3], engineCondition)
+                                || extraCached[5] != vehicleFuelLabel
+                                || extraCached[6] != vehicleBatteryLabel
+                                || extraCached[7] != vehicleEngineLabel) {
+                            String line = VehicleEspStats.buildLine(fuelPct, batteryUses, batteryMax,
+                                    engineCondition, vehicleFuelLabel, vehicleBatteryLabel, vehicleEngineLabel);
+                            extraCached = new Object[]{fuelPct, batteryUses, batteryMax, engineCondition,
+                                    line, vehicleFuelLabel, vehicleBatteryLabel, vehicleEngineLabel};
+                            VEHICLE_EXTRA_TEXT.put(var10, extraCached);
+                        }
+                        if (extraCached[4] != null) {
+                            Rendering.drawEspTextCenter((String)extraCached[4], scale, var11, var12 + (float)(lineH * 2), var6, var7, var8, var5);
+                        }
                     }
                     if (this.isVisualsTrailersEnable && var10 != null && this.hasTrailerPart(var10)) {
                         // 二百三十四 拖车 ESP: 标签始终画; 连线+近端距离数字 <150 才画 (二百二十七 实测口径)
@@ -1419,6 +1476,25 @@ public class CoreAPI {
         this.animalSpeciesSetKey = raw;
         this.animalSpeciesSet = set;
         return set;
+    }
+
+    /** 追踪清单: 去空、去重、保留顺序、最多 50 条; 名字内不允许分隔符。 */
+    public static String normalizeWatchlist(String raw) {
+        if (raw == null || raw.isEmpty()) {
+            return "";
+        }
+        java.util.LinkedHashSet<String> kept = new java.util.LinkedHashSet<String>();
+        for (String part : raw.split(";")) {
+            String name = part.trim();
+            if (name.isEmpty() || name.length() > 200 || name.indexOf(';') >= 0) {
+                continue;
+            }
+            kept.add(name);
+            if (kept.size() >= 50) {
+                break;
+            }
+        }
+        return String.join(";", kept);
     }
 
     /** 该物种当前是否参与显示: 全部模式恒 true; 自定义模式下空选择 = 一种都不显示。 */

@@ -6,6 +6,7 @@ EtherTheme = {}
 
 -- 调色板 (参考图实测: 近黑青底 #0E1213 + 薄荷青 #48D8A8 主强调 + 天蓝 #63C7F8 数值 + 银轨 #949C9D)
 EtherTheme.glassBG       = { r = 0.055, g = 0.070, b = 0.075, a = 0.94 }  -- 窗口底(近黑青, 参考图实测)
+EtherTheme.panelBG       = { r = 0.03,  g = 0.05,  b = 0.06,  a = 1 }     -- 主面板黑底 (弹窗对齐主面板用)
 EtherTheme.railBG        = { r = 0.075, g = 0.115, b = 0.115, a = 0.94 }  -- 导航条底(暗石板)
 EtherTheme.listHeaderBG  = { r = 0.08,  g = 0.15,  b = 0.15,  a = 1 }     -- 列表表头底(暗青; 取代 ISScrollingListBox 默认暗红)
 EtherTheme.blood         = { r = 0.28,  g = 0.85,  b = 0.66,  a = 1 }     -- 薄荷青(参考图拇指实测 #48D8A8)

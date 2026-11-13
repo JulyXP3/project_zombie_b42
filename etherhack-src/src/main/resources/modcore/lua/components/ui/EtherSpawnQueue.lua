@@ -433,9 +433,10 @@ end
 
 -- 背景/标题必须在 prerender (render 在子控件之后: 画在 render 会盖住按钮)
 function EtherSpawnQueuePopup:prerender()
-    local bg = EtherTheme.glassBG
-    self:drawRect(0, 0, self.width, self.height, 0.97, bg.r, bg.g, bg.b)
-    EtherTheme.drawTileBox(self, 0, 0, self.width, self.height, true, 8)
+    -- 背景对齐主面板 (纯黑底 + 切角青框), 不再用玻璃青底/激活磁贴填充 (用户 2026-11-13)
+    local bg = EtherTheme.panelBG
+    self:drawRect(0, 0, self.width, self.height, 1.0, bg.r, bg.g, bg.b)
+    EtherTheme.drawFrame(self, 0, 0, self.width, self.height)
     local tc = EtherTheme.text
     local title = getTranslate("UI_SpawnQueue_Title")
     local modeKey = self.mode == "corpse" and "UI_SpawnMode_Corpse"

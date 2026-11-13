@@ -86,6 +86,7 @@ function EtherRadarPanel:initList()
             table.insert(list, {
                 item = item,
                 name = name,
+                full = item:getFullName() or "",
                 lname = string.lower(name),
                 lfid = string.lower(item:getFullName() or ""),
                 -- 注意: ScriptItem 没有 getType() (那是 InventoryItem 的), 短名用 getName()
@@ -124,8 +125,24 @@ function EtherRadarPanel:applyFilter()
 end
 
 --*********************************************************
---* 列表行绘制: 图标 + 名称 (耕种-播种同款无列头列表; 名称取条目预存 text 零跨界)
+--* 列表行绘制: 勾选框 + 图标 + 名称 (样式与战利品多选列表一致)
+--* 勾选态按物品全名存在 EtherWatchlist, 过滤重建列表不丢
 --*********************************************************
+local CHECK_TEX = {};
+local CHECK_W = 16;
+local CHECK_HIT_W = 22;
+local NAME_X = 44;
+
+local function checkTexture(on)
+    local key = on and "on" or "off";
+    if CHECK_TEX[key] == nil then
+        CHECK_TEX[key] = resolveTexture(on
+            and "modcore/media/ui/checkbox_checked.png"
+            or "modcore/media/ui/checkbox_unchecked.png") or false;
+    end
+    return CHECK_TEX[key];
+end
+
 function EtherRadarPanel:drawDatas(y, item, alt)
     if y + self:getYScroll() + self.itemheight < 0 or y + self:getYScroll() >= self.height then
         return y + self.itemheight
@@ -133,11 +150,21 @@ function EtherRadarPanel:drawDatas(y, item, alt)
 
     EtherTheme.drawRowUnderlay(self, y, self.selected == item.index, alt, self.itemheight)
 
-    local iconSize = fontHeightSmall;
-    self:drawText(item.text, 25, y + 4, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 0.9, self.font);
+    local fullName = item.item and item.item:getFullName() or nil
+    local tex = checkTexture(fullName ~= nil and self.checked ~= nil and self.checked[fullName] ~= nil)
+    if tex then
+        self:drawTextureScaled(tex, 3, y + (self.itemheight - CHECK_W) / 2, CHECK_W, CHECK_W, 1, 1, 1, 1)
+    end
 
-    -- 二百七十五 (L3): 图标走 EtherTheme 缓存 (零逐帧桥调用/拼接/查表), 五页共用一份
-    EtherTheme.drawItemIcon(self, item.item, y, iconSize);
+    local iconSize = fontHeightSmall;
+    self:drawText(item.text, NAME_X, y + 4, EtherTheme.text.r, EtherTheme.text.g, EtherTheme.text.b, 0.9, self.font);
+
+    -- 图标 (EtherTheme 缓存; 勾选框占位后右移)
+    local texture = EtherTheme.itemTexture(item.item)
+    if texture then
+        self:drawTextureScaledAspect2(texture, 23, y + (self.itemheight - iconSize) / 2,
+            iconSize, iconSize, 1, 1, 1, 1)
+    end
 
     return y + self.itemheight;
 end
@@ -204,6 +231,165 @@ function EtherRadarPanel:onEspToggled(checked)
     if self:ensureScan() then
         EtherItemSearch.setItemEspEnabled(true);
     end
+end
+
+--*********************************************************
+--* 追踪清单 (2026-11-13): 行勾选 = 暂存; 「加入清单」写入持久清单;
+--*   「清单」弹出列表逐项移除; 追踪只针对清单内容。
+--*   只存物品全名, 不统计数量。
+--*********************************************************
+function EtherRadarPanel:refreshWatchLabel()
+    if self.watchCb ~= nil then
+        local text = tr("UI_RadarPanel_WatchToggle", { n = EtherWatchlist.count() })
+        self.watchCb.title = text
+        if self.watchCb.titleLines ~= nil then self.watchCb.titleLines = { text } end
+    end
+    if self.listBtn ~= nil then
+        self.listBtn.title = tr("UI_RadarPanel_OpenList", { n = EtherWatchlist.count() })
+    end
+end
+
+function EtherRadarPanel:persistWatchlist()
+    if type(setWatchlist) == "function" then
+        setWatchlist(EtherWatchlist.encode())
+    end
+end
+
+-- 载入并剔除当前物品库中不存在的旧条目 (mod 卸载/改名后)
+function EtherRadarPanel:loadWatchlist()
+    local raw = type(getWatchlist) == "function" and getWatchlist() or ""
+    EtherWatchlist.load(raw)
+    if self.fullList == nil then return end
+    local known = {}
+    for i = 1, #self.fullList do known[self.fullList[i].full] = true end
+    local changed = false
+    local names = {}
+    for i = 1, EtherWatchlist.count() do names[i] = EtherWatchlist.at(i) end
+    EtherWatchlist.load("")
+    for i = 1, #names do
+        if known[names[i]] then
+            EtherWatchlist.toggle(names[i])
+        else
+            changed = true
+        end
+    end
+    if changed then self:persistWatchlist() end
+    self:refreshWatchLabel()
+end
+
+function EtherRadarPanel:startWatchTracking()
+    local targets = EtherWatchlist.targets()
+    if EtherWatchlist.count() == 0 then return false end
+    self.statusText = tr("UI_RadarPanel_WatchTracking")
+    EtherItemSearch.startScan(targets, false, function(n)
+        if self.watchCb == nil or not self.watchCb.isChecked then return end
+        if n == 0 then
+            self.statusText = tr("UI_ItemSearch_NoResults")
+        else
+            self.statusText = tr("UI_RadarPanel_StatusHits", { count = n })
+        end
+    end)
+    EtherItemSearch.setMinimapEnabled(true)
+    EtherItemSearch.setItemEspEnabled(true)
+    return true
+end
+
+function EtherRadarPanel:stopWatchTracking(restore)
+    EtherItemSearch.setMinimapEnabled(self.watchPrevMinimap and true or false)
+    EtherItemSearch.setItemEspEnabled(self.watchPrevEsp and true or false)
+    if restore then self.statusText = nil end
+end
+
+-- 清单内容变化 (加入/弹窗移除/清空): 保存 + 刷新按钮 + 追踪跟随
+function EtherRadarPanel:onWatchlistChanged()
+    self:persistWatchlist()
+    self:refreshWatchLabel()
+    if self.watchCb == nil or not self.watchCb.isChecked then return end
+    if EtherWatchlist.count() == 0 then
+        self.watchCb.isChecked = false
+        self:stopWatchTracking(true)
+        self.statusText = tr("UI_RadarPanel_WatchEmpty")
+    else
+        self:startWatchTracking()
+    end
+end
+
+-- 把列表里勾选的行加入清单 (勾选本身不持久化, 与战利品模块一致)
+function EtherRadarPanel:addCheckedToWatchlist()
+    local checked = self.datas ~= nil and self.datas.checked or nil
+    local selected = 0
+    local added = 0
+    local rejected = false
+    if checked ~= nil then
+        for full in pairs(checked) do
+            selected = selected + 1
+            if not EtherWatchlist.contains(full) then
+                local result = EtherWatchlist.toggle(full)
+                if result == "added" then
+                    added = added + 1
+                elseif result == "full" then
+                    rejected = true
+                end
+            end
+        end
+    end
+    if self.datas ~= nil then self.datas.checked = {} end
+    if selected == 0 then
+        self.statusText = tr("UI_RadarPanel_NothingChecked")
+        return
+    end
+    if added == 0 and not rejected then
+        self.statusText = tr("UI_RadarPanel_AlreadyInList")
+        return
+    end
+    if rejected then
+        self.statusText = tr("UI_RadarPanel_WatchFull")
+    end
+    self:onWatchlistChanged()
+end
+
+function EtherRadarPanel:openWatchlist()
+    EtherWatchlistPopup.open(function()
+        self:onWatchlistChanged()
+    end)
+end
+
+function EtherRadarPanel:onWatchToggled(checked)
+    if checked then
+        if EtherWatchlist.count() == 0 then
+            self.watchCb.isChecked = false
+            self.statusText = tr("UI_RadarPanel_WatchEmpty")
+            return
+        end
+        self.watchPrevMinimap = UIMap.drawItems and true or false
+        self.watchPrevEsp = UIMap.drawItemEsp and true or false
+        self:startWatchTracking()
+    else
+        self:stopWatchTracking(true)
+    end
+    self:refreshWatchLabel()
+end
+
+-- 列表鼠标: 行首勾选区域切换暂存勾选, 其余交给原版整行选中 (与战利品同款)
+function EtherRadarPanel.onListMouseDown(panel, list, x, y)
+    if x <= CHECK_HIT_W then
+        local row = list:rowAt(x, y);
+        if row >= 1 and row <= #list.items then
+            local it = list.items[row];
+            local full = it.item and it.item:getFullName() or nil;
+            if full ~= nil then
+                if list.checked[full] ~= nil then
+                    list.checked[full] = nil;
+                else
+                    list.checked[full] = it.text or full;
+                    list.selected = row;
+                end
+                return true;
+            end
+        end
+    end
+    ISScrollingListBox.onMouseDown(list, x, y);
+    return true;
 end
 
 --*********************************************************
@@ -279,16 +465,31 @@ function EtherRadarPanel:createChildren()
     self:_text(idX, idY + EtherTheme.entryLabelDY, idT, EtherTheme.text, UIFont.Small);
     self:_group(PAD, sy, boxW, searchH);
 
-    -- ================= 底部: 两个勾选 + 说明 + 状态 =================
-    -- 两组开关相互独立, 自由组合: 只小地图 / 小地图+画线 / 单独画线
+    -- ================= 底部: 清单按钮 + 三个勾选 + 说明 + 状态 =================
+    -- 勾选 = 暂存; 「加入清单」写入持久清单; 「清单」打开弹窗查看/移除
     local cbTitle = getTranslate("UI_ItemSearch_ShowOnMap");
     local espTitle = getTranslate("UI_RadarPanel_EspLines");
     local hintLines = EtherTheme.wrapHint(getTranslate("UI_RadarPanel_Hint"), innerW);
     local hintH = #hintLines * EtherTheme.fontHgtHint;
-    local actH = (ctrlH + GAP) * 2 + IP + hintH + IP + fhS + IP;   -- 勾选×2 + 说明块 + 状态行
+    local actH = (ctrlH + GAP) * 4 + IP + hintH + IP + fhS + IP;   -- 按钮行 + 勾选×3 + 说明 + 状态
     local actY = H - PAD - (actH + IP * 2);
 
-    local cbY = actY + IP;
+    local btnY = actY + IP;
+    local addW = UIButton.measureWidth(getTranslate("UI_RadarPanel_AddToList"));
+    local listW = UIButton.measureWidth(tr("UI_RadarPanel_OpenList", { n = 0 }));
+    local btnW = math.min(math.max(addW, listW), math.floor((innerW - GAP) / 2));
+    self.addBtn = UIButton:new(innerX, btnY, btnW, ctrlH,
+        getTranslate("UI_RadarPanel_AddToList"), function() EtherRadarPanel.addCheckedToWatchlist(self); end, btnW);
+    self.listBtn = UIButton:new(innerX + btnW + GAP, btnY, btnW, ctrlH,
+        tr("UI_RadarPanel_OpenList", { n = 0 }), function() EtherRadarPanel.openWatchlist(self); end, btnW);
+    self.addBtn:initialise();
+    self.addBtn:instantiate();
+    self.listBtn:initialise();
+    self.listBtn:instantiate();
+    self:addChild(self.addBtn);
+    self:addChild(self.listBtn);
+
+    local cbY = btnY + ctrlH + GAP;
     self.showCb = UICheckbox:new(innerX, cbY, cbTitle, UIMap.drawItems and true or false, function(v)
         EtherRadarPanel.onShowMapToggled(self, v);
     end);
@@ -306,7 +507,15 @@ function EtherRadarPanel:createChildren()
     self.espCb.width = innerW;
     self:addChild(self.espCb);
 
-    local hintY0 = espY + ctrlH + IP;
+    local watchY = espY + ctrlH + GAP;
+    self.watchCb = UICheckbox:new(innerX, watchY, tr("UI_RadarPanel_WatchToggle", { n = 0 }), false,
+        function(v) EtherRadarPanel.onWatchToggled(self, v); end);
+    self.watchCb:initialise();
+    self.watchCb:instantiate();
+    self.watchCb.width = innerW;
+    self:addChild(self.watchCb);
+
+    local hintY0 = watchY + ctrlH + IP;
     for i = 1, #hintLines do
         self:_text(innerX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, hintLines[i], EtherTheme.textDim, nil, true);
     end
@@ -328,10 +537,16 @@ function EtherRadarPanel:createChildren()
     self.datas.joypadParent = self;
     self.datas.font = UIFont.NewSmall;
     self.datas.doDrawItem = self.drawDatas;
+    -- 勾选 = 暂存 (按物品全名, 过滤重建列表不丢), 点「加入清单」才写入持久清单
+    self.datas.checked = {};
+    self.datas.onMouseDown = function(list, x, y)
+        return EtherRadarPanel.onListMouseDown(self, list, x, y);
+    end;
     EtherTheme.styleList(self.datas);
     self:addChild(self.datas);
 
     self:initList();
+    self:loadWatchlist();
 end
 
 --*********************************************************

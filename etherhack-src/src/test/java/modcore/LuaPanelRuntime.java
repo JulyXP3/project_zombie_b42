@@ -25,14 +25,26 @@ final class LuaPanelRuntime {
                 }
                 function getTranslate(key) return translations[key] or key end
                 function tr(key, params) return getTranslate(key) end
+                function getItemNameFromFullType(fullName) return tostring(fullName) end
                 player = {}
                 function getPlayer() return player end
                 function isMultiplayer() return true end
+                function getCore()
+                    return { getScreenWidth = function() return 1280 end,
+                             getScreenHeight = function() return 720 end }
+                end
+                function getMouseX() return 100 end
+                function getMouseY() return 100 end
                 local control = {
-                    initialise = function() end, instantiate = function() end,
+                    initialise = function(self) self.children = self.children or {} end,
+                    instantiate = function() end,
                     setClearButton = function() end, setVisible = function(self, v) self.visible = v end,
                     setEditable = function(self, v) self.editable = v end,
                     setEnable = function(self, v) self.enable = v end,
+                    setX = function(self, v) self.x = v end,
+                    setY = function(self, v) self.y = v end,
+                    addToUIManager = function(self) self.inUIManager = true end,
+                    removeFromUIManager = function(self) self.inUIManager = false end,
                     getInternalText = function(self) return self.text end,
                     addChild = function(self, child) table.insert(self.children, child) end,
                     clear = function(self) self.items = {} end,

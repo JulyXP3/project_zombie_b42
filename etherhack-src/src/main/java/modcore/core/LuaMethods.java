@@ -862,6 +862,20 @@ public class LuaMethods {
         saveConfig("startup");
     }
 
+    @LuaMethod(name="getWatchlist", global=true)
+    public static String getWatchlist() {
+        if (CoreMain.getInstance().CoreAPI == null) return "";
+        String raw = CoreMain.getInstance().CoreAPI.watchlist;
+        return raw == null ? "" : raw;
+    }
+
+    @LuaMethod(name="setWatchlist", global=true)
+    public static void setWatchlist(String var0) {
+        if (CoreMain.getInstance().CoreAPI == null) return;
+        CoreMain.getInstance().CoreAPI.watchlist = CoreAPI.normalizeWatchlist(var0);
+        saveConfig("startup");
+    }
+
     /** 恢复出厂默认设置 (设置页「重置默认设置」按钮): 走 loadConfig 缺省分支, Lua 侧随后 saveConfig("startup") 落盘 */
     @LuaMethod(name="resetConfig", global=true)
     public static void resetConfig() {

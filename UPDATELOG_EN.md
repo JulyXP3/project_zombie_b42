@@ -2,6 +2,10 @@
 
 ## [3.2.8] - Current
 
+- Added: vehicle ESP now shows fuel, battery and engine condition; missing or unreadable values are omitted.
+
+- Added: the item radar supports ticking several items and adding them to a list, viewing and removing entries in the List window; "Track list" marks only the listed types, and the list persists across restarts.
+
 - Improved: auto-repair restores each eligible part to condition 95; the engine, fuel tank, trunk, glove box and lightbar are excluded. Each step waits for the server result before continuing, and the job stops instead of resending when a result cannot be confirmed. Cancelling or leaving the vehicle does not keep processing in the background.
 
 

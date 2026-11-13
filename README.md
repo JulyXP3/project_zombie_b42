@@ -35,7 +35,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Item Radar
 
-- Full item database list (name/ID search) + "Show on map" + "ESP tracking" (three-way synced with the minimap "Items" toggle)
+- Full item database list (name/ID search) + "Show on map" + "ESP tracking" (three-way synced with the minimap "Items" toggle); tick several items and press "Add to list", remove entries in the "List" window, and "Track list" marks only the listed types (the list persists across restarts)
 
 ### Traps
 
@@ -53,7 +53,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### ESP
 
-- Master switch + five modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed), zombie info (overhead HP readout, zombie radar), animal info (show animal names, animal radar with distance lines within 150 tiles, multi-select species filter, track livestock trailers), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision — every zombie/vehicle/player forced visible)
+- Master switch + five modules: player info (nearby usernames, primary/secondary items), vehicle info (power/top speed/fuel/battery/engine condition), zombie info (overhead HP readout, zombie radar), animal info (show animal names, animal radar with distance lines within 150 tiles, multi-select species filter, track livestock trailers), standalone toggles (player radar 150 tiles, vehicle radar, 360° vision — every zombie/vehicle/player forced visible)
 
 ### Map
 
