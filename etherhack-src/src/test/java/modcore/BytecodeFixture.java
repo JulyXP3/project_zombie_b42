@@ -6,7 +6,9 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.*;
 
 import java.io.IOException;
+import java.lang.invoke.MethodHandles;
 import java.util.Map;
+import sun.misc.Unsafe;
 
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -65,6 +67,12 @@ public final class BytecodeFixture {
         return new ClassLoader(BytecodeFixture.class.getClassLoader()) {
             Class<?> define() { return defineClass(node.name.replace('/', '.'), bytes, 0, bytes.length); }
         }.define();
+    }
+
+    public static <T> T allocate(Class<T> type) throws Exception {
+        Unsafe unsafe = (Unsafe) MethodHandles.privateLookupIn(Unsafe.class, MethodHandles.lookup())
+                .findStaticVarHandle(Unsafe.class, "theUnsafe", Unsafe.class).get();
+        return type.cast(unsafe.allocateInstance(type));
     }
 
     public static String owner(Class<?> type) {

@@ -60,7 +60,6 @@ import zombie.inventory.types.HandWeapon;
 import zombie.inventory.types.Food;
 import zombie.iso.IsoGridSquare;
 import zombie.network.GameClient;
-import zombie.network.PacketTypes;
 import zombie.network.ServerOptions;
 import zombie.scripting.ScriptManager;
 import zombie.scripting.objects.Recipe;
@@ -861,6 +860,34 @@ public class LuaMethods {
         CoreMain.getInstance().CoreAPI.isPadClothing = var0;
         saveConfig("startup");
     }
+
+    @LuaMethod(name="generatorMaintenanceReady", global=true)
+    public static boolean generatorMaintenanceReady() {
+        return !GameClient.client || GameClient.connection != null && GameClient.connection.isReady();
+    }
+
+    /** 本地会话已进入且移动提交未失败, 不是服务端回执。 */
+    @LuaMethod(name="teleportClimbReady", global=true)
+    public static boolean teleportClimbReady(IsoPlayer player) {
+        return TeleportClimbRuntime.ready(player);
+    }
+
+    @LuaMethod(name="teleportClimbPending", global=true)
+    public static boolean teleportClimbPending(IsoPlayer player) {
+        return TeleportClimbRuntime.pending(player);
+    }
+
+    @LuaMethod(name="teleportClimbCloseFailed", global=true)
+    public static boolean teleportClimbCloseFailed(IsoPlayer player) {
+        return TeleportClimbRuntime.closeFailed(player);
+    }
+
+    /** 穿墙结束请求使用存储会话, 等两阶段服务器周期回声后清位; 不依赖 getPlayer。 */
+    @LuaMethod(name="teleportClimbState", global=true)
+    public static boolean teleportClimbState(IsoPlayer player, boolean entering) {
+        return entering ? TeleportClimbRuntime.enter(player) : TeleportClimbRuntime.exit();
+    }
+
 
     @LuaMethod(name="getWatchlist", global=true)
     public static String getWatchlist() {

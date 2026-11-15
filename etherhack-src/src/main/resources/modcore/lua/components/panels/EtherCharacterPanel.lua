@@ -279,6 +279,10 @@ function EtherCharacterPanel:build()
                 end
             end
         end);
+        if mod.title == "UI_CharacterPanel_Group_Items" then
+            self:addSpacer(EtherFormPanel.SECTION_GAP);
+            GeneratorMaintenance.addModule(self);
+        end
     end
 end
 

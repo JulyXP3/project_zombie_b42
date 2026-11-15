@@ -54,7 +54,7 @@ import org.objectweb.asm.tree.TypeInsnNode;
 import org.objectweb.asm.tree.VarInsnNode;
 
 public class GamePatcher {
-    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "iso/IsoChunk.class", "core/opengl/RenderSettings$PlayerRenderSettings.class", "iso/LightingJNI$JNILighting.class", "network/ServerLOS$ServerLighting.class", "core/physics/CarController.class",
+    private final String[] patchFiles = new String[]{"GameWindow.class", "inventory/ItemContainer.class", "Lua/LuaEventManager.class", "Lua/LuaManager.class", "characters/IsoGameCharacter.class", "characters/NetworkCharacterAI.class", "network/packets/service/TimeSyncPacket.class", "network/GameClient.class", "CombatManager.class", "characters/Role.class", "vehicles/BaseVehicle.class", "characters/IsoZombie.class", "network/packets/character/CreatePlayerPacket.class", "iso/IsoGridSquare.class", "iso/IsoChunk.class", "core/opengl/RenderSettings$PlayerRenderSettings.class", "iso/LightingJNI$JNILighting.class", "network/ServerLOS$ServerLighting.class", "core/physics/CarController.class",
             // 二百一十七: IsoPlayer.class 自 exposePrivateFields (modifyClass) 起就一直被写盘,
             // 但从未登记在本表 —— 卸载时 restoreFiles 只按本表删除补丁类, 导致该文件残留。
             // 「关窗射击」(WindowShotPatch) 注入 IsoPlayer.updateWhileInVehicle 后正式登记,
@@ -600,21 +600,20 @@ public class GamePatcher {
     }
 
     //*********************************************************
-    //* 枪械百发百中 (CoreAPI.isAlwaysHit): 劫持 CombatManager.calculateHitChanceData
-    //* 的收尾 PUTFIELD (唯一可能产生 <100 的 clamp 路径; 前两个早退 PUTFIELD 本就写
-    //* MAXIMUM=100) —— 栈上 POP 丢弃钳制结果, LDC 100.0f 覆写。
-    //* 消费方: calculateHitInfoList 的 hitInfo.chance (=100 → Rand.Next(100)<=100 恒中)
-    //* + updateReticle 的 isoReticle.setChance (准星同步显示 100%)。
-    //* 服务端包内无命中率字段, 与只爆头同一信任模型, MP 同样生效。
+    //* 枪械概率: 原「百发百中」与只爆头的本人射击僵尸保障共用收尾计算点。
+    //* 不改变弹道/遮挡/射程，不写伤害忽略位；后续原版判定读取这次概率。
     //*********************************************************
     private void patchAlwaysHit() {
-        Logger.print("Patching CombatManager.calculateHitChanceData with always-hit hook...");
+        Logger.print("Patching CombatManager.calculateHitChanceData with shot-chance hook...");
         try {
-            Patch.injectIntoClass("zombie/CombatManager", "calculateHitChanceData", false, method -> {
-                // b42.22: HitChanceData 由可变类改成 record, 方法末尾不再是 PUTFIELD,
-                // 而是 `new HitChanceData(clampedHitChance, aimPenalty)` 后直接 ARETURN。
-                // 锚点改为: 方法里最后一处 `NEW HitChanceData` 之前的那条 FSTORE(命中率局部槽),
-                // 在它之后覆写该局部槽 —— 后面的 FLOAD 读到的就是 100。
+            Patch.injectIntoClass("zombie/CombatManager", "calculateHitChanceData", false, null, method -> {
+                String descriptor = "(Lzombie/characters/IsoGameCharacter;Lzombie/inventory/types/HandWeapon;"
+                        + "Lzombie/iso/IsoMovingObject;F)Lzombie/CombatManager$HitChanceData;";
+                if (!method.desc.equals(descriptor)) {
+                    throw new IllegalStateException("unexpected calculateHitChanceData descriptor: " + method.desc);
+                }
+                // b42.22: 只改收尾 new HitChanceData(chance, aimPenalty) 前的概率局部槽，
+                // 保留原版早退与瞄准惩罚；槽位从返回形状现取。
                 TypeInsnNode creation = null;
                 for (AbstractInsnNode insn = method.instructions.getFirst(); insn != null; insn = insn.getNext()) {
                     if (insn instanceof TypeInsnNode candidate && candidate.getOpcode() == 187
@@ -638,6 +637,7 @@ public class GamePatcher {
                         || !(chanceLoad instanceof VarInsnNode) || chanceLoad.getOpcode() != 23
                         || !(penaltyLoad instanceof VarInsnNode) || penaltyLoad.getOpcode() != 23
                         || !(init instanceof MethodInsnNode) || init.getOpcode() != 183
+                        || !"zombie/CombatManager$HitChanceData".equals(((MethodInsnNode) init).owner)
                         || !"<init>".equals(((MethodInsnNode) init).name)
                         || !"(FF)V".equals(((MethodInsnNode) init).desc)
                         || ret == null || ret.getOpcode() != 176) {
@@ -647,29 +647,138 @@ public class GamePatcher {
                 if (((VarInsnNode) chanceLoad).var != hitChanceVar) {
                     throw new IllegalStateException("unexpected hit chance operand slot");
                 }
-                // 开关守卫 (三级判空, 栈中性): isAlwaysHit=false 时局部槽保持钳制后的原值。
                 InsnList toInject = new InsnList();
-                LabelNode skipOverwrite = new LabelNode();
-                toInject.add(new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
-                toInject.add(new JumpInsnNode(198, skipOverwrite));
-                toInject.add(new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
-                toInject.add(new FieldInsnNode(180, "modcore/core/CoreMain", "CoreAPI", "Lmodcore/core/CoreAPI;"));
-                toInject.add(new JumpInsnNode(198, skipOverwrite));
-                toInject.add(new MethodInsnNode(184, "modcore/core/CoreMain", "getInstance", "()Lmodcore/core/CoreMain;", false));
-                toInject.add(new FieldInsnNode(180, "modcore/core/CoreMain", "CoreAPI", "Lmodcore/core/CoreAPI;"));
-                toInject.add(new FieldInsnNode(180, "modcore/core/CoreAPI", "isAlwaysHit", "Z"));
-                toInject.add(new JumpInsnNode(153, skipOverwrite));
-                toInject.add(new LdcInsnNode(Float.valueOf(100.0f)));
-                toInject.add(new VarInsnNode(56, hitChanceVar)); // FSTORE: 覆写钳制后的命中率局部槽
-                toInject.add(skipOverwrite);
+                toInject.add(new VarInsnNode(23, hitChanceVar));
+                toInject.add(new VarInsnNode(25, 2));
+                toInject.add(new VarInsnNode(25, 1));
+                toInject.add(new VarInsnNode(25, 3));
+                toInject.add(new MethodInsnNode(184, "modcore/core/HeadshotRuntime", "selectHitChance",
+                        "(FLzombie/inventory/types/HandWeapon;Lzombie/characters/IsoGameCharacter;"
+                                + "Lzombie/iso/IsoMovingObject;)F", false));
+                toInject.add(new VarInsnNode(56, hitChanceVar));
                 method.instructions.insertBefore(creation, toInject);
-                Logger.print("  [OK] Injected always-hit (chance=100, slot " + hitChanceVar
-                        + ") into CombatManager.calculateHitChanceData()");
-            });
+                Logger.print("  [OK] Injected shot-chance selector into slot " + hitChanceVar);
+            }, "modcore/core/HeadshotRuntime", "selectHitChance");
         }
         catch (Exception e) {
             Logger.print("Warning: Always-hit injection failed: " + e.getMessage());
             Logger.logException(e);
+        }
+    }
+
+    /** 穿墙玩家限域状态门 + 同通道移动发送门, 运行时引用类保持 ASM-free。 */
+    private void patchTeleportStateSuppress() {
+        Logger.print("Patching NetworkCharacterAI.postUpdate with teleport state-suppress gate...");
+        try {
+            Patch.injectIntoClass("zombie/characters/NetworkCharacterAI", "postUpdate", false,
+                    GamePatcher::verifyTeleportPostUpdate, method -> {
+                InsnList toInject = new InsnList();
+                toInject.add(new VarInsnNode(25, 0));
+                toInject.add(new MethodInsnNode(184, "modcore/core/TeleportClimbRuntime", "observePostUpdate",
+                        "(Lzombie/characters/NetworkCharacterAI;)V", false));
+                toInject.add(new VarInsnNode(25, 0));
+                toInject.add(new MethodInsnNode(184, "modcore/core/TeleportClimbRuntime", "suppressActive",
+                        "(Lzombie/characters/NetworkCharacterAI;)Z", false));
+                LabelNode proceed = new LabelNode();
+                toInject.add(new JumpInsnNode(153, proceed));
+                toInject.add(new InsnNode(177));
+                toInject.add(proceed);
+                method.instructions.insertBefore(method.instructions.getFirst(), toInject);
+                Logger.print("  [OK] Injected player-scoped teleport state gate");
+            }, "modcore/core/TeleportClimbRuntime", "suppressActive");
+            Logger.print("Patching GameClient.sendPlayer2 with ordered teleport movement gate...");
+            Patch.injectIntoClass("zombie/network/GameClient", "sendPlayer2", false,
+                    GamePatcher::verifyTeleportPlayerSender, method -> {
+                InsnList toInject = new InsnList();
+                toInject.add(new MethodInsnNode(184, "modcore/core/TeleportClimbRuntime", "observePlayerSender", "()V", false));
+                toInject.add(new VarInsnNode(25, 1));
+                toInject.add(new MethodInsnNode(184, "modcore/core/TeleportClimbRuntime", "routePlayerUpdate",
+                        "(Lzombie/characters/IsoPlayer;)Z", false));
+                LabelNode proceed = new LabelNode();
+                toInject.add(new JumpInsnNode(153, proceed));
+                toInject.add(new InsnNode(177));
+                toInject.add(proceed);
+                method.instructions.insertBefore(method.instructions.getFirst(), toInject);
+                Logger.print("  [OK] Injected ordered local-player movement gate");
+            }, "modcore/core/TeleportClimbRuntime", "routePlayerUpdate");
+            Patch.injectIntoClass("zombie/network/packets/service/TimeSyncPacket", "processClient", false,
+                    GamePatcher::verifyTeleportFenceReceiver, method -> {
+                InsnList hook = new InsnList();
+                hook.add(new MethodInsnNode(184, "modcore/core/TeleportClimbRuntime", "observeFenceReceiver", "()V", false));
+                hook.add(new VarInsnNode(25, 0));
+                hook.add(new FieldInsnNode(180, "zombie/network/packets/service/TimeSyncPacket", "clientTime", "J"));
+                hook.add(new VarInsnNode(25, 1));
+                hook.add(new MethodInsnNode(184, "modcore/core/TeleportClimbRuntime", "acknowledgeFence",
+                        "(JLzombie/core/raknet/UdpConnection;)V", false));
+                method.instructions.insertBefore(method.instructions.getFirst(), hook);
+                Logger.print("  [OK] Injected teleport server-cycle fence observer");
+            }, "modcore/core/TeleportClimbRuntime", "acknowledgeFence");
+        }
+        catch (Exception e) {
+            Logger.print("Warning: teleport gates injection failed: " + e.getMessage());
+            Logger.logException(e);
+        }
+    }
+
+    private static java.util.List<AbstractInsnNode> realInstructions(MethodNode method) {
+        java.util.List<AbstractInsnNode> real = new java.util.ArrayList<>();
+        for (AbstractInsnNode instruction : method.instructions) {
+            if (instruction.getOpcode() >= 0) real.add(instruction);
+        }
+        return real;
+    }
+
+    private static void verifyTeleportPostUpdate(MethodNode method) {
+        int[] expected = {25, 180, 182, 153, 25, 180, 182, 167, 25, 180, 182, 54, 21, 153, 25, 182, 177};
+        java.util.List<AbstractInsnNode> real = realInstructions(method);
+        if (!"()V".equals(method.desc) || real.size() != expected.length) {
+            throw new IllegalStateException("NetworkCharacterAI.postUpdate shape changed");
+        }
+        for (int i = 0; i < expected.length; i++) {
+            if (real.get(i).getOpcode() != expected[i]) throw new IllegalStateException("postUpdate opcode order changed");
+        }
+        verifyCall(real.get(2), "zombie/characters/IsoGameCharacter", "isLocal", "()Z");
+        verifyCall(real.get(6), "zombie/characters/NetworkState", "send", "()V");
+        verifyCall(real.get(10), "zombie/characters/NetworkState", "timeout", "()Z");
+        verifyCall(real.get(15), "zombie/characters/NetworkCharacterAI", "resetState", "()V");
+    }
+
+    private static void verifyTeleportPlayerSender(MethodNode method) {
+        int[] expected = {178, 153, 25, 182, 154, 177, 25, 182, 182, 153, 25, 25, 182,
+                25, 182, 182, 58, 25, 25, 182, 58, 25, 198, 25, 25, 182, 177};
+        java.util.List<AbstractInsnNode> real = realInstructions(method);
+        if (!"(Lzombie/characters/IsoPlayer;)V".equals(method.desc) || real.size() != expected.length) {
+            throw new IllegalStateException("GameClient.sendPlayer2 shape changed");
+        }
+        for (int i = 0; i < expected.length; i++) {
+            if (real.get(i).getOpcode() != expected[i]) throw new IllegalStateException("sendPlayer2 opcode order changed");
+        }
+        verifyCall(real.get(3), "zombie/characters/IsoPlayer", "isLocalPlayer", "()Z");
+        verifyCall(real.get(15), "zombie/characters/NetworkPlayerAI", "getPlayerPacket",
+                "()Lzombie/network/packets/character/PlayerPacket;");
+        verifyCall(real.get(19), "zombie/network/packets/character/PlayerPacket", "set",
+                "(Lzombie/characters/IsoPlayer;)Lzombie/network/PacketTypes$PacketType;");
+        verifyCall(real.get(25), "zombie/network/packets/character/PlayerPacket", "sendToServer",
+                "(Lzombie/network/PacketTypes$PacketType;)V");
+    }
+
+    private static void verifyTeleportFenceReceiver(MethodNode method) {
+        int[] expected = {25, 180, 25, 180, 184, 184, 177};
+        java.util.List<AbstractInsnNode> real = realInstructions(method);
+        if (!"(Lzombie/core/raknet/UdpConnection;)V".equals(method.desc) || real.size() != expected.length) {
+            throw new IllegalStateException("TimeSyncPacket.processClient shape changed");
+        }
+        for (int i = 0; i < expected.length; i++) {
+            if (real.get(i).getOpcode() != expected[i]) throw new IllegalStateException("TimeSync client opcode order changed");
+        }
+        verifyCall(real.get(4), "java/lang/System", "nanoTime", "()J");
+        verifyCall(real.get(5), "zombie/GameTime", "syncServerTime", "(JJJ)V");
+    }
+
+    private static void verifyCall(AbstractInsnNode instruction, String owner, String name, String descriptor) {
+        if (!(instruction instanceof MethodInsnNode call) || !owner.equals(call.owner)
+                || !name.equals(call.name) || !descriptor.equals(call.desc)) {
+            throw new IllegalStateException("unexpected call: " + owner + "." + name);
         }
     }
 
@@ -1589,6 +1698,9 @@ public class GamePatcher {
         this.patchHeadshotOnly();
         modcore.core.CriticalChancePatch.install();
         this.patchAlwaysHit();
+        // 穿墙档状态抑制门 (四百二十一): 传送期间抑制本机原版状态 Enter/Exit 上行,
+        // 防止 IdleState 等 isSyncOnEnter 转换包在服务端覆盖爬窗豁免所需的状态名
+        this.patchTeleportStateSuppress();
         // 超级群攻: maxHit 扩容 + 全向扇面 + 属主命中包抑制 + 群攻全额伤害 (研判 §三A/§五/§六/§九)
         this.patchSuperMultiHit();
         this.patchSuperMultiHitSuppression();
@@ -1691,6 +1803,7 @@ public class GamePatcher {
         steps.put("patchHeadshotOnly", this::patchHeadshotOnly);
         steps.put("CriticalChancePatch", modcore.core.CriticalChancePatch::install);
         steps.put("patchAlwaysHit", this::patchAlwaysHit);
+        steps.put("patchTeleportStateSuppress", this::patchTeleportStateSuppress);
         steps.put("patchSuperMultiHit", this::patchSuperMultiHit);
         steps.put("patchSuperMultiHitSuppression", this::patchSuperMultiHitSuppression);
         steps.put("patchSuperMultiHitFullDamage", this::patchSuperMultiHitFullDamage);

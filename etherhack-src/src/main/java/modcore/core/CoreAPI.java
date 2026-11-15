@@ -258,6 +258,7 @@ public class CoreAPI {
             {"isEnableGodMode", "k05"}, {"isEnableNoclip", "k06"},
             {"isEnableInvisible", "k07"}, {"isEnableNightVision", "k08"},
             {"isZombieDontAttack", "k09"},
+            // 2026-11-15: k88(快速装填) 退休, 空号禁止复用。
             {"isHeadshotOnly", "k11"}, {"isAlwaysHit", "k12"},
             {"isSuperMultiHit", "k13"}, {"superMultiHitCount", "k14"},
             {"isBypassDebugMode", "k15"}, {"isUnlimitedCarry", "k16"},

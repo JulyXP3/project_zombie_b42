@@ -36,6 +36,11 @@ local function findBagMagazine(player, gun)
     return nil
 end
 
+local function queueBagInsert(player, gun, mag)
+    local action = ISInsertMagazine:new(player, gun, mag)
+    ISTimedActionQueue.add(action)
+end
+
 local function setMessage(key, n)
     if n == nil then
         EtherAmmoFarm.message = getTranslate(key)
@@ -85,7 +90,7 @@ function EtherAmmoFarm.startBagFarm()
         deadline = getTimestampMs() + 4000,
     }
     setMessage("UI_AmmoFarm_Running", 0)
-    ISTimedActionQueue.add(ISInsertMagazine:new(player, gun, mag))
+    queueBagInsert(player, gun, mag)
     return true
 end
 
@@ -137,7 +142,7 @@ function EtherAmmoFarm.pollBagFarm()
             s.phase = "insert"
             s.deadline = now + 4000
             setMessage("UI_AmmoFarm_Running", s.count)
-            ISTimedActionQueue.add(ISInsertMagazine:new(player, gun, mag))
+            queueBagInsert(player, gun, mag)
         end
     end
 end

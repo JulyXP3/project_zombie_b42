@@ -19,6 +19,24 @@
 
 require "ISUI/ISPanel"
 
+if AutoDriveMap ~= nil then
+    for _, hook in ipairs(AutoDriveMap.hooks) do
+        if hook.class[hook.key] == hook.installed then
+            hook.class[hook.key] = hook.previous;
+        end
+    end
+end
+AutoDriveMap = { hooks = {} };
+local function rememberHooks(class)
+    if class == nil then return; end
+    for _, key in ipairs({ "onRightMouseUp", "onAutoDriveAnchor", "render" }) do
+        table.insert(AutoDriveMap.hooks, { class = class, key = key, previous = rawget(class, key) });
+    end
+end
+rememberHooks(UIMap);
+rememberHooks(ISWorldMap);
+rememberHooks(ISMap);
+
 --*********************************************************
 --* 锚定动作: 调 API, 成功/失败都用玩家 Say 即时反馈 (状态行见驾驶页)
 --*********************************************************
@@ -72,42 +90,30 @@ end
 --*********************************************************
 --* 导航路线画线: 路点连线 + 终点标记 (render 包装共用)。
 --* 路线 = 大地图同源道路矢量 (Java RoadNetwork), 蓝色实心线严格贴地图大路;
---* 直线兜底 (路网不可用) 橙色。立即模式渲染语义: "画一次"由 Java 侧数据不变
---* 保证 — Lua 每帧重读重画同一条固定数据; 路线仅在续段/受阻替换尾段事件时
---* Java 侧变化, 线随之改形, 已画前缀永不改变。性能无忧 (路点数十级, 仅开图 render)。
+--* 路点同一个 UI 周期只读一次, 每图独立投影后批量裁剪线段。
+--* 路线来源、终点与驾驶算法不改, 不再按每两像素逐块跨界绘制。
 --*********************************************************
 local function drawDriveRoute(self)
-    if type(autoDriveGetRouteCount) ~= "function" then return; end
-    local n = autoDriveGetRouteCount();
-    if n < 2 or self.mapAPI == nil then return; end
-    -- 颜色按路线类型: 大地图路网 = 蓝实心, 直线兜底 = 橙
-    local kind = (type(autoDriveGetRouteKind) == "function") and autoDriveGetRouteKind() or "";
+    if self.mapAPI == nil or type(mapDrawSegments) ~= "function" then return; end
+    local route = MapData.currentRoute();
+    if route.count < 2 then return; end
     local r, g, b = 1.0, 0.6, 0.2;
-    if kind == "road" or kind == "roadwm" then r, g, b = 0.35, 0.55, 1.0; end
-    local W, H = self:getWidth(), self:getHeight();
-    local ux0, uy0 = nil, nil;
-    for i = 0, n - 1 do
-        local ux = self.mapAPI:worldToUIX(autoDriveGetRouteX(i), autoDriveGetRouteY(i));
-        local uy = self.mapAPI:worldToUIY(autoDriveGetRouteX(i), autoDriveGetRouteY(i));
+    if route.kind == "road" or route.kind == "roadwm" then r, g, b = 0.35, 0.55, 1.0; end
+    local segments = self.mapRouteSegments or {};
+    self.mapRouteSegments = segments;
+    local ux0, uy0, index = nil, nil, 1;
+    for i = 1, route.count * 2, 2 do
+        local wx, wy = route.points[i], route.points[i + 1];
+        local ux, uy = self.mapAPI:worldToUIX(wx, wy), self.mapAPI:worldToUIY(wx, wy);
         if ux0 ~= nil then
-            -- 视口剔除: 段两端点均在容器外 (同侧越界) 则跳过
-            if not ((ux0 < 0 and ux < 0) or (uy0 < 0 and uy < 0)
-                    or (ux0 > W and ux > W) or (uy0 > H and uy > H)) then
-                -- UIElement 无 drawLine: 3x3 实心小块沿段插值连线 (步长 2px, 同终点十字原语)
-                local dx, dy = ux - ux0, uy - uy0;
-                local steps = math.max(1, math.floor(math.sqrt(dx * dx + dy * dy) / 2));
-                for s = 0, steps do
-                    local t = s / steps;
-                    local px = ux0 + dx * t;
-                    local py = uy0 + dy * t;
-                    if px >= -3 and py >= -3 and px <= W + 3 and py <= H + 3 then
-                        self:drawRect(px - 1, py - 1, 3, 3, 1.0, r, g, b);
-                    end
-                end
-            end
+            segments[index], segments[index + 1], segments[index + 2], segments[index + 3] = ux0, uy0, ux, uy;
+            index = index + 4;
         end
         ux0, uy0 = ux, uy;
     end
+    for i = index, #segments do segments[i] = nil; end
+    mapDrawSegments(segments, route.count - 1, self:getAbsoluteX(), self:getAbsoluteY(),
+        self:getWidth(), self:getHeight(), r, g, b, 1.0);
 end
 
 --*********************************************************
@@ -115,9 +121,7 @@ end
 --* 门控 = 路线存在 (而非 isActive): 手动接管/到达后导航线与终点标记
 --* 保留显示, 直到下次锚定换目标 (2026-09-07 用户需求"我需要导航线")。
 --*********************************************************
-local function drawDriveMarker(self)
-    if type(autoDriveGetRouteCount) ~= "function" or autoDriveGetRouteCount() < 1 then return; end
-    if self.mapAPI == nil then return; end
+local function drawDriveMarkerContents(self)
     drawDriveRoute(self);
     local tx, ty = autoDriveGetTargetX(), autoDriveGetTargetY();
     local ux = self.mapAPI:worldToUIX(tx, ty);
@@ -133,6 +137,17 @@ local function drawDriveMarker(self)
     self:drawText(tr("UI_Drive_MapTarget"), ux + 8, uy - 4, r, g, b, a, UIFont.Small);
 end
 
+local function drawDriveMarker(self)
+    if type(autoDriveGetRouteCount) ~= "function" or autoDriveGetRouteCount() < 1
+        or self.mapAPI == nil then return; end
+    self:suspendStencil();
+    self:clampStencilRectToParent(0, 0, self:getWidth(), self:getHeight());
+    local ok, err = pcall(drawDriveMarkerContents, self);
+    self:clearStencilRect();
+    self:resumeStencil();
+    if not ok then error(err); end
+end
+
 --*********************************************************
 --* 传送选项统一入口 (2026-09-15 九十八 修复): 三处地图菜单 (自有 UIMap / 原版 M 大地图
 --* ISWorldMap / 背包地图 ISMap) 都走这里 —— 车内 = 「汽车传送」独立项 (乘客可见, 点了被
@@ -141,19 +156,7 @@ end
 --* 被吞掉), 且 M 地图包装从未接传送项 → 用户 MP 实测: 面板/minimap 只有步行两档、
 --* M 大地图只有锚定项。传送方法统一挂 UIMap 类表 (方法自会用 getPlayer() 兜底)。
 --*********************************************************
-local function addTeleportOptions(context, worldX, worldY)
-    if type(UIMap) ~= "table" or type(UIMap.startVehicleTeleport) ~= "function" then return; end
-    if not getWorld():getMetaGrid():isValidChunk(worldX / 10, worldY / 10) then return; end
-    local player = getPlayer();
-    if player ~= nil and player:getVehicle() ~= nil then
-        -- 车内: 仅车辆档 (九十六 用户裁定: 步行两档在车内本就无效, 隐藏)
-        context:addOption(getTranslate("UI_Map_VehTeleportContext"), UIMap, UIMap.startVehicleTeleport, worldX, worldY);
-    else
-        context:addOption(getTranslate("UI_Map_TeleportContext"), UIMap, UIMap.onTeleport, worldX, worldY);
-        -- 穿墙档: 直线路径不查连通 (antiCheatNoClip 开启的服会撞检查被踢)
-        context:addOption(getTranslate("UI_Map_TeleportLinear"), UIMap, UIMap.onTeleportLinear, worldX, worldY);
-    end
-end
+local addTeleportOptions = MapActions.addTeleportOptions;
 
 --*********************************************************
 --* 挂钩 1: 自有 UIMap。防御式: UIMap 不存在时整体跳过。
@@ -293,4 +296,8 @@ if ISMap ~= nil then
             drawDriveMarker(self);
         end
     end
+end
+
+for _, hook in ipairs(AutoDriveMap.hooks) do
+    hook.installed = hook.class[hook.key];
 end

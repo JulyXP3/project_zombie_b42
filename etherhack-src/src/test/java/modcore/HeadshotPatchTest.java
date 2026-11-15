@@ -315,18 +315,32 @@ public class HeadshotPatchTest {
         for (MethodNode m : patched.methods) {
             if (m.name.equals("createCombatData")) replaceBody(m, new InsnNode(Opcodes.RETURN));
         }
+        stubResolveHitReactionToShotChest(patched);
+        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
+        patched.accept(writer);
+        return loadCombatMethod(writer.toByteArray(), "processHit",
+                HandWeapon.class, IsoGameCharacter.class, IsoGameCharacter.class);
+    }
+
+    private static void stubResolveHitReactionToShotChest(ClassNode patched) {
         MethodNode resolve = method(patched, "resolveHitReaction");
         replaceBody(resolve,
                 new org.objectweb.asm.tree.FieldInsnNode(Opcodes.GETSTATIC,
                         "zombie/combat/HitReaction", "SHOT_CHEST", "Lzombie/combat/HitReaction;"),
                 new InsnNode(Opcodes.ARETURN));
-        ClassWriter writer = new ClassWriter(ClassWriter.COMPUTE_FRAMES | ClassWriter.COMPUTE_MAXS);
-        patched.accept(writer);
-        return loadProcessHit(writer.toByteArray());
     }
 
-    private static Method loadProcessHit(byte[] result) throws Exception {
-        ClassLoader loader = new ClassLoader(HeadshotPatchTest.class.getClassLoader()) {
+    private static Method loadCombatMethod(byte[] result, String name, Class<?>... parameterTypes) throws Exception {
+        return isolatedCombatLoader(result).loadClass("zombie.CombatManager").getMethod(name, parameterTypes);
+    }
+
+    /**
+     * CombatManager 本体来自变换结果; 全部内部类 (含匿名类 CombatManager$1 的枚举 switch 表)
+     * 必须留在同一隔离加载器 —— 匿名类是包私有, 若从父加载器加载会因跨加载器包私有访问
+     * 抛 IllegalAccessError。被测方法引用的内部类参数类型 (HitData) 需通过本加载器解析。
+     */
+    private static ClassLoader isolatedCombatLoader(byte[] result) {
+        return new ClassLoader(HeadshotPatchTest.class.getClassLoader()) {
             @Override
             protected Class<?> loadClass(String name, boolean resolve) throws ClassNotFoundException {
                 if (!name.equals("zombie.CombatManager") && !name.startsWith("zombie.CombatManager$")) {
@@ -349,8 +363,10 @@ public class HeadshotPatchTest {
                 return defined;
             }
         };
-        return loader.loadClass("zombie.CombatManager")
-                .getMethod("processHit", HandWeapon.class, IsoGameCharacter.class, IsoGameCharacter.class);
+    }
+
+    private static Method loadProcessHit(byte[] result) throws Exception {
+        return loadCombatMethod(result, "processHit", HandWeapon.class, IsoGameCharacter.class, IsoGameCharacter.class);
     }
 
     private static void replaceBody(MethodNode method, AbstractInsnNode... instructions) {

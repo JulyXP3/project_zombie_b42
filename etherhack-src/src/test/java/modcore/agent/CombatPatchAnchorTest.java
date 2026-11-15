@@ -8,7 +8,6 @@ import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.FieldInsnNode;
-import org.objectweb.asm.tree.LdcInsnNode;
 import org.objectweb.asm.tree.MethodInsnNode;
 import org.objectweb.asm.tree.MethodNode;
 
@@ -34,10 +33,9 @@ class CombatPatchAnchorTest {
     void alwaysHitOverwritesTheLocalChanceInsteadOfTheRemovedFieldWrite() throws Exception {
         run("patchAlwaysHit");
         MethodNode method = patched("zombie/CombatManager", "calculateHitChanceData");
-        assertEquals(1, count(method, "isAlwaysHit"), "the switch must gate the overwrite exactly once");
-        assertEquals(1, count(method, "LDC 100.0"), "the forced chance must be injected exactly once");
-        assertTrue(forcedValuePrecedes(method, "LDC 100.0", Opcodes.FSTORE),
-                "the forced chance must be stored back into the hit chance local");
+        assertEquals(1, count(method, "selectHitChance"), "the shared selector must be injected exactly once");
+        assertTrue(forcedValuePrecedes(method, "selectHitChance", Opcodes.FSTORE),
+                "the selected chance must be stored back into the original chance local");
     }
 
     @Test
@@ -66,7 +64,7 @@ class CombatPatchAnchorTest {
         Patch.resetSession();
         run("patchAlwaysHit");
         run("patchSuperMultiHitFullDamage");
-        assertEquals(1, count(patched("zombie/CombatManager", "calculateHitChanceData"), "isAlwaysHit"));
+        assertEquals(1, count(patched("zombie/CombatManager", "calculateHitChanceData"), "selectHitChance"));
         assertEquals(1, count(patched("zombie/CombatManager", "getHitDamage"), "isSuperMultiHit"));
     }
 
@@ -96,7 +94,8 @@ class CombatPatchAnchorTest {
         boolean[] found = {false};
         for (AbstractInsnNode insn : method.instructions) {
             boolean valueHit = switch (value) {
-                case "LDC 100.0" -> insn instanceof LdcInsnNode ldc && Float.valueOf(100.0f).equals(ldc.cst);
+                case "selectHitChance" -> insn instanceof MethodInsnNode call
+                        && call.owner.equals("modcore/core/HeadshotRuntime") && call.name.equals("selectHitChance");
                 case "FLOAD" -> insn.getOpcode() == Opcodes.FLOAD;
                 default -> false;
             };
@@ -126,10 +125,10 @@ class CombatPatchAnchorTest {
         int total = 0;
         for (AbstractInsnNode insn : method.instructions) {
             boolean hit = switch (what) {
-                case "isAlwaysHit" -> insn instanceof FieldInsnNode f && f.name.equals("isAlwaysHit");
+                case "selectHitChance" -> insn instanceof MethodInsnNode call
+                        && call.owner.equals("modcore/core/HeadshotRuntime") && call.name.equals("selectHitChance");
                 case "isSuperMultiHit" -> insn instanceof FieldInsnNode f && f.name.equals("isSuperMultiHit");
                 case "HitPacketFilter" -> insn instanceof MethodInsnNode m && m.owner.equals("modcore/core/HitPacketFilter");
-                case "LDC 100.0" -> insn instanceof LdcInsnNode ldc && Float.valueOf(100.0f).equals(ldc.cst);
                 case "FSTORE" -> insn.getOpcode() == Opcodes.FSTORE;
                 default -> false;
             };

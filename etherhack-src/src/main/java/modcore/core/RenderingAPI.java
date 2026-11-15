@@ -7,6 +7,8 @@ import zombie.iso.IsoCamera;
 import zombie.iso.IsoUtils;
 import modcore.utils.Logger;
 import modcore.utils.Rendering;
+import modcore.utils.MapSegmentClip;
+import zombie.debug.LineDrawer;
 
 /**
  * 物品雷达世界标记 (Lua OnPostUIDraw 逐帧绘制) 的绘制原语暴露。
@@ -26,6 +28,36 @@ public class RenderingAPI {
 
     private static final int CIRCLE_SEGMENTS = 16;   // 与 game LineDrawer.DrawIsoCircle 同段数
     private static boolean loggedError;
+
+    @LuaMethod(name = "mapCollectFrame", global = true)
+    public static boolean collectMapFrame(KahluaTable buffer, int flags) {
+        return MapFrameData.collect(buffer, flags);
+    }
+
+    private static final double[] mapClip = new double[4];
+
+    /** Map-local route coordinates; one call clips and emits all visible segments. */
+    @LuaMethod(name = "mapDrawSegments", global = true)
+    public static void drawMapSegments(KahluaTable data, int count, double ox, double oy,
+                                       double width, double height, double r, double g, double b, double a) {
+        if (data == null || count <= 0 || !Double.isFinite(ox) || !Double.isFinite(oy)) return;
+        int index = 1;
+        for (int i = 0; i < count; i++) {
+            double x1 = mapNum(data.rawget(index++));
+            double y1 = mapNum(data.rawget(index++));
+            double x2 = mapNum(data.rawget(index++));
+            double y2 = mapNum(data.rawget(index++));
+            if (MapSegmentClip.clip(x1, y1, x2, y2, width, height, mapClip)) {
+                LineDrawer.drawLine((float) (ox + mapClip[0]), (float) (oy + mapClip[1]),
+                        (float) (ox + mapClip[2]), (float) (oy + mapClip[3]),
+                        (float) r, (float) g, (float) b, (float) a, 1.5f, 1.5f);
+            }
+        }
+    }
+
+    private static double mapNum(Object value) {
+        return value instanceof Number number ? number.doubleValue() : Double.NaN;
+    }
 
     /** 0.5px 细线: 与载具/僵尸雷达 (updateZombiesVisuals 等) 同一绘制入口 */
     @LuaMethod(name = "etherDrawThinLine", global = true)

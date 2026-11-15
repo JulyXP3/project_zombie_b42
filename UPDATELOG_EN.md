@@ -2,6 +2,16 @@
 
 ## [3.2.8] - Current
 
+- Fixed: starting, finishing and cancelling fast-move (through walls). Synchronization failures stop the task and show a warning, disappearing players or disconnections do not retain an old task, and cancelling does not freeze ordinary walking. Regular fast-move and vehicle teleport features remain unchanged. The user confirmed wall-crossing works on their private server.
+
+- Changed: Headshot only for firearms now applies headshot damage to your shots against zombies and prevents hits from randomly dealing no damage, without also enabling Never miss. Armor, obstructions and range still apply; one-shot kills are not guaranteed.
+
+- Improved: item radar refreshes sooner after movement, picking up items or container changes, rechecks after tracking is resumed, and does not mix old results into a new target selection. In-game behavior confirmed by the user.
+
+- Improved: minimap and map-panel markers follow the visible area more accurately, newly available vehicles appear sooner, and route drawing is simpler. Auto-centering, drag/zoom, teleport and navigation options remain unchanged; smoothness awaits in-game testing.
+
+- Added: a Generator module on the Survival page with Fill fuel and Repair to full, affecting generators on the same floor within eight tiles. No items are consumed and generators are not automatically switched on or off. Multiplayer behavior awaits private-server testing.
+
 - Added: vehicle ESP now shows fuel, battery and engine condition; missing or unreadable values are omitted.
 
 - Added: the item radar supports ticking several items and adding them to a list, viewing and removing entries in the List window; "Track list" marks only the listed types, and the list persists across restarts.

@@ -19,13 +19,14 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Survival
 
 - **Items & carry**: auto-repair inventory items / unlimited carry weight
+- **Generators**: Fill fuel / Repair to full for placed generators on the same floor within eight tiles; one-shot, no items consumed, and no deliberate changes to power or connection. Confirmed working by the user
 - **Moodles & needs**: infinite stamina / disable muscle strain / disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / keep optimal calories / keep optimal weight / repair worn clothing / pad worn clothing with leather strips
 - **Debug privileges (SP only)**: God mode / NoClip / Invisible / Creative mode / instant progress bars — requires "Unlock debug privileges (SP)" on the Other page first
 - **Special modes**: Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / Zombies don't attack the player (MP-ready)
 
 ### Combat
 
-- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / 90% Critical Chance (your ordinary weapon attacks against zombies; shoves, unarmed attacks and special weapon rules are excluded) / Headshot only for firearms (every hit is a headshot, 3× damage) / firearms never miss (ignores environment) / Group-Hit / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
+- **Combat enhancements**: attack-speed multiplier (1–2.5) / attack-range bonus (0–4) / One-Shot Kill / 90% Critical Chance (your ordinary weapon attacks against zombies; shoves, unarmed attacks and special weapon rules are excluded) / Headshot only for firearms (headshot damage bonus; your shots against zombies do not randomly deal no damage after hitting, without also enabling Never miss; armor, obstructions and range still apply) / firearms never miss (ignores environment) / Group-Hit / No jamming / Shoot through closed windows (in vehicle) (with a firearm in hand, hit zombies outside while seated even with the window fully shut; melee and shoving are unaffected)
 - **Super Group-Hit**: per-swing hit cap 10–20 (hits every enemy around you; the vanilla damage falloff across targets is removed, so every zombie takes full damage — combine with 90% Critical Chance / One-Shot Kill)
 - **Temp Weapon**: locally spawn a firearm and swap it into your hands (searchable full firearm list + swap/restore)
 
@@ -35,7 +36,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 ### Item Radar
 
-- Full item database list (name/ID search) + "Show on map" + "ESP tracking" (three-way synced with the minimap "Items" toggle); tick several items and press "Add to list", remove entries in the "List" window, and "Track list" marks only the listed types (the list persists across restarts)
+- Full item database list (name/ID search) + "Show on map" + "ESP tracking" (three-way synced with the minimap "Items" toggle); tick several items and press "Add to list", remove entries in the "List" window, and "Track list" marks only the listed types (the list persists across restarts); movement and known item changes refresh sooner, and resuming tracking rechecks the area. In-game timing confirmed by the user
 
 ### Traps
 
@@ -58,8 +59,8 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 ### Map
 
 - **Reveal map**: reveals the entire unexplored area with one click (recorded server-side in multiplayer)
-- **Right-click menu** (identical on the M world map, the panel and the minimap): fast-move (glides along walkable paths at 17 tiles/s, does not trigger the movement anticheat, unlimited range), fast-move (through walls), **vehicle teleport** (shown while seated in the driver's seat: hops the vehicle and everyone aboard to the target in steps bounded by the server's speed budget; can cross water), plus navigate-here / clear route / resume navigation
-- Minimap: movable window + quick-toggle bar; show local player / other players / zombies / vehicles / items
+- **Right-click menu** (identical on the M world map, the panel and the minimap): fast-move (glides along walkable paths at 17 tiles/s, does not trigger the movement anticheat, unlimited range), fast-move (through walls; confirmed working by the user on their private server), **vehicle teleport** (shown while seated in the driver's seat: hops the vehicle and everyone aboard to the target in steps bounded by the server's speed budget; can cross water), plus navigate-here / clear route / resume navigation
+- Minimap: movable window + five quick toggles for local player / other players / zombies / vehicles / items; dynamic markers update with UI drawing and use the visible rectangular/isometric/panned area. Auto-centering and teleport/navigation remain; smoothness awaits in-game testing
 
 ### Loot
 

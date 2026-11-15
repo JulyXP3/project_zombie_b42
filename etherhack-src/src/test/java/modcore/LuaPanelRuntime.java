@@ -43,6 +43,8 @@ final class LuaPanelRuntime {
                     setEnable = function(self, v) self.enable = v end,
                     setX = function(self, v) self.x = v end,
                     setY = function(self, v) self.y = v end,
+                    setAnchorLeft = function() end, setAnchorRight = function() end,
+                    setAnchorTop = function() end, setAnchorBottom = function() end,
                     addToUIManager = function(self) self.inUIManager = true end,
                     removeFromUIManager = function(self) self.inUIManager = false end,
                     getInternalText = function(self) return self.text end,
