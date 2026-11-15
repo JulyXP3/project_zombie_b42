@@ -60,7 +60,7 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 - **Reveal map**: reveals the entire unexplored area with one click (recorded server-side in multiplayer)
 - **Right-click menu** (identical on the M world map, the panel and the minimap): fast-move (glides along walkable paths at 17 tiles/s, does not trigger the movement anticheat, unlimited range), fast-move (through walls; confirmed working by the user on their private server), **vehicle teleport** (shown while seated in the driver's seat: hops the vehicle and everyone aboard to the target in steps bounded by the server's speed budget; can cross water), plus navigate-here / clear route / resume navigation
-- Minimap: movable window + five quick toggles for local player / other players / zombies / vehicles / items; dynamic markers update with UI drawing and use the visible rectangular/isometric/panned area. Auto-centering and teleport/navigation remain; smoothness awaits in-game testing
+- Minimap: movable window + five quick toggles for local player / other players / zombies / vehicles / items; dynamic markers update with UI drawing and use the visible rectangular/isometric/panned area. Auto-centering and teleport/navigation remain; the user has confirmed the minimap features work in-game
 
 ### Loot
 
@@ -176,7 +176,7 @@ Full acceptance requires zero failed, errored or skipped tests; `gradlew.bat jar
 ## Known limitations
 
 - **The filter is a plain substring match** (name/ID, case-insensitive): ticking "Show on map" or "ESP tracking" with nothing selected tracks **every** item in the filtered list — e.g. searching `Wrench` also tracks `Ratchet Wrench`. To track a single item, select it in the list first.
-- The item radar only scans **loaded** tiles within 56 tiles of the player (client-side limitation; the server's `processItems` registry is always empty on the client), and refreshes are throttled: inventory changes trigger a rescan after a 1s debounce; movement triggers a rescan after 5+ tiles but at most once every 4 seconds — hit positions are not per-frame live.
+- The item radar only scans **loaded** areas within 56 tiles of the player. Moving at least 2 tiles with at least 1 second between movement refreshes checks newly entered areas. Known item changes schedule a refresh after about 0.25 seconds without further changes; continuous changes are grouped for up to about 1 second. Unknown distant changes are checked gradually. Completion time depends on item counts and server synchronization, so results are not guaranteed to update every frame.
 - Player inventories/equipment are intentionally excluded; other players' items appear with the 1–2s sync delay.
 - Loot encryption on servers hides container contents from the client entirely.
 

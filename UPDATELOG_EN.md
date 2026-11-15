@@ -8,9 +8,9 @@
 
 - Improved: item radar refreshes sooner after movement, picking up items or container changes, rechecks after tracking is resumed, and does not mix old results into a new target selection. In-game behavior confirmed by the user.
 
-- Improved: minimap and map-panel markers follow the visible area more accurately, newly available vehicles appear sooner, and route drawing is simpler. Auto-centering, drag/zoom, teleport and navigation options remain unchanged; smoothness awaits in-game testing.
+- Improved: minimap and map-panel markers follow the visible area more accurately, newly available vehicles appear sooner, and route drawing is simpler. Auto-centering, drag/zoom, teleport and navigation options remain unchanged; the user has confirmed the minimap features work in-game.
 
-- Added: a Generator module on the Survival page with Fill fuel and Repair to full, affecting generators on the same floor within eight tiles. No items are consumed and generators are not automatically switched on or off. Multiplayer behavior awaits private-server testing.
+- Added: a Generator module on the Survival page with Fill fuel and Repair to full, affecting generators on the same floor within eight tiles. No items are consumed and generators are not automatically switched on or off. Confirmed working by the user on their private server.
 
 - Added: vehicle ESP now shows fuel, battery and engine condition; missing or unreadable values are omitted.
 
