@@ -25,7 +25,8 @@ require "ISUI/ISPanel"
 --* vanilla 世界声音 (addSound 6 参重载, flags=4 引尸语义), MP 走
 --* WorldSoundPacket 上行 (服务端零校验), 半径 200 >= 50 连 ZPOP 未加载
 --* 尣群一起拽; 关闭即停。万象天引按钮 = 单发把可支配 (isLocal, MP=追
---* 你的那些) 僵尸环形落位到脚下 (zombieGather Java 原语), 0 只提示先
+--* 你的那些) 僵尸定点落位到面朝方向前方 4 格的同一格 (zombieGather
+--* Java 原语, 之后由体积碰撞挤开), 0 只提示先
 --* 开吸引转所有权。状态行画在各模块区内部 (用户反馈: 不共享一处)。
 --* 详见 analysis/僵尸吸引与尸群聚集(已实施).md。
 --*

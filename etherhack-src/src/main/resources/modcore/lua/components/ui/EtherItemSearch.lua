@@ -1,436 +1,417 @@
---*********************************************************
---* 物品搜索: 方格贡献索引 + 新边缘/已知脏贡献 + 低预算巡回。
---* 显式分步状态机细化到物品, 不用 Kahlua 协程; 版本校验后原子公布结果。
---*********************************************************
+-- Item search controller: Java owns all loaded-layer traversal, source deltas and complete export.
 if EtherItemSearch ~= nil and EtherItemSearch._handlers ~= nil then
     for name, fn in pairs(EtherItemSearch._handlers) do
         if Events[name] ~= nil then Events[name].Remove(fn); end
     end
 end
+if EtherItemSearch ~= nil then
+    for _, hook in ipairs(EtherItemSearch._pickupHooks or {}) do
+        -- Restore only our own wrapper; preserve later changes by other modules.
+        if hook.owner[hook.key] == hook.wrapped then hook.owner[hook.key] = hook.previous; end
+    end
+end
 EtherItemSearch = EtherItemSearch or {};
-
-EtherItemSearch.results = nil;
-EtherItemSearch.radius = 56;
-EtherItemSearch.lastTargets = nil;
-EtherItemSearch.debounceMs = 250;
-EtherItemSearch.maxDebounceMs = 1000;
-EtherItemSearch.moveRefreshTiles = 2;
-EtherItemSearch.moveRefreshMs = 1000;
-EtherItemSearch.stepBudgetMs = 3;
-EtherItemSearch.patrolMs = 1000;
-EtherItemSearch.patrolCells = 128;
-EtherItemSearch.refreshPending = false;
-EtherItemSearch.lastChangeAt = 0;
-EtherItemSearch.lastScanAt = 0;
-EtherItemSearch._cursor = nil;
-EtherItemSearch._generation = 0;
-EtherItemSearch._contributions = {};
-EtherItemSearch._contributionKeys = {};
-EtherItemSearch._bounds = nil;
-EtherItemSearch._dirty = {};
-EtherItemSearch._patrolOffset = 0;
-EtherItemSearch._failed = false;
-
+EtherItemSearch.results, EtherItemSearch.lastTargets, EtherItemSearch.progress = nil, nil, nil;
+EtherItemSearch.radius, EtherItemSearch.stepBudgetMs = 56, 3;
+EtherItemSearch.debounceMs, EtherItemSearch.maxDebounceMs = 250, 1000;
+EtherItemSearch.moveRefreshTiles, EtherItemSearch.moveRefreshMs = 2, 1000;
+-- Vehicle-speed adaptation: sample recent travel, then shrink the relocation throttle so a fast
+-- vehicle does not wait a full second between window updates.
+EtherItemSearch.speedWindowMs, EtherItemSearch.speedFastTiles, EtherItemSearch.speedMidTiles = 500, 8, 4;
+EtherItemSearch.moveThrottleFastMs, EtherItemSearch.moveThrottleMidMs = 250, 500;
+-- Let an in-flight scan finish while the vehicle is still inside this many scan radii; restarting
+-- before completion would starve the request forever and never publish a result.
+EtherItemSearch.relocateTolerance = 2;
+EtherItemSearch._speedSamples = {};
+EtherItemSearch.patrolMs, EtherItemSearch.patrolCells = 1000, 128;
+-- Layer preset (persisted): 0 = all loaded floors, 1 = current +-2, 2 = current only.
+EtherItemSearch.layerMode = type(getItemScanLayerMode) == "function" and (getItemScanLayerMode() or 0) or 0;
+EtherItemSearch.refreshPending, EtherItemSearch.lastChangeAt, EtherItemSearch.lastScanAt = false, 0, 0;
+EtherItemSearch._cursor, EtherItemSearch._enableRequestHandle, EtherItemSearch._bounds = nil, nil, nil;
+EtherItemSearch._generation = (EtherItemSearch._generation or 0) + 1;
+EtherItemSearch._contributions, EtherItemSearch._contributionKeys, EtherItemSearch._patrolOffset = nil, nil, nil;
+EtherItemSearch._dirty, EtherItemSearch._firstDirtyAt, EtherItemSearch._failed = {}, nil, false;
 local handlers = {};
 EtherItemSearch._handlers = handlers;
 local sessionPlayer, sessionCell = nil, nil;
-local SCAN_TIMEOUT_MS = 120000;
 
-local function enabled()
-    return UIMap ~= nil and (UIMap.drawItems or UIMap.drawItemEsp);
+local function enabled() return UIMap ~= nil and (UIMap.drawItems or UIMap.drawItemEsp); end
+local function finite(v) return type(v) == "number" and v == v and math.abs(v) < math.huge; end
+local function tr(key) if type(getTranslate) == "function" then return getTranslate(key); end return key; end
+local floorLabels, floorNumberText, basementNumberText = {}, nil, nil;
+function EtherItemSearch.refreshFloorLabels()
+    local upper, lower = tr("UI_RadarPanel_FloorNumber"), tr("UI_RadarPanel_BasementNumber");
+    if upper ~= floorNumberText or lower ~= basementNumberText then
+        floorLabels, floorNumberText, basementNumberText = {}, upper, lower;
+    end
 end
-
-local function finite(value)
-    return type(value) == "number" and value == value and math.abs(value) < math.huge;
+function EtherItemSearch.floorLabel(z)
+    if not finite(z) then return ""; end
+    z = math.floor(z);if z < -32 or z > 31 then return ""; end
+    local text = floorLabels[z];
+    if text == nil then
+        local number = z >= 0 and z+1 or -z;
+        local template = z >= 0 and floorNumberText or basementNumberText;
+        text = string.gsub(template,"{n}",tostring(number));floorLabels[z] = text;
+    end
+    return text;
 end
+EtherItemSearch.refreshFloorLabels();
 
+local function noteSpeed(x, y, now)
+    if not finite(x) or not finite(y) then return; end
+    local samples = EtherItemSearch._speedSamples;
+    samples[#samples + 1] = {x=x, y=y, at=now};
+    local cutoff = now - EtherItemSearch.speedWindowMs;
+    while #samples > 2 and samples[1].at < cutoff do table.remove(samples, 1) end
+end
+function EtherItemSearch.moveThrottleMs()
+    local samples = EtherItemSearch._speedSamples;
+    if #samples < 2 then return EtherItemSearch.moveRefreshMs; end
+    local first, last = samples[1], samples[#samples];
+    local dt = last.at - first.at;
+    if dt <= 0 then return EtherItemSearch.moveRefreshMs; end
+    local dx, dy = last.x - first.x, last.y - first.y;
+    local tilesPerSecond = math.sqrt(dx * dx + dy * dy) * 1000 / dt;
+    if tilesPerSecond >= EtherItemSearch.speedFastTiles then return EtherItemSearch.moveThrottleFastMs; end
+    if tilesPerSecond >= EtherItemSearch.speedMidTiles then return EtherItemSearch.moveThrottleMidMs; end
+    return EtherItemSearch.moveRefreshMs;
+end
+local function copyTargets(source)
+    local out = {}; for key, value in pairs(source or {}) do if value == true then out[key] = true; end end
+    return out;
+end
 local function targetsEqual(a, b)
     if a == nil or b == nil then return false; end
     for key, value in pairs(a) do if value == true and b[key] ~= true then return false; end end
     for key, value in pairs(b) do if value == true and a[key] ~= true then return false; end end
     return true;
 end
-
+local function boundsAround(player)
+    local x, y, r = math.floor(player:getX()), math.floor(player:getY()), EtherItemSearch.radius;
+    return {cx=x,cy=y,radius=r,x1=x-r,x2=x+r,y1=y-r,y2=y+r};
+end
+local function contains(b, x, y) return b ~= nil and x >= b.x1 and x <= b.x2 and y >= b.y1 and y <= b.y2; end
+local function noteChange()
+    local now = getTimestampMs();
+    EtherItemSearch.refreshPending, EtherItemSearch.lastChangeAt = true, now;
+    EtherItemSearch._firstDirtyAt = EtherItemSearch._firstDirtyAt or now;
+end
 local function markSquare(x, y, z)
-    if not enabled() or EtherItemSearch.lastTargets == nil then return; end
+    if not enabled() or EtherItemSearch.lastTargets == nil or EtherItemSearch._failed then return; end
     if not finite(x) or not finite(y) or not finite(z) then return; end
     x, y, z = math.floor(x), math.floor(y), math.floor(z);
-    local b = EtherItemSearch._cursor ~= nil and EtherItemSearch._cursor.bounds or EtherItemSearch._bounds;
-    if not ItemScanIndex.contains(b, x, y, z) then return; end
-    local key = ItemScanIndex.key(x, y, z);
-    EtherItemSearch._dirty[key] = { x = x, y = y, z = z };
-    local now = getTimestampMs();
-    if not EtherItemSearch.refreshPending then EtherItemSearch._firstDirtyAt = now; end
-    EtherItemSearch.refreshPending = true;
-    EtherItemSearch.lastChangeAt = now;
+    if z < -32 or z > 31 then return; end
+    local cur = EtherItemSearch._cursor;
+    local b = cur ~= nil and cur.bounds or EtherItemSearch._bounds;
+    if not contains(b, x, y) then return; end
+    EtherItemSearch._dirty[x .. ":" .. y .. ":" .. z] = {x=x,y=y,z=z}; noteChange();
 end
-
-local function scanItem(cur, job, item, x, y, z)
-    if item == nil then return; end
-    cur.stats.items = cur.stats.items + 1;
-    if cur.targets[item:getFullType()] == true or cur.targets[item:getType()] == true then
-        ItemScanIndex.add(job.out, job.keys, x, y, z, item:getDisplayName());
+local function failure(cur, frame)
+    EtherItemSearch._cursor, EtherItemSearch._enableRequestHandle = nil, nil;
+    EtherItemSearch._failed = true; EtherItemSearch.progress = frame;
+    -- A failed refresh must not keep showing the previous snapshot as if it were current.
+    EtherItemSearch.results, EtherItemSearch.resultVersion, EtherItemSearch.resultCollectedAt = nil, nil, nil;
+    if cur ~= nil and cur.onDone ~= nil then cur.onDone(0, frame.stats); end
+end
+local function mergeDirty(batch, source)
+    for key, value in pairs(source or {}) do batch[key] = value; end
+end
+local function beginScan(targets, silent, onDone, mode, dirty)
+    local player, cell = getPlayer(), getCell();
+    if player == nil or cell == nil then EtherItemSearch.clear(); if onDone ~= nil then onDone(0,nil); end return; end
+    local copied = copyTargets(targets);
+    local sameScope = sessionPlayer == player and sessionCell == cell and targetsEqual(copied, EtherItemSearch.lastTargets);
+    local batch = {};
+    if sameScope then
+        local previous = EtherItemSearch._cursor;
+        -- Detached batches are acknowledged only by READY. A replaced request must replay them.
+        if previous ~= nil then mergeDirty(batch, previous.dirty); end
+        mergeDirty(batch, dirty);
+        mergeDirty(batch, EtherItemSearch._dirty);
+    end
+    if not sameScope then
+        EtherItemSearch.results, EtherItemSearch.resultVersion, EtherItemSearch.resultCollectedAt = nil, nil, nil;
+    end
+    EtherItemSearch._generation = EtherItemSearch._generation + 1;
+    local b = (mode == "full" or mode == "move" or EtherItemSearch._bounds == nil) and boundsAround(player) or EtherItemSearch._bounds;
+    local cur = {version=EtherItemSearch._generation,player=player,cell=cell,mode=mode,bounds=b,
+        startedAt=getTimestampMs(),silent=silent,onDone=onDone,dirty=batch};
+    sessionPlayer, sessionCell = player, cell;
+    EtherItemSearch.lastTargets, EtherItemSearch._failed = copied, false;
+    EtherItemSearch.refreshPending, EtherItemSearch._firstDirtyAt, EtherItemSearch._dirty = false, nil, {};
+    EtherItemSearch._enableRequestHandle = nil;
+    if type(itemScanBegin) ~= "function" or type(itemScanStep) ~= "function" then
+        failure(cur,{state="error",phase="done",error="item scan API unavailable"}); return;
+    end
+    local layerMode = EtherItemSearch.layerMode or 0;
+    local patrolDue = mode ~= "full" and (mode == "patrol"
+        or cur.startedAt-(EtherItemSearch._lastPatrolAt or EtherItemSearch.lastScanAt) >= EtherItemSearch.patrolMs);
+    cur.patrolCells = patrolDue and EtherItemSearch.patrolCells or 0;
+    local ok, ticket = pcall(itemScanBegin, copied, mode, EtherItemSearch.radius, batch, cur.patrolCells, layerMode);
+    if not ok or ticket == nil or ticket <= 0 then failure(cur,{state="error",phase="done",error=tostring(ticket)}); return; end
+    cur.ticket = ticket; EtherItemSearch._cursor = cur;
+    EtherItemSearch.progress = {state="running",phase="coverage",ticket=ticket,stats={}};
+    if mode == "full" or mode == "move" then
+        EtherItemSearch._scanX, EtherItemSearch._scanY = b.cx, b.cy;
+        EtherItemSearch._lastPriorityAt = cur.startedAt;
+    end
+    if mode == "full" then EtherItemSearch._lastPatrolAt = cur.startedAt; end
+    EtherItemSearch._playerZ = math.floor(player:getZ());
+    return cur.version;
+end
+function EtherItemSearch.startScan(targets, silent, onDone)
+    local handle = beginScan(targets, silent, onDone, "full", nil);
+    EtherItemSearch._enableRequestHandle = handle; return handle;
+end
+function EtherItemSearch.stepScan()
+    local cur = EtherItemSearch._cursor; if cur == nil then return; end
+    EtherItemSearch._enableRequestHandle = nil;
+    if cur.version ~= EtherItemSearch._generation or cur.player ~= getPlayer() or cur.cell ~= getCell() then EtherItemSearch.clear(); return; end
+    local player = cur.player;
+    local driftX, driftY = math.abs(math.floor(player:getX())-cur.bounds.cx), math.abs(math.floor(player:getY())-cur.bounds.cy);
+    local tolerance = EtherItemSearch.radius * (EtherItemSearch.relocateTolerance or 1);
+    if cur.bounds.radius ~= EtherItemSearch.radius
+        or driftX > tolerance or driftY > tolerance then
+        beginScan(EtherItemSearch.lastTargets,cur.silent,cur.onDone,"move",EtherItemSearch._dirty); return;
+    end
+    local ok, frame = pcall(itemScanStep, cur.ticket, EtherItemSearch.stepBudgetMs);
+    if not ok or type(frame) ~= "table" then failure(cur,{state="error",phase="done",error=tostring(frame)}); return; end
+    EtherItemSearch.progress = frame; cur.phase = frame.phase;
+    if frame.state == "running" then return; end
+    if frame.state == "error" or frame.state == "timeout" then failure(cur,frame); return; end
+    if frame.state ~= "ready" or type(frame.results) ~= "table" then
+        failure(cur,{state="error",phase=frame.phase,error=frame.error or "incomplete scan delivery"}); return;
+    end
+    EtherItemSearch.results, EtherItemSearch._bounds = frame.results, frame.window or cur.bounds;
+    EtherItemSearch.lastScanAt = getTimestampMs();
+    EtherItemSearch.resultVersion, EtherItemSearch.resultCollectedAt = cur.version, EtherItemSearch.lastScanAt;
+    if (cur.patrolCells or 0) > 0 then EtherItemSearch._lastPatrolAt = EtherItemSearch.lastScanAt; end
+    EtherItemSearch._cursor = nil;
+    if cur.onDone ~= nil then cur.onDone(#frame.results, frame.stats); end
+end
+function EtherItemSearch.requestRefresh()
+    if not enabled() or EtherItemSearch.lastTargets == nil or EtherItemSearch._failed then return; end
+    local player = getPlayer();if player ~= nil then markSquare(player:getX(),player:getY(),player:getZ()); end
+    noteChange();
+end
+-- Resolve ownership, not contents: no recursive bag scan and no persistent item/container references.
+local function sourceMethod(object, name)
+    if object == nil then return nil; end
+    local ok, value = pcall(function()
+        local fn = object[name];
+        if fn ~= nil then return fn(object); end
+    end);
+    if ok then return value; end
+end
+local function sourcePosition(source)
+    local pending, seen, count = {source}, {}, 0;
+    local links = {"getSourceGrid","getContainer","getContainingItem","getParent","getVehicle",
+        "getOwner","getVehiclePart","getWorldItem","getSquare"};
+    while #pending > 0 and count < 16 do
+        local object = table.remove(pending);
+        if object ~= nil and not seen[object] then
+            seen[object], count = true, count + 1;
+            local x, y, z = sourceMethod(object,"getX"), sourceMethod(object,"getY"), sourceMethod(object,"getZ");
+            if finite(x) and finite(y) and finite(z) then return {x=x,y=y,z=z}; end
+            -- Exact square/world item/vehicle ownership takes precedence over the fallback sourceGrid.
+            for i = 1, #links do
+                local owner = sourceMethod(object,links[i]);
+                if owner ~= nil and not seen[owner] then pending[#pending+1] = owner; end
+            end
+        end
     end
 end
-
-local function pushItems(stack, cur, container, x, y, z)
-    if container == nil then return; end
-    cur.stats.containers = cur.stats.containers + 1;
-    stack[#stack + 1] = { kind = "items", list = container:getItems(), index = 0, x = x, y = y, z = z };
+local function markPosition(position)
+    if position ~= nil then markSquare(position.x,position.y,position.z); end
 end
-
--- 每次只取一个对象/容器/物品, 调用者在各步之间检查预算。
-local function stepJob(cur, job)
-    local stack = job.stack;
-    local task = stack[#stack];
-    if task == nil then return true; end
-    local kind = task.kind;
-    if kind == "item" then
-        table.remove(stack);
-        scanItem(cur, job, task.item, task.x, task.y, task.z);
-    elseif kind == "bag" then
-        table.remove(stack);
-        if task.item:IsInventoryContainer() then
-            local inventory = task.item:getInventory();
-            if inventory ~= nil then
-                cur.stats.bags = cur.stats.bags + 1;
-                stack[#stack + 1] = { kind = "items", list = inventory:getItems(), index = 0,
-                    x = task.x, y = task.y, z = task.z };
-            end
-        end
-    elseif kind == "containers" then
-        if task.index >= task.obj:getContainerCount() then table.remove(stack); return false; end
-        local container = task.obj:getContainerByIndex(task.index);
-        task.index = task.index + 1;
-        pushItems(stack, cur, container, task.obj:getX(), task.obj:getY(), task.obj:getZ());
-    elseif kind == "parts" then
-        if task.index >= task.vehicle:getPartCount() then table.remove(stack); return false; end
-        local part = task.vehicle:getPartByIndex(task.index);
-        task.index = task.index + 1;
-        if part ~= nil then
-            pushItems(stack, cur, part:getItemContainer(), part:getX(), part:getY(), task.vehicle:getZ());
-        end
-    elseif kind == "vehicles" then
-        if task.index > #task.list then table.remove(stack); return false; end
-        local vehicle = task.list[task.index];
-        task.index = task.index + 1;
-        if vehicle ~= nil then
-            local x, y, z = vehicle:getX(), vehicle:getY(), vehicle:getZ();
-            if finite(x) and finite(y) and finite(z)
-                and ItemScanIndex.contains(cur.bounds, math.floor(x), math.floor(y), math.floor(z)) then
-                stack[#stack + 1] = { kind = "parts", vehicle = vehicle, index = 0 };
-            end
-        end
-    else
-        if task.list == nil or task.index >= task.list:size() then table.remove(stack); return false; end
-        local obj = task.list:get(task.index);
-        task.index = task.index + 1;
-        if obj ~= nil then
-            if kind == "items" then
-                scanItem(cur, job, obj, task.x, task.y, task.z);
-            elseif kind == "objects" then
-                stack[#stack + 1] = { kind = "containers", obj = obj, index = 0 };
-            elseif kind == "floor" then
-                cur.stats.floor = cur.stats.floor + 1;
-                local item = obj:getItem();
-                if item ~= nil then
-                    local x, y, z = obj:getX(), obj:getY(), obj:getZ();
-                    stack[#stack + 1] = { kind = "bag", item = item, x = x, y = y, z = z };
-                    stack[#stack + 1] = { kind = "item", item = item, x = x, y = y, z = z };
-                end
-            elseif kind == "bodies" then
-                pushItems(stack, cur, obj:getContainer(), obj:getX(), obj:getY(), obj:getZ());
-            end
-        end
-    end
+local function markSource(source)
+    local position = sourcePosition(source);
+    if position ~= nil then markPosition(position);return true; end
     return false;
 end
-
-local function squareJob(cur, square, x, y, z, key)
-    local job = { stack = {}, out = {}, keys = {}, x = x, y = y, z = z, key = key };
-    if square ~= nil then
-        cur.stats.squares = cur.stats.squares + 1;
-        job.stack = {
-            { kind = "bodies", list = square:getDeadBodys(), index = 0 },
-            { kind = "floor", list = square:getWorldObjects(), index = 0 },
-            { kind = "objects", list = square:getObjects(), index = 0 },
-        };
-    end
-    return job;
+local function observesPickups()
+    return enabled() and EtherItemSearch.lastTargets ~= nil and not EtherItemSearch._failed;
 end
-
-local function retain(cur, key, contribution)
-    if contribution ~= nil and contribution ~= false
-        and ItemScanIndex.contains(cur.bounds, contribution.x, contribution.y, contribution.z) then
-        cur.nextContributions[key] = contribution;
-        cur.nextKeys[#cur.nextKeys + 1] = key;
+local pickupHooks = {};
+EtherItemSearch._pickupHooks = pickupHooks;
+local function installPickupObserver(owner, key, kind)
+    if owner == nil or type(owner[key]) ~= "function" then return; end
+    for _, hook in ipairs(pickupHooks) do
+        if hook.owner == owner and hook.key == key and owner[key] == hook.wrapped then return; end
     end
-end
-
-local function mergeHit(cur, hit)
-    if ItemScanIndex.contains(cur.bounds, hit.x, hit.y, hit.z) then
-        ItemScanIndex.add(cur.out, cur.resultKeys, hit.x, hit.y, hit.z, hit.name, hit.count);
-    end
-end
-
-local function stepCursor(cur)
-    if cur.phase == "squares" then
-        if cur.job ~= nil then
-            if stepJob(cur, cur.job) then
-                local job = cur.job;
-                cur.replacements[job.key] = #job.out > 0 and { x = job.x, y = job.y, z = job.z,
-                    hits = job.out, version = cur.version, sampledAt = getTimestampMs() } or false;
-                cur.replacementKeys[#cur.replacementKeys + 1] = job.key;
-                cur.job = nil;
+    local previous = owner[key];
+    local wrapped;
+    if kind == "transfer" then
+        -- The vanilla shared transfer returns one InventoryItem. Keep that return value and every argument.
+        wrapped = function(self, character, value, source, target, dropSquare, ...)
+            if not observesPickups() then return previous(self,character,value,source,target,dropSquare,...); end
+            local beforeSource, beforeTarget = sourcePosition(source), sourcePosition(target);
+            local result = previous(self,character,value,source,target,dropSquare,...);
+            markPosition(beforeSource);markPosition(beforeTarget);
+            markSource(source);markSource(target);markSource(dropSquare);
+            -- A vehicle source need not have a static square; even an unresolved owner needs one refresh.
+            noteChange();
+            return result;
+        end;
+    elseif kind == "clientTransfer" then
+        -- B42 client transactions skip the shared helper in perform(); the action still retains both owners.
+        wrapped = function(self, ...)
+            if not observesPickups() then return previous(self,...); end
+            local source,target = self.srcContainer,self.destContainer;
+            local beforeSource,beforeTarget = sourcePosition(source),sourcePosition(target);
+            local result = previous(self,...);
+            markPosition(beforeSource);markPosition(beforeTarget);
+            markSource(source);markSource(target);noteChange();
+            return result;
+        end;
+    else
+        wrapped = function(self, ...)
+            if not observesPickups() then return previous(self,...); end
+            local before = {};
+            for _, queued in ipairs(self.queueList or {}) do
+                for _, placed in ipairs(queued.items or {}) do before[#before+1] = sourcePosition(placed); end
             end
-        else
-            local x, y, z, key = ItemScanIndex.take(cur.plan);
-            if x == nil then cur.phase = "vehicles"; return; end
-            cur.job = squareJob(cur, cur.cell:getGridSquare(x, y, z), x, y, z, key);
-        end
-    elseif cur.phase == "vehicles" then
-        if cur.job == nil then
-            local vehicles = cur.cell:getVehicles();
-            local list = vehicles ~= nil and vehicles:toArray() or {};
-            cur.job = { stack = { { kind = "vehicles", list = list, index = 1 } }, out = cur.vehicles, keys = {} };
-        elseif stepJob(cur, cur.job) then
-            cur.job, cur.phase, cur.index = nil, "retain", 1;
-        end
-    elseif cur.phase == "retain" then
-        local key = cur.baseKeys[cur.index];
-        if key == nil then cur.phase, cur.index = "replace", 1; return; end
-        cur.index = cur.index + 1;
-        if cur.replacements[key] == nil then retain(cur, key, cur.base[key]); end
-    elseif cur.phase == "replace" then
-        local key = cur.replacementKeys[cur.index];
-        if key == nil then cur.phase, cur.index, cur.hitIndex = "merge", 1, 1; return; end
-        cur.index = cur.index + 1;
-        retain(cur, key, cur.replacements[key]);
-    elseif cur.phase == "merge" then
-        local key = cur.nextKeys[cur.index];
-        if key == nil then cur.phase, cur.index = "merge-vehicles", 1; return; end
-        local contribution = cur.nextContributions[key];
-        local hit = contribution.hits[cur.hitIndex];
-        if hit == nil then cur.index, cur.hitIndex = cur.index + 1, 1; return; end
-        cur.hitIndex = cur.hitIndex + 1;
-        mergeHit(cur, hit);
-    elseif cur.phase == "merge-vehicles" then
-        local hit = cur.vehicles[cur.index];
-        if hit == nil then cur.phase = "done"; return; end
-        cur.index = cur.index + 1;
-        mergeHit(cur, hit);
+            local beforeItem = sourcePosition(self.item);if beforeItem ~= nil then before[#before+1] = beforeItem; end
+            local beforeTarget = sourcePosition(self.destContainer);
+            local result = previous(self,...);
+            for _, position in ipairs(before) do markPosition(position); end
+            markPosition(beforeTarget);markSource(self.destContainer);noteChange();
+            return result;
+        end;
     end
+    pickupHooks[#pickupHooks+1] = {owner=owner,key=key,previous=previous,wrapped=wrapped};
+    owner[key] = wrapped;
 end
-
-local function beginScan(targetTypes, silent, onDone, mode, dirty)
-    local player, cell = getPlayer(), getCell();
-    if player == nil or cell == nil or targetTypes == nil then
-        EtherItemSearch.clear();
-        if onDone ~= nil then onDone(0, nil); end
-        return;
-    end
-    local px, py, pz = player:getX(), player:getY(), player:getZ();
-    if not finite(px) or not finite(py) or not finite(pz) then EtherItemSearch.clear(); return; end
-    local changed = not targetsEqual(EtherItemSearch.lastTargets, targetTypes);
-    if sessionPlayer ~= player or sessionCell ~= cell then
-        EtherItemSearch.clear();
-        sessionPlayer, sessionCell = player, cell;
-        changed = true;
-    end
-    local targets = {};
-    for key, value in pairs(targetTypes) do if value == true then targets[key] = true; end end
-    EtherItemSearch.lastTargets = targets;
-    EtherItemSearch._failed = false;
-    EtherItemSearch._generation = EtherItemSearch._generation + 1;
-    local old = EtherItemSearch._bounds;
-    local bounds = mode == "patrol" and old or ItemScanIndex.bounds(px, py, pz, EtherItemSearch.radius);
-    bounds = bounds or ItemScanIndex.bounds(px, py, pz, EtherItemSearch.radius);
-    local full = mode == "full" or changed or old == nil or old.radius ~= bounds.radius
-        or old.cz ~= bounds.cz or math.abs(old.cx - bounds.cx) > bounds.radius
-        or math.abs(old.cy - bounds.cy) > bounds.radius;
-    if full then
-        EtherItemSearch._dirty = {};
-        EtherItemSearch.refreshPending, EtherItemSearch._firstDirtyAt = false, nil;
-    end
-    if changed then EtherItemSearch.results = nil; end
-    EtherItemSearch._cursor = { cell = cell, player = player, targets = targets,
-        version = EtherItemSearch._generation, bounds = bounds, plan = ItemScanIndex.plan(old, bounds, dirty, full),
-        silent = silent, onDone = onDone, mode = mode, px = px, py = py, phase = "squares", startedAt = getTimestampMs(),
-        base = full and {} or EtherItemSearch._contributions,
-        baseKeys = full and {} or EtherItemSearch._contributionKeys,
-        replacements = {}, replacementKeys = {}, nextContributions = {}, nextKeys = {},
-        vehicles = {}, out = {}, resultKeys = {}, stats = { squares = 0, floor = 0, containers = 0, bags = 0, items = 0 } };
+local function installPickupObservers()
+    installPickupObserver(ISTransferAction,"transferItem","transfer");
+    installPickupObserver(ISInventoryTransferAction,"perform","clientTransfer");
+    installPickupObserver(ISGrabItemAction,"perform","ground");
 end
-
-function EtherItemSearch.startScan(targetTypes, silent, onDone)
-    beginScan(targetTypes, silent, onDone, "full", nil);
-end
-
-local function advance(cur, deadline)
-    repeat
-        stepCursor(cur);
-        if cur.phase == "done" then return; end
-    until getTimestampMs() >= deadline;
-end
-
-local function stopScan(cur, reason)
-    EtherItemSearch._cursor = nil;
-    EtherItemSearch._failed = true;
-    if cur.onDone ~= nil then cur.onDone(0, nil); end
-    print("[modcore] item scan stopped: " .. tostring(reason));
-end
-
-local function stepScan()
-    local cur = EtherItemSearch._cursor;
-    if cur == nil then return; end
-    if cur.player ~= getPlayer() or cur.cell ~= getCell() or cur.version ~= EtherItemSearch._generation then
-        EtherItemSearch.clear();
-        return;
-    end
-    local now = getTimestampMs();
-    if now - cur.startedAt > SCAN_TIMEOUT_MS then stopScan(cur, "timeout"); return; end
-    local ok, err = pcall(advance, cur, now + EtherItemSearch.stepBudgetMs);
-    if not ok then stopScan(cur, err); return; end
-    if cur.phase == "done" then
-        EtherItemSearch.results = cur.out;
-        EtherItemSearch._contributions, EtherItemSearch._contributionKeys = cur.nextContributions, cur.nextKeys;
-        EtherItemSearch._bounds = cur.bounds;
-        EtherItemSearch.lastScanAt = getTimestampMs();
-        EtherItemSearch.resultVersion, EtherItemSearch.resultCollectedAt = cur.version, EtherItemSearch.lastScanAt;
-        if cur.mode ~= "patrol" then
-            EtherItemSearch._scanX, EtherItemSearch._scanY = cur.px, cur.py;
-            EtherItemSearch._lastPriorityAt = EtherItemSearch.lastScanAt;
-        end
-        EtherItemSearch._cursor = nil;
-        if cur.onDone ~= nil then cur.onDone(#cur.out, cur.stats); end
-    end
-end
-
-function EtherItemSearch.refresh()
-    if not enabled() or EtherItemSearch._failed or EtherItemSearch.lastTargets == nil
-        or not EtherItemSearch.refreshPending or EtherItemSearch._cursor ~= nil then return; end
-    local now = getTimestampMs();
-    if now - EtherItemSearch.lastChangeAt < EtherItemSearch.debounceMs
-        and now - (EtherItemSearch._firstDirtyAt or now) < EtherItemSearch.maxDebounceMs then return; end
-    local dirty = {};
-    for _, p in pairs(EtherItemSearch._dirty) do dirty[#dirty + 1] = p; end
-    EtherItemSearch._dirty = {};
-    EtherItemSearch.refreshPending, EtherItemSearch._firstDirtyAt = false, nil;
-    beginScan(EtherItemSearch.lastTargets, true, nil, "dirty", dirty);
-end
-
-local function onPlayerUpdate(player)
-    if player ~= nil and player ~= getPlayer() then return; end
-    if sessionPlayer ~= getPlayer() or sessionCell ~= getCell() then
-        EtherItemSearch.clear();
-        sessionPlayer, sessionCell = getPlayer(), getCell();
-        return;
-    end
-    stepScan();
-    if player == nil or not enabled() or EtherItemSearch._failed or EtherItemSearch.lastTargets == nil then return; end
-    local items = player:getInventory():getItems();
-    if items ~= nil then
-        local count = items:size();
-        if EtherItemSearch._invSize ~= nil and count ~= EtherItemSearch._invSize then
-            markSquare(player:getX(), player:getY(), player:getZ());
-        end
-        EtherItemSearch._invSize = count;
-    end
-    if EtherItemSearch._cursor ~= nil then return; end
-    EtherItemSearch.refresh();
-    if EtherItemSearch._cursor ~= nil then return; end
-    local b = EtherItemSearch._bounds;
-    if b == nil then beginScan(EtherItemSearch.lastTargets, true, nil, "full", nil); return; end
-    local now = getTimestampMs();
-    local dx, dy = player:getX() - (EtherItemSearch._scanX or player:getX()),
-        player:getY() - (EtherItemSearch._scanY or player:getY());
-    if math.floor(player:getZ()) ~= b.cz or (dx * dx + dy * dy >= EtherItemSearch.moveRefreshTiles ^ 2
-        and now - (EtherItemSearch._lastPriorityAt or 0) >= EtherItemSearch.moveRefreshMs) then
-        beginScan(EtherItemSearch.lastTargets, true, nil, "move", nil);
-        return;
-    end
-    if now - (EtherItemSearch._lastPatrolAt or EtherItemSearch.lastScanAt) >= EtherItemSearch.patrolMs then
-        local dirty, offset = ItemScanIndex.patrol(b, EtherItemSearch._patrolOffset, EtherItemSearch.patrolCells);
-        EtherItemSearch._patrolOffset, EtherItemSearch._lastPatrolAt = offset, now;
-        beginScan(EtherItemSearch.lastTargets, true, nil, "patrol", dirty);
-    end
-end
-
 local function onSquareChanged(square)
-    if square ~= nil then markSquare(square:getX(), square:getY(), square:getZ()); end
+    if square ~= nil then markSquare(square:getX(),square:getY(),square:getZ()); end
 end
-
-local function onObjectChanged(obj)
-    if obj ~= nil then onSquareChanged(obj:getSquare()); end
-end
-
+local function onObjectChanged(obj) if observesPickups() then markSource(obj); end end
 local function onInventoryWindowChanged(page, stage)
     if not enabled() or EtherItemSearch.lastTargets == nil or (stage ~= nil and stage ~= "end") then return; end
-    local player = getPlayer();
-    if player == nil then return; end
-    markSquare(player:getX(), player:getY(), player:getZ());
+    local player = getPlayer();if player == nil then return; end
+    markSquare(player:getX(),player:getY(),player:getZ());
     page = page or (type(getPlayerLoot) == "function" and getPlayerLoot(0) or nil);
     if page ~= nil and page.backpacks ~= nil then
         for _, entry in ipairs(page.backpacks) do
             local container = entry.inventory;
-            if container ~= nil then
-                local square = container:getSourceGrid();
-                if square ~= nil then onSquareChanged(square); end
-            end
+            if container ~= nil then markSource(container); end
         end
     end
 end
-
-local function onContainerUpdate(square)
-    if not enabled() or EtherItemSearch.lastTargets == nil then return; end
-    if square ~= nil and instanceof(square, "IsoGridSquare") then onSquareChanged(square);
-    else onInventoryWindowChanged(); end
+local function onContainerUpdate(source)
+    if not observesPickups() then return; end
+    if not markSource(source) then onInventoryWindowChanged(); end
 end
-
+local function tryDirtyRefresh(now, moveDue)
+    if EtherItemSearch.refreshPending and (now-EtherItemSearch.lastChangeAt >= EtherItemSearch.debounceMs
+        or now-(EtherItemSearch._firstDirtyAt or now) >= EtherItemSearch.maxDebounceMs) then
+        local dirty = EtherItemSearch._dirty;
+        beginScan(EtherItemSearch.lastTargets,true,nil,moveDue and "move" or "dirty",dirty);return true;
+    end
+    return false;
+end
+function EtherItemSearch.refresh()
+    if not enabled() or EtherItemSearch._failed or EtherItemSearch.lastTargets == nil or EtherItemSearch._cursor ~= nil then return; end
+    local player = getPlayer();if player == nil then return; end
+    local now = getTimestampMs();
+    local dx,dy = math.floor(player:getX())-(EtherItemSearch._scanX or math.floor(player:getX())),math.floor(player:getY())-(EtherItemSearch._scanY or math.floor(player:getY()));
+    local moveDue = dx*dx+dy*dy >= EtherItemSearch.moveRefreshTiles^2 and now-(EtherItemSearch._lastPriorityAt or 0) >= EtherItemSearch.moveRefreshMs;
+    tryDirtyRefresh(now,moveDue);
+end
+local function onPlayerUpdate(player)
+    installPickupObservers(); -- Vanilla action classes may have loaded after this module.
+    local current, cell = getPlayer(), getCell();
+    if current ~= sessionPlayer or cell ~= sessionCell then
+        EtherItemSearch.clear();sessionPlayer,sessionCell = current,cell;
+    end
+    if player == nil or player ~= current then return; end
+    EtherItemSearch.stepScan();
+    if not enabled() or EtherItemSearch.lastTargets == nil or EtherItemSearch._failed then return; end
+    local size = player:getInventory():getItems():size();
+    if EtherItemSearch._invSize ~= nil and size ~= EtherItemSearch._invSize then markSquare(player:getX(),player:getY(),player:getZ()); end
+    EtherItemSearch._invSize = size;
+    local z = math.floor(player:getZ());
+    if EtherItemSearch._playerZ ~= nil and z ~= EtherItemSearch._playerZ then noteChange(); end
+    EtherItemSearch._playerZ = z;
+    if EtherItemSearch._cursor ~= nil then return; end
+    local now = getTimestampMs();
+    noteSpeed(player:getX(), player:getY(), now);
+    local dx,dy = math.floor(player:getX())-(EtherItemSearch._scanX or math.floor(player:getX())),math.floor(player:getY())-(EtherItemSearch._scanY or math.floor(player:getY()));
+    local moveDue = dx*dx+dy*dy >= EtherItemSearch.moveRefreshTiles^2 and now-(EtherItemSearch._lastPriorityAt or 0) >= EtherItemSearch.moveThrottleMs();
+    if tryDirtyRefresh(now,moveDue) then return; end
+    if moveDue then
+        beginScan(EtherItemSearch.lastTargets,true,nil,"move",EtherItemSearch._dirty);return;
+    end
+    if now-(EtherItemSearch._lastPatrolAt or EtherItemSearch.lastScanAt) >= EtherItemSearch.patrolMs then
+        EtherItemSearch._lastPatrolAt = now;beginScan(EtherItemSearch.lastTargets,true,nil,"patrol",nil);
+    end
+end
+function EtherItemSearch.clear()
+    if type(itemScanCancel) == "function" then itemScanCancel(); end
+    EtherItemSearch.results, EtherItemSearch.lastTargets, EtherItemSearch.progress = nil,nil,nil;
+    EtherItemSearch._cursor, EtherItemSearch._bounds, EtherItemSearch._enableRequestHandle = nil,nil,nil;
+    EtherItemSearch._generation = EtherItemSearch._generation + 1;
+    EtherItemSearch._dirty, EtherItemSearch._failed = {},false;
+    EtherItemSearch.refreshPending, EtherItemSearch._firstDirtyAt = false,nil;
+    EtherItemSearch._scanX, EtherItemSearch._scanY, EtherItemSearch._invSize, EtherItemSearch._playerZ = nil,nil,nil,nil;
+    EtherItemSearch._speedSamples = {};
+    EtherItemSearch._lastPriorityAt, EtherItemSearch._lastPatrolAt = nil,nil;
+    EtherItemSearch.resultVersion, EtherItemSearch.resultCollectedAt = nil,nil;
+    sessionPlayer,sessionCell = nil,nil;
+end
+-- Preserve a paused selection in this world, while invalidating its old request and visible snapshot.
+function EtherItemSearch.setTrackingTargets(targets)
+    local copied = copyTargets(targets);
+    EtherItemSearch.clear();
+    sessionPlayer,sessionCell = getPlayer(),getCell();
+    for _, selected in pairs(copied) do
+        if selected == true then EtherItemSearch.lastTargets = copied;break; end
+    end
+end
+local function displayTargets()
+    if EtherWatchlist ~= nil and EtherWatchlist.count() > 0 then return EtherWatchlist.targets(); end
+    return EtherItemSearch.lastTargets;
+end
+local function resumeTracking(wasEnabled, requestHandle)
+    if enabled() and (not wasEnabled or EtherItemSearch._failed) then
+        local targets = displayTargets();
+        if targets == nil then return; end
+        local cur = EtherItemSearch._cursor;
+        if requestHandle ~= nil and requestHandle == EtherItemSearch._enableRequestHandle and cur ~= nil
+            and cur.version == requestHandle and cur.version == EtherItemSearch._generation and cur.mode == "full"
+            and cur.player == getPlayer() and cur.cell == getCell()
+            and targetsEqual(targets,EtherItemSearch.lastTargets) then
+            EtherItemSearch._enableRequestHandle = nil;return;
+        end
+        EtherItemSearch.startScan(targets,true,nil);
+    end
+end
+function EtherItemSearch.setMinimapEnabled(value,requestHandle)
+    UIMap.ensureDrawFlags();local wasEnabled = enabled();UIMap.drawItems = value;
+    if not value then EtherItemSearch._enableRequestHandle = nil; end
+    setMapDrawItems(value);if value then resumeTracking(wasEnabled,requestHandle); end
+end
+function EtherItemSearch.setItemEspEnabled(value,requestHandle)
+    UIMap.ensureDrawFlags();local wasEnabled = enabled();UIMap.drawItemEsp = value;
+    if not value then EtherItemSearch._enableRequestHandle = nil; end
+    if value then resumeTracking(wasEnabled,requestHandle); end
+end
+installPickupObservers();
 handlers.OnPlayerUpdate = onPlayerUpdate;
 handlers.OnRefreshInventoryWindowContainers = onInventoryWindowChanged;
 handlers.OnContainerUpdate = onContainerUpdate;
-handlers.OnObjectAdded = onObjectChanged;
-handlers.OnObjectAboutToBeRemoved = onObjectChanged;
+handlers.OnObjectAdded, handlers.OnObjectAboutToBeRemoved = onObjectChanged,onObjectChanged;
 handlers.LoadGridsquare = onSquareChanged;
+handlers.LoadChunk = function() if enabled() and EtherItemSearch.lastTargets ~= nil and not EtherItemSearch._failed then noteChange(); end end;
 handlers.OnMainMenuEnter = function() EtherItemSearch.clear(); end;
-for name, fn in pairs(handlers) do
-    if Events[name] ~= nil then Events[name].Remove(fn); Events[name].Add(fn); end
-end
-
-function EtherItemSearch.clear()
-    EtherItemSearch.results, EtherItemSearch.lastTargets = nil, nil;
-    EtherItemSearch._cursor, EtherItemSearch._bounds = nil, nil;
-    EtherItemSearch._generation = EtherItemSearch._generation + 1;
-    EtherItemSearch._contributions, EtherItemSearch._contributionKeys, EtherItemSearch._dirty = {}, {}, {};
-    EtherItemSearch._patrolOffset = 0;
-    EtherItemSearch._failed = false;
-    EtherItemSearch.refreshPending, EtherItemSearch._firstDirtyAt = false, nil;
-    EtherItemSearch._scanX, EtherItemSearch._scanY, EtherItemSearch._invSize = nil, nil, nil;
-    EtherItemSearch._lastPriorityAt, EtherItemSearch._lastPatrolAt = nil, nil;
-    EtherItemSearch.resultVersion, EtherItemSearch.resultCollectedAt = nil, nil;
-end
-
-local function resumeTracking(wasEnabled)
-    if not wasEnabled and enabled() and EtherItemSearch.lastTargets ~= nil then
-        EtherItemSearch.startScan(EtherItemSearch.lastTargets, true, nil);
-    end
-end
-
-function EtherItemSearch.setMinimapEnabled(value)
-    UIMap.ensureDrawFlags();
-    local wasEnabled = enabled();
-    UIMap.drawItems = value;
-    setMapDrawItems(value);
-    resumeTracking(wasEnabled);
-end
-
-function EtherItemSearch.setItemEspEnabled(value)
-    UIMap.ensureDrawFlags();
-    local wasEnabled = enabled();
-    UIMap.drawItemEsp = value;
-    resumeTracking(wasEnabled);
-end
+for name, fn in pairs(handlers) do if Events[name] ~= nil then Events[name].Remove(fn);Events[name].Add(fn); end end
+if type(itemScanCancel) == "function" then itemScanCancel(); end
 
 function isMapDrawItemEsp()
     UIMap.ensureDrawFlags();
@@ -449,7 +430,7 @@ end
 --*       暂存数组跨帧复用, 仅结果清空时重建
 --* 留痕: 纯客户端渲染, 零网络包零日志
 --*********************************************************
-EtherItemSearch.worldDrawRadius = 150; -- 雷达线半径(格), 与僵尸/载具雷达同款 150; 结果本身来自 56 格扫描, 实际不超过 ~61
+EtherItemSearch.worldDrawRadius = 150; -- 仅世界显示半径；扫描结果不按显示条数截断
 EtherItemSearch.worldMaxMarkers = 60;  -- 单帧最多绘制条数, 命中洪峰时取最近的
 EtherItemSearch._worldProbe = nil;     -- nil=未探测; true=投影可用; false=投影原语不可达(自动禁用, 不影响其它功能)
 
@@ -504,6 +485,7 @@ local function drawWorldMarkers()
     if player == nil then return end
     if not worldProbeOk() then return end
 
+    EtherItemSearch.refreshFloorLabels(); -- two template reads per frame, none per marker
     local px, py, pz = player:getX(), player:getY(), player:getZ();
     -- 人物屏幕锚点: 雷达线起点 (半墙高胸口锚定 + 头顶 60, 与 Java 侧载具/僵尸雷达同款)
     local psx, psy = worldToScreen(px, py, pz, 128 / (2 / Core.getTileScale()));
@@ -542,16 +524,10 @@ local function drawWorldMarkers()
         etherDrawThinLine(sx, sy, psx, psy + 60, 1, 0.78, 0.35, 0.8);
 
         if sx > -160 and sy > -20 and sx < sw and sy < sh then
-            -- 物品侧文字: 名称 x数量 + 楼层 (z 相对玩家: 楼上/楼下, 同层不标 —— 修"分不清哪层楼")
+            -- 物品侧文字: 名称 x数量 + 绝对楼层，换玩家楼层不改变目标层名
             -- 数量分隔用 ASCII x: 游戏 Small 字体缺 × 字形, 实测渲染成空白 (实机截图 "扳手 1")
             -- 文字主体预拼于扫描完成时 (cur.out 侧 label 字段), 此处只拼楼层小尾巴
-            local dz = (p.z or 0) - pz;
-            local floorTag = "";
-            if dz > 0 then
-                floorTag = " " .. tr("UI_RadarPanel_FloorUp");
-            elseif dz < 0 then
-                floorTag = " " .. tr("UI_RadarPanel_FloorDown");
-            end
+            local floorTag = " " .. EtherItemSearch.floorLabel(p.z or 0);
             local text = (p.label or (p.name .. " x" .. p.count)) .. floorTag;
             local tx = sx - tm:MeasureStringX(UIFont.Small, text) / 2;
             -- 阴影 + 主字双层, 与 ESP 文字同款画法; 琥珀色区别于僵尸红/载具白

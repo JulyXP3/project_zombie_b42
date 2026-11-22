@@ -896,6 +896,21 @@ public class LuaMethods {
         return raw == null ? "" : raw;
     }
 
+    @LuaMethod(name="getItemScanLayerMode", global=true)
+    public static int getItemScanLayerMode() {
+        if (CoreMain.getInstance().CoreAPI == null) return 0;
+        return CoreAPI.normalizeLayerMode(CoreMain.getInstance().CoreAPI.itemScanLayerMode);
+    }
+
+    @LuaMethod(name="setItemScanLayerMode", global=true)
+    public static void setItemScanLayerMode(int value) {
+        if (CoreMain.getInstance().CoreAPI == null) return;
+        int mode = CoreAPI.normalizeLayerMode(value);
+        if (CoreMain.getInstance().CoreAPI.itemScanLayerMode == mode) return;
+        CoreMain.getInstance().CoreAPI.itemScanLayerMode = mode;
+        saveConfig("startup");
+    }
+
     @LuaMethod(name="setWatchlist", global=true)
     public static void setWatchlist(String var0) {
         if (CoreMain.getInstance().CoreAPI == null) return;
@@ -960,6 +975,62 @@ public class LuaMethods {
     @LuaMethod(name="isCritMax", global=true)
     public static boolean isCritMax() {
         return CoreMain.getInstance().CoreAPI.isCritMax;
+    }
+
+    @LuaMethod(name="armFoodRecovery", global=true)
+    public static boolean armFoodRecovery(){return FoodRecoveryRuntime.arm();}
+    @LuaMethod(name="cancelFoodRecovery", global=true)
+    public static void cancelFoodRecovery(){FoodRecoveryRuntime.cancel();}
+    @LuaMethod(name="prepareFoodRecovery", global=true)
+    public static boolean prepareFoodRecovery(InventoryItem item,float fraction){return FoodRecoveryRuntime.prepare(item,fraction);}
+    @LuaMethod(name="foodRecoveryStarted", global=true)
+    public static void foodRecoveryStarted(){FoodRecoveryRuntime.started();}
+    @LuaMethod(name="foodRecoveryCompleted", global=true)
+    public static void foodRecoveryCompleted(){FoodRecoveryRuntime.completed();}
+    @LuaMethod(name="foodRecoveryStopped", global=true)
+    public static void foodRecoveryStopped(){FoodRecoveryRuntime.stopped();}
+    @LuaMethod(name="foodRecoveryFailed", global=true)
+    public static void foodRecoveryFailed(){FoodRecoveryRuntime.failed();}
+    @LuaMethod(name="foodRecoveryContextLost", global=true)
+    public static void foodRecoveryContextLost(){FoodRecoveryRuntime.contextLost();}
+    @LuaMethod(name="setFoodRecoveryHooksReady", global=true)
+    public static void setFoodRecoveryHooksReady(boolean ready){FoodRecoveryRuntime.setHooksReady(ready);}
+    @LuaMethod(name="updateFoodRecovery", global=true)
+    public static void updateFoodRecovery(){FoodRecoveryRuntime.tick();}
+    @LuaMethod(name="getFoodRecoveryState", global=true)
+    public static String getFoodRecoveryState(){return FoodRecoveryRuntime.phase();}
+    @LuaMethod(name="getFoodRecoveryResult", global=true)
+    public static String getFoodRecoveryResult(){return FoodRecoveryRuntime.result();}
+    @LuaMethod(name="getFoodRecoveryCleanup", global=true)
+    public static String getFoodRecoveryCleanup(){return FoodRecoveryRuntime.cleanup();}
+    @LuaMethod(name="getFoodRecoveryAvailability", global=true)
+    public static String getFoodRecoveryAvailability(){return FoodRecoveryRuntime.availability();}
+    @LuaMethod(name="getFoodRecoveryRemainingSeconds", global=true)
+    public static int getFoodRecoveryRemainingSeconds(){return FoodRecoveryRuntime.remainingSeconds();}
+
+    @LuaMethod(name="getFoodRecoveryCandidateItem", global=true)
+    public static InventoryItem getFoodRecoveryCandidateItem(){return FoodRecoveryRuntime.candidate();}
+    @LuaMethod(name="getFoodRecoveryRequestedPercentage", global=true)
+    public static float getFoodRecoveryRequestedPercentage(){return FoodRecoveryRuntime.request();}
+    @LuaMethod(name="getFoodRecoveryCheckedItems", global=true)
+    public static int getFoodRecoveryCheckedItems(){return FoodRecoveryRuntime.checked();}
+    @LuaMethod(name="getFoodRecoveryFoodName", global=true)
+    public static String getFoodRecoveryFoodName(){return FoodRecoveryRuntime.foodName();}
+
+    @LuaMethod(name="getMovementSpeedMultiplier", global=true)
+    public static int getMovementSpeedMultiplier() {
+        CoreAPI api = CoreMain.getInstance().CoreAPI;
+        return api == null ? 1 : MovementSpeedPolicy.normalizePreset(api.movementSpeedMultiplier);
+    }
+
+    @LuaMethod(name="setMovementSpeedMultiplier", global=true)
+    public static void setMovementSpeedMultiplier(int value) {
+        CoreAPI api = CoreMain.getInstance().CoreAPI;
+        if (api == null) return;
+        int preset = MovementSpeedPolicy.normalizePreset(value);
+        if (api.movementSpeedMultiplier == preset) return;
+        api.movementSpeedMultiplier = preset;
+        saveConfig("startup");
     }
 
     @LuaMethod(name="getCombatSpeedMultiplier", global=true)

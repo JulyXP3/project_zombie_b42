@@ -148,7 +148,8 @@ function GeneratorMaintenance.addModule(panel)
             hint:instantiate()
             panel:_anchor(hint)
             panel:addChild(hint)
-            panel.generatorStatus = ModuleHint:new(ix, by + ctrlH + gap + hintH + gap, iw, "")
+            -- Start with a real message instead of an empty reserved line; the first click replaces it.
+            panel.generatorStatus = ModuleHint:new(ix, by + ctrlH + gap + hintH + gap, iw, tr("UI_Generator_Idle"))
             panel.generatorStatus.height = statusH
             panel.generatorStatus:initialise()
             panel.generatorStatus:instantiate()

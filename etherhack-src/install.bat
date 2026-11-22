@@ -6,8 +6,8 @@ rem ================================================================
 rem This script checks only these three things:
 rem   1) projectzomboid.jar is present in this folder (never changed)
 rem   2) which installer to run: the HIGHEST version when several
-rem      modcore-*.jar files are here (for example modcore-3.2.8-B42.jar
-rem      and an older modcore-3.2.7-B42.jar -> the 3.2.8 one is used)
+rem      modcore-*.jar files are here (for example modcore-3.2.9-B42.jar
+rem      and an older modcore-3.2.8-B42.jar -> the 3.2.9 one is used)
 rem   3) a Windows x64 full JDK 25: JAVA_HOME first, then PATH
 rem After a successful install the modcore-*.jar here is deleted; running
 rem this script again with no jar runs the uninstall flow.

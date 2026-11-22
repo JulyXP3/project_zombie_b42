@@ -67,6 +67,7 @@ function EtherRadarPanel:render()
     if self.espCb ~= nil then
         self.espCb:setCheked(isMapDrawItemEsp());
     end
+    self:updateScanStatus();
     if self.statusText ~= nil and self.statusX ~= nil then
         local td = EtherTheme.textDim;
         self:drawText(self.statusText, self.statusX, self.statusY, td.r, td.g, td.b, 1, UIFont.Small);
@@ -176,35 +177,72 @@ end
 --* 扫描为时间片异步: 立即返回 true, 状态行先显示「搜索中…」,
 --* 完成回调更新命中数/无结果 (期间无冻结, 详见 EtherItemSearch)。
 --*********************************************************
-function EtherRadarPanel:ensureScan()
+local scanPhases = {
+    coverage="UI_RadarPanel_PhaseCoverage", copy="UI_RadarPanel_PhaseCopy", prune="UI_RadarPanel_PhasePrune",
+    squares="UI_RadarPanel_PhaseSquares", vehicles="UI_RadarPanel_PhaseVehicles", delta="UI_RadarPanel_PhaseDelta",
+    export="UI_RadarPanel_PhaseExport", done="UI_RadarPanel_PhaseDone",
+};
+function EtherRadarPanel:setScanResult(n)
+    local frame = EtherItemSearch.progress;
+    if frame ~= nil and frame.state == "error" then self.statusText = tr("UI_RadarPanel_ScanError");
+    elseif frame ~= nil and frame.state == "timeout" then self.statusText = tr("UI_RadarPanel_ScanTimeout");
+    elseif n == 0 then self.statusText = tr("UI_ItemSearch_NoResults");
+    else self.statusText = tr("UI_RadarPanel_StatusHits", {count=n}); end
+end
+function EtherRadarPanel:updateScanStatus()
+    if self._scanHandle == nil and not self:trackingActive() then return; end
+    if UIMap == nil or (not UIMap.drawItems and not UIMap.drawItemEsp) then return; end
+    local frame = EtherItemSearch.progress;if frame == nil then return; end
+    if frame.state == "running" then
+        local stats = frame.stats or {};
+        self.statusText = tr("UI_RadarPanel_ScanProgress", {
+            phase=tr(scanPhases[frame.phase] or "UI_RadarPanel_PhaseCoverage"),
+            cells=math.floor(stats.cells or 0),items=math.floor(stats.items or 0),
+            seconds=math.floor((stats.elapsedMs or 0)/1000),
+        });
+    elseif frame.state == "ready" then self:setScanResult(#(EtherItemSearch.results or {}));
+    elseif frame.state == "error" or frame.state == "timeout" then self:setScanResult(0); end
+end
+
+-- 追踪目标: 清单非空则整份清单; 清单为空才回退到选中物品/整个过滤列表。
+function EtherRadarPanel:trackingTargets()
+    if EtherWatchlist.count() > 0 then return EtherWatchlist.targets(), EtherWatchlist.count() end
     local targetTypes = {};
     local nTargets = 0;
-    local sel = self.datas.selected;
-    if self.datas.items ~= nil and sel >= 1 and sel <= #self.datas.items and self.datas.items[sel].item ~= nil then
-        targetTypes[self.datas.items[sel].item:getFullName()] = true;
+    local data = self.datas or {};
+    local sel = data.selected or 0;
+    if data.items ~= nil and sel >= 1 and sel <= #data.items and data.items[sel].item ~= nil then
+        targetTypes[data.items[sel].item:getFullName()] = true;
         nTargets = 1;
-    elseif self.datas.items ~= nil then
-        for i = 1, #self.datas.items do
-            local scriptItem = self.datas.items[i].item;
+    elseif data.items ~= nil then
+        for i = 1, #data.items do
+            local scriptItem = data.items[i].item;
             if scriptItem ~= nil then
                 targetTypes[scriptItem:getFullName()] = true;
                 nTargets = nTargets + 1;
             end
         end
     end
-    if nTargets == 0 then
+    if nTargets == 0 then return nil, 0 end
+    return targetTypes, nTargets
+end
+
+function EtherRadarPanel:trackingActive()
+    return UIMap ~= nil and (UIMap.drawItems or UIMap.drawItemEsp)
+end
+
+function EtherRadarPanel:ensureScan()
+    local targetTypes, nTargets = self:trackingTargets();
+    -- 清单非空时 trackingTargets 必返回目标, 所以无目标 == 清单为空且无选中/过滤项。
+    if targetTypes == nil or nTargets == 0 then
         self.statusText = tr("UI_RadarPanel_SelectFirst");
         return false;
     end
 
     self.statusText = tr("UI_ItemSearch_Searching");
     local panel = self;
-    EtherItemSearch.startScan(targetTypes, false, function(n, stats)
-        if n == 0 then
-            panel.statusText = tr("UI_ItemSearch_NoResults");
-        else
-            panel.statusText = tr("UI_RadarPanel_StatusHits", { count = n });
-        end
+    self._scanHandle = EtherItemSearch.startScan(targetTypes, false, function(n, stats)
+        panel:setScanResult(n);
     end);
     return true;
 end
@@ -213,11 +251,13 @@ end
 function EtherRadarPanel:onShowMapToggled(checked)
     if not checked then
         EtherItemSearch.setMinimapEnabled(false);
-        self.statusText = nil;
+        if not UIMap.drawItems and not UIMap.drawItemEsp then
+            self.statusText = nil;
+        end
         return
     end
     if self:ensureScan() then
-        EtherItemSearch.setMinimapEnabled(true);
+        EtherItemSearch.setMinimapEnabled(true, self._scanHandle);
     end
 end
 
@@ -225,11 +265,13 @@ end
 function EtherRadarPanel:onEspToggled(checked)
     if not checked then
         EtherItemSearch.setItemEspEnabled(false);
-        self.statusText = nil;
+        if not UIMap.drawItems and not UIMap.drawItemEsp then
+            self.statusText = nil;
+        end
         return
     end
     if self:ensureScan() then
-        EtherItemSearch.setItemEspEnabled(true);
+        EtherItemSearch.setItemEspEnabled(true, self._scanHandle);
     end
 end
 
@@ -238,12 +280,36 @@ end
 --*   「清单」弹出列表逐项移除; 追踪只针对清单内容。
 --*   只存物品全名, 不统计数量。
 --*********************************************************
-function EtherRadarPanel:refreshWatchLabel()
-    if self.watchCb ~= nil then
-        local text = tr("UI_RadarPanel_WatchToggle", { n = EtherWatchlist.count() })
-        self.watchCb.title = text
-        if self.watchCb.titleLines ~= nil then self.watchCb.titleLines = { text } end
+-- 楼层档位: 全部楼层 -> 本层±2 -> 仅本层 -> 回环; 立刻重扫以便马上生效。
+local LAYER_MODES = {0, 1, 2};
+local LAYER_TITLES = {"UI_RadarPanel_LayerAll", "UI_RadarPanel_LayerPM2", "UI_RadarPanel_LayerCurrent"};
+function EtherRadarPanel.layerModeTitle()
+    local mode = EtherItemSearch.layerMode or 0;
+    return tr(LAYER_TITLES[mode + 1] or LAYER_TITLES[1]);
+end
+function EtherRadarPanel:refreshLayerLabel()
+    if self.layerBtn ~= nil then
+        local text = EtherRadarPanel.layerModeTitle();
+        self.layerBtn.title = text
+        if self.layerBtn.titleLines ~= nil then self.layerBtn.titleLines = { text } end
     end
+end
+function EtherRadarPanel:cycleLayerMode()
+    local mode = EtherItemSearch.layerMode or 0
+    local nextMode = mode
+    for i = 1, #LAYER_MODES do
+        if LAYER_MODES[i] == mode then nextMode = LAYER_MODES[i % #LAYER_MODES + 1]; break end
+    end
+    EtherItemSearch.layerMode = nextMode
+    if type(setItemScanLayerMode) == "function" then setItemScanLayerMode(nextMode) end
+    self:refreshLayerLabel()
+    if self:trackingActive() and EtherItemSearch.lastTargets ~= nil then
+        EtherItemSearch.clear()
+        self:ensureScan()
+    end
+end
+
+function EtherRadarPanel:refreshWatchLabel()
     if self.listBtn ~= nil then
         self.listBtn.title = tr("UI_RadarPanel_OpenList", { n = EtherWatchlist.count() })
     end
@@ -277,41 +343,24 @@ function EtherRadarPanel:loadWatchlist()
     self:refreshWatchLabel()
 end
 
-function EtherRadarPanel:startWatchTracking()
-    local targets = EtherWatchlist.targets()
-    if EtherWatchlist.count() == 0 then return false end
-    self.statusText = tr("UI_RadarPanel_WatchTracking")
-    EtherItemSearch.startScan(targets, false, function(n)
-        if self.watchCb == nil or not self.watchCb.isChecked then return end
-        if n == 0 then
-            self.statusText = tr("UI_ItemSearch_NoResults")
-        else
-            self.statusText = tr("UI_RadarPanel_StatusHits", { count = n })
-        end
-    end)
-    EtherItemSearch.setMinimapEnabled(true)
-    EtherItemSearch.setItemEspEnabled(true)
-    return true
-end
-
-function EtherRadarPanel:stopWatchTracking(restore)
-    EtherItemSearch.setMinimapEnabled(self.watchPrevMinimap and true or false)
-    EtherItemSearch.setItemEspEnabled(self.watchPrevEsp and true or false)
-    if restore then self.statusText = nil end
-end
-
 -- 清单内容变化 (加入/弹窗移除/清空): 保存 + 刷新按钮 + 追踪跟随
 function EtherRadarPanel:onWatchlistChanged()
     self:persistWatchlist()
     self:refreshWatchLabel()
-    if self.watchCb == nil or not self.watchCb.isChecked then return end
-    if EtherWatchlist.count() == 0 then
-        self.watchCb.isChecked = false
-        self:stopWatchTracking(true)
-        self.statusText = tr("UI_RadarPanel_WatchEmpty")
-    else
-        self:startWatchTracking()
+    local targets,n = self:trackingTargets()
+    -- Paused edits still invalidate old targets, including an unfinished request from before pause.
+    if not self:trackingActive() then
+        EtherItemSearch.setTrackingTargets(targets)
+        self._scanHandle = nil
+        return
     end
+    if n == 0 then
+        EtherItemSearch.setTrackingTargets(nil)
+        self._scanHandle = nil
+        self.statusText = tr("UI_RadarPanel_WatchEmpty")
+        return
+    end
+    self:ensureScan()
 end
 
 -- 把列表里勾选的行加入清单 (勾选本身不持久化, 与战利品模块一致)
@@ -352,22 +401,6 @@ function EtherRadarPanel:openWatchlist()
     EtherWatchlistPopup.open(function()
         self:onWatchlistChanged()
     end)
-end
-
-function EtherRadarPanel:onWatchToggled(checked)
-    if checked then
-        if EtherWatchlist.count() == 0 then
-            self.watchCb.isChecked = false
-            self.statusText = tr("UI_RadarPanel_WatchEmpty")
-            return
-        end
-        self.watchPrevMinimap = UIMap.drawItems and true or false
-        self.watchPrevEsp = UIMap.drawItemEsp and true or false
-        self:startWatchTracking()
-    else
-        self:stopWatchTracking(true)
-    end
-    self:refreshWatchLabel()
 end
 
 -- 列表鼠标: 行首勾选区域切换暂存勾选, 其余交给原版整行选中 (与战利品同款)
@@ -471,23 +504,26 @@ function EtherRadarPanel:createChildren()
     local espTitle = getTranslate("UI_RadarPanel_EspLines");
     local hintLines = EtherTheme.wrapHint(getTranslate("UI_RadarPanel_Hint"), innerW);
     local hintH = #hintLines * EtherTheme.fontHgtHint;
-    local actH = (ctrlH + GAP) * 4 + IP + hintH + IP + fhS + IP;   -- 按钮行 + 勾选×3 + 说明 + 状态
+    local actH = (ctrlH + GAP) * 3 + IP + hintH + IP + fhS + IP;   -- 按钮行 + 勾选×2 + 说明 + 状态
     local actY = H - PAD - (actH + IP * 2);
 
     local btnY = actY + IP;
-    local addW = UIButton.measureWidth(getTranslate("UI_RadarPanel_AddToList"));
-    local listW = UIButton.measureWidth(tr("UI_RadarPanel_OpenList", { n = 0 }));
-    local btnW = math.min(math.max(addW, listW), math.floor((innerW - GAP) / 2));
+    local btnW = math.floor((innerW - GAP * 2) / 3);
     self.addBtn = UIButton:new(innerX, btnY, btnW, ctrlH,
         getTranslate("UI_RadarPanel_AddToList"), function() EtherRadarPanel.addCheckedToWatchlist(self); end, btnW);
     self.listBtn = UIButton:new(innerX + btnW + GAP, btnY, btnW, ctrlH,
         tr("UI_RadarPanel_OpenList", { n = 0 }), function() EtherRadarPanel.openWatchlist(self); end, btnW);
+    self.layerBtn = UIButton:new(innerX + (btnW + GAP) * 2, btnY, btnW, ctrlH,
+        EtherRadarPanel.layerModeTitle(), function() EtherRadarPanel.cycleLayerMode(self); end, btnW);
     self.addBtn:initialise();
     self.addBtn:instantiate();
     self.listBtn:initialise();
     self.listBtn:instantiate();
+    self.layerBtn:initialise();
+    self.layerBtn:instantiate();
     self:addChild(self.addBtn);
     self:addChild(self.listBtn);
+    self:addChild(self.layerBtn);
 
     local cbY = btnY + ctrlH + GAP;
     self.showCb = UICheckbox:new(innerX, cbY, cbTitle, UIMap.drawItems and true or false, function(v)
@@ -507,15 +543,7 @@ function EtherRadarPanel:createChildren()
     self.espCb.width = innerW;
     self:addChild(self.espCb);
 
-    local watchY = espY + ctrlH + GAP;
-    self.watchCb = UICheckbox:new(innerX, watchY, tr("UI_RadarPanel_WatchToggle", { n = 0 }), false,
-        function(v) EtherRadarPanel.onWatchToggled(self, v); end);
-    self.watchCb:initialise();
-    self.watchCb:instantiate();
-    self.watchCb.width = innerW;
-    self:addChild(self.watchCb);
-
-    local hintY0 = watchY + ctrlH + IP;
+    local hintY0 = espY + ctrlH + IP;
     for i = 1, #hintLines do
         self:_text(innerX, hintY0 + (i - 1) * EtherTheme.fontHgtHint, hintLines[i], EtherTheme.textDim, nil, true);
     end

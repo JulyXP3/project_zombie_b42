@@ -2,9 +2,9 @@
 
 A community-maintained build of [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) for Project Zomboid Build 42.
 
-The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / full-vehicle auto-repair / free building / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Item spawning (Item Spawn / Corpse spawn / Unbox spawn / Worn spawn) / ESP / Item Radar + Minimap Markers**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
+The main additions over the original mod are **Farming / Map teleport + vehicle teleport / Vehicle navigation mode (auto-drive along the road network) / full-vehicle auto-repair / free building / Reveal Map / True Night Vision / Combat enhancements + Temp Weapon / Item spawning (Item Spawn / Corpse spawn / Unbox spawn / Worn spawn) / ESP / Item Radar + Minimap Markers / Movement presets / One-click recovery**, plus several fixes and robustness improvements for the B42 client Lua environment (Kahlua). See the "Feature Overview" below for the full list.
 
-> Current version: **3.2.8-B42** (for Project Zomboid **42.22.2**).
+> Current version: **3.2.9-B42** (for Project Zomboid **42.22.2**).
 
 > **Important:** **Any form of commercial use is prohibited** (including selling and paywalled downloads), and forks/modifications **must credit the original authors**. See the License section at the end for details.
 
@@ -20,6 +20,8 @@ UI: cyberpunk-style icon+label nav tiles, instant CN/EN/RU language switching, t
 
 - **Items & carry**: auto-repair inventory items / unlimited carry weight
 - **Generators**: Fill fuel / Repair to full for placed generators on the same floor within eight tiles; one-shot, no items consumed, and no deliberate changes to power or connection. Confirmed working by the user
+- **Movement presets**: 1x / 2x / 3x unified speed-up for walking, running and sprinting, remembered across restarts; special actions keep their original speed and only your own normal manual movement is affected. Confirmed in game
+- **One-click recovery**: a single click restores **endurance / fatigue / thirst / stress / boredom / unhappiness** using ordinary safe food; held food is preferred, otherwise your own inventory is searched in bounded steps and a small serving is eaten regardless of nutrition. The panel shows the chosen food and progress; cancelling neither consumes food nor clears unrelated actions, and leftover food keeps its own values. Injuries are not healed. Confirmed in game
 - **Moodles & needs**: infinite stamina / disable muscle strain / disable every moodle & need (fatigue/hunger/thirst/drunk/anger/fear/pain/panic/boredom/unhappiness/wetness/infection/false infection/...) / keep optimal calories / keep optimal weight / repair worn clothing / pad worn clothing with leather strips
 - **Debug privileges (SP only)**: God mode / NoClip / Invisible / Creative mode / instant progress bars — requires "Unlock debug privileges (SP)" on the Other page first
 - **Special modes**: Night Vision / **True Night Vision** (render-level full brightness — night tint and vision-cone overlay removed, unlit interiors no longer pitch black; client-side only) / Zombies don't attack the player (MP-ready)
@@ -123,7 +125,7 @@ Build requirements: a **full Windows x64 JDK 25**, **PowerShell 7 (`pwsh` availa
 1. Copy the target game's `projectzomboid.jar` into `etherhack-src/lib/`, keeping the original name. Do not modify the game's original file.
 2. Open `etherhack-src/build-fast.bat` in a text editor and fill in `BUILD_JAVA_HOME` (JDK root) and `BUILD_GAME_DIR` (game root) at the top.
 3. Run `etherhack-src/build-fast.bat`. (Run `build.bat` if you need the full build, but it takes about 5-10 minutes.)
-4. Take `modcore-3.2.8-B42.jar` from `etherhack-src/build/`, and copy it together with `etherhack-src/install.bat` and `etherhack-src/uninstall.bat` into the game root folder.
+4. Take `modcore-3.2.9-B42.jar` from `etherhack-src/build/`, and copy it together with `etherhack-src/install.bat` and `etherhack-src/uninstall.bat` into the game root folder.
 5. Run `install.bat` and wait until it finishes.
 
 ## Launch (two ways)
@@ -158,7 +160,7 @@ set "BUILD_GAME_DIR=E:\Steam\steamapps\common\ProjectZomboid"
 
 Then run `etherhack-src/build.bat` (full tests and packaging), or `etherhack-src/build-fast.bat` (compilation and packaging only). Both check that the configured game JAR matches `lib/projectzomboid.jar`; the fast entry does not require a copied game runtime.
 
-The output JAR is `etherhack-src/build/modcore-3.2.8-B42.jar`. The full entry manages its test copy under `temp/native-runtime-build/`: missing copies/files are rebuilt, and a changed game runtime selects a new copy. Unknown content, changed ownership records, redirected paths or concurrent builds are refused rather than removed automatically. Keep other tools and evidence in `temp/`; there is no need to empty the whole directory.
+The output JAR is `etherhack-src/build/modcore-3.2.9-B42.jar`. The full entry manages its test copy under `temp/native-runtime-build/`: missing copies/files are rebuilt, and a changed game runtime selects a new copy. Unknown content, changed ownership records, redirected paths or concurrent builds are refused rather than removed automatically. Keep other tools and evidence in `temp/`; there is no need to empty the whole directory.
 
 Automation can override the top configuration with `MODCORE_BUILD_JAVA_HOME` and `MODCORE_BUILD_GAME_DIR`; a positional game path takes precedence, and `PZ_GAME_DIR` remains supported. An invalid explicit configuration does not fall back to system Java. Set `MODCORE_NO_PAUSE=1` to disable the final pause. `build.bat --fast` still skips only some tests, so its output is also not fully verified.
 
@@ -168,7 +170,7 @@ Full acceptance requires zero failed, errored or skipped tests; `gradlew.bat jar
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/modcore-3.2.8-B42.jar` | 3.2.8 artifact (for 42.22.2): isolated checks passed; auto-repair accepted in-game (other features per their docs) |
+| `etherhack-src/build/modcore-3.2.9-B42.jar` | 3.2.9 artifact (for 42.22.2): movement presets and six-state recovery confirmed in game; auto-repair accepted in-game (other features per their docs) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `analysis/` | Reverse-engineering evidence and design docs (`analysis/**/*.md` is tracked; decompiled sources stay local only) |

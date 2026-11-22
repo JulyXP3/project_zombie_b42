@@ -16,6 +16,12 @@
  * zombies at third parties - that would be the deferred "horde command"
  * attack surface (analysis/僵尸控制与尸群指挥-研判(暂不实现).md).
  *
+ * Landing rule (2026-11-20 user decision): every gathered zombie is put on the
+ * SAME tile four tiles ahead of the player, along the facing direction - not a
+ * ring around the player. Vanilla body collision then spreads the pile out;
+ * that is the expected outcome and this API deliberately does no spacing.
+ * See analysis/僵尸吸引与尸群聚集-前方定点落位(已实施-待实测).md.
+ *
  * Known interaction: with「zombies don't attack me」enabled our own ASM patch
  * gates IsoZombie.setTarget, so the target refresh is suppressed and only the
  * position gather takes effect. Accepted by design.
@@ -36,18 +42,14 @@ import java.util.List;
 
 public class ZombieGatherAPI {
 
-    /** 环形落位内圈半径 (格): 玩家碰撞余量, 贴着但不重叠。 */
-    private static final float RING_INNER = 2.5f;
-    /** 环形落位外圈半径 (格): 数量多时外扩到此处封顶。 */
-    private static final float RING_OUTER = 3.5f;
-    /** 相邻落位最小间距 (格): 僵尸碰撞半径经验值, 挤不下换下一圈。 */
-    private static final float MIN_SPACING = 1.2f;
+    /** 落点距离 (格): 玩家面朝方向正前方的这一格, 所有僵尸共用。 */
+    private static final float GATHER_DISTANCE = 4.0f;
     /** 默认聚集半径 (格): Lua 层未传 radius 时的兜底。 */
     private static final float DEFAULT_RADIUS = 40.0f;
 
     /*
-     * Teleport every locally-owned zombie within `radius` tiles into a ring
-     * around the calling player and point them at that player. Returns the
+     * Teleport every locally-owned zombie within `radius` tiles onto one tile
+     * four tiles ahead of the calling player, and point them at that player. Returns the
      * number gathered (0 = none owned - zombies must target you first; run the
      * sound lure to take ownership). Throws RuntimeException so the Lua pcall
      * surfaces the real reason.
@@ -81,23 +83,14 @@ public class ZombieGatherAPI {
         int count = owned.size();
         if (count == 0) return 0;
 
-        // 环形落位: 先按数量估一圈半径, 圈上均分; 间距兜不住 (太多) 时外扩
-        float ring = RING_INNER;
-        float circumference = (float) (2.0 * Math.PI) * ring;
-        while (circumference < count * MIN_SPACING && ring < RING_OUTER) {
-            ring += 0.1f;
-            circumference = (float) (2.0 * Math.PI) * ring;
-        }
-        float step = (float) (2.0 * Math.PI) / count;
-        float angle = 0.0f;
+        // 定点落位: 所有僵尸去玩家面朝方向前方同一格, 由游戏体积碰撞挤开
+        int[] target = ZombieGatherTarget.gatherTile(px, py,
+                p.getForwardDirectionX(), p.getForwardDirectionY(), GATHER_DISTANCE);
         int gathered = 0;
         for (int i = 0; i < count; ++i) {
             IsoZombie z = owned.get(i);
-            float tx = px + (float) Math.cos(angle) * ring;
-            float ty = py + (float) Math.sin(angle) * ring;
-            angle += step;
             try {
-                z.teleportTo(tx, ty, pz);
+                z.teleportTo(target[0], target[1], pz);
                 // 目标刷新为玩家自己 (聚集后围上来); 「僵尸不会攻击玩家」
                 // 开启时被自家补丁拦掉, 只剩位置生效 - 如实接受
                 z.setTarget(p);
@@ -107,7 +100,8 @@ public class ZombieGatherAPI {
             }
         }
         Logger.printLog("[ZombieGather] gathered " + gathered + "/" + count
-                + " local zombies within " + radius + " tiles");
+                + " local zombies within " + radius + " tiles to tile "
+                + target[0] + "," + target[1] + "," + pz + " (player " + px + "," + py + ")");
         return gathered;
     }
 

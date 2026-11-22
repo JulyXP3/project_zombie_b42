@@ -2,9 +2,9 @@
 
 面向 Project Zomboid Build 42 的 [EtherHack 3.1.0 (B42)](https://github.com/dei0/EtherHack) 社区维护构建。
 
-在原版基础上新增了 **耕种 / 地图传送 + 汽车传送 / 载具导航模式(沿道路网自动行驶) / 整车自动维修 / 免费建造 / 点亮全图 / 真-夜视 / 战斗强化 + 临时武器 / 物品生成(物品生成 (MP) · 尸体生成 · 开盒生成 · 穿戴生成) / ESP / 物品雷达 + 小地图标记** 等大量功能, 并针对 B42 客户端 Lua 环境 (Kahlua) 做了多处修复与加固。完整功能见下方「功能一览」。
+在原版基础上新增了 **耕种 / 地图传送 + 汽车传送 / 载具导航模式(沿道路网自动行驶) / 整车自动维修 / 免费建造 / 点亮全图 / 真-夜视 / 战斗强化 + 临时武器 / 物品生成(物品生成 (MP) · 尸体生成 · 开盒生成 · 穿戴生成) / ESP / 物品雷达 + 小地图标记 / 移动倍率 / 一键状态恢复** 等大量功能, 并针对 B42 客户端 Lua 环境 (Kahlua) 做了多处修复与加固。完整功能见下方「功能一览」。
 
-> 当前版本：**3.2.8-B42**（适配 Project Zomboid **42.22.2**）。
+> 当前版本：**3.2.9-B42**（适配 Project Zomboid **42.22.2**）。
 
 > **重要声明:** 本项目**禁止任何形式的商业用途**(包括售卖、付费下载等), 二次修改与转载**必须标注原作者**。授权条款详见文末「许可证」。
 
@@ -20,6 +20,8 @@
 
 - **物品与携带**: 自动修理背包中的物品 / 无限负重
 - **发电机**: 「加满燃油」/「修复至满」，单次处理同楼层、周围八格内的已摆放发电机，不消耗物品，不主动改变开关与连接；实测通过
+- **移动倍率**: 1x / 2x / 3x 三档步行、跑步与冲刺统一加速，档位跨重启保存；特殊动作保持原速；仅影响本机正常手动移动。实测通过
+- **一键状态恢复**: 点一次即可用普通安全食品恢复**耐力 / 疲劳 / 口渴 / 压力 / 无聊 / 不快乐**六项负面状态；手中食品优先，否则在自己背包内按需分批选择并无营养限制地小份食用；面板显示选中食品与进度，取消待吃动作不会误食、不会清空其他动作，吃剩的食物按原值还原。不含伤势治疗。实测通过
 - **状态与需求**: 无限耐力 / 禁用肌肉拉伤 / 状态与需求全系禁用(疲劳/饥饿/口渴/醉酒/愤怒/恐惧/疼痛/恐慌/士气低落/压力/疾病/吸烟压力/理智/无聊/不快乐/潮湿/感染/虚假感染) / 维持最佳卡路里 / 维持最佳体重 / 修复身上衣物 / 身上衣物填充皮革条
 - **调试权限功能(仅单人)**: 上帝模式 / 穿墙模式 / 隐身模式 / 创造模式 / 进度条秒走完 —— 需先在「其他」页开启「解锁调试权限(单人)」
 - **特殊模式**: 夜视模式 / **真-夜视**(渲染级全亮, 夜色与视野锥黑幕移除, 无灯室内不再漆黑, 纯客户端) / 僵尸不会攻击玩家(多人可用)
@@ -123,7 +125,7 @@
 1. 准备编译依赖：将目标游戏的 `projectzomboid.jar` 复制到 `etherhack-src/lib/`，保持原文件名；不要修改游戏原文件。
 2. 以文本形式打开 `etherhack-src/build-fast.bat`，在顶部填写 `BUILD_JAVA_HOME`（JDK 根目录）和 `BUILD_GAME_DIR`（游戏根目录）。
 3. 运行 `etherhack-src/build-fast.bat`。(如果你需要走完整构建, 就运行build.bat, 但这会需要5-10分钟)
-4. 从 `etherhack-src/build/` 取出 `modcore-3.2.8-B42.jar`，与 `etherhack-src/install.bat`、`etherhack-src/uninstall.bat` 一起复制到游戏根目录下。
+4. 从 `etherhack-src/build/` 取出 `modcore-3.2.9-B42.jar`，与 `etherhack-src/install.bat`、`etherhack-src/uninstall.bat` 一起复制到游戏根目录下。
 5. 运行install.bat, 等待执行完毕。
 
 ## 启动(两种方式)
@@ -158,7 +160,7 @@ set "BUILD_GAME_DIR=E:\Steam\steamapps\common\ProjectZomboid"
 
 随后运行 `etherhack-src/build.bat`（完整测试并打包），或 `etherhack-src/build-fast.bat`（仅编译打包）。两个入口均核对游戏 JAR 与 `lib/projectzomboid.jar` 一致；快速入口不要求游戏 Java 副本。
 
-产物为 `etherhack-src/build/modcore-3.2.8-B42.jar`。完整入口自动管理 `temp/native-runtime-build/` 下的测试副本，副本不存在或缺文件会重建，游戏 Java 更新后会选用新副本；未知文件、被改记录、跳转路径或并发构建会拒绝，不自动删除可疑内容。保留 `temp/` 中的其他工具和证据，不需要清空整个目录。
+产物为 `etherhack-src/build/modcore-3.2.9-B42.jar`。完整入口自动管理 `temp/native-runtime-build/` 下的测试副本，副本不存在或缺文件会重建，游戏 Java 更新后会选用新副本；未知文件、被改记录、跳转路径或并发构建会拒绝，不自动删除可疑内容。保留 `temp/` 中的其他工具和证据，不需要清空整个目录。
 
 自动化可通过 `MODCORE_BUILD_JAVA_HOME`、`MODCORE_BUILD_GAME_DIR` 覆盖顶部配置；游戏位置参数优先于环境覆盖，`PZ_GAME_DIR` 仍兼容。显式错误配置不会改用系统 Java。`MODCORE_NO_PAUSE=1` 可取消结束暂停。`build.bat --fast` 仍仅跳过部分测试，产物同样未完整验收。
 
@@ -168,7 +170,7 @@ set "BUILD_GAME_DIR=E:\Steam\steamapps\common\ProjectZomboid"
 
 | 路径 | 说明 |
 |---|---|
-| `etherhack-src/build/modcore-3.2.8-B42.jar` | 3.2.8 产物（适配 42.22.2）：隔离验证通过；自动修理已实机验收（其余功能按各自文档状态） |
+| `etherhack-src/build/modcore-3.2.9-B42.jar` | 3.2.9 产物（适配 42.22.2）：移动倍率与六项状态恢复已实机验收（其余功能按各自文档状态） |
 | `etherhack-src/` | 完整源码 (Gradle 工程, 含 `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua 冒烟测试 + Kahlua 兼容性检查脚本 |
 | `analysis/` | 反编译取证与设计文档 (`analysis/**/*.md` 入库, 反编译产物仅存本地) |

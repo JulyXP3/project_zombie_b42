@@ -69,6 +69,10 @@ final class LuaTestRuntime {
         });
     }
 
+    Object call(Object function, Object... arguments) {
+        return thread.call(function, arguments);
+    }
+
     Object[] execute(String source) throws IOException {
         var closure = LuaCompiler.loadstring(source, "test", environment);
         Object[] result = thread.pcall(closure, new Object[0]);

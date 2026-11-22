@@ -135,6 +135,7 @@ public class CoreAPI {
     public boolean isUnlimitedEndurance;
     public boolean isCritMax;
     public float combatSpeedMultiplier = 1.0f;
+    public int movementSpeedMultiplier = 1;
     public float attackRangeBonus = 0.0f;
     public boolean isAutoRepairItems;
     public boolean isRepairClothing;
@@ -194,6 +195,8 @@ public class CoreAPI {
     public boolean isMapDrawVehicles;
     public boolean isMapDrawZombies;
     public boolean isMapDrawItems;
+    /** Item radar layer preset: 0 = all loaded floors, 1 = player +-2, 2 = current floor only. */
+    public int itemScanLayerMode;
     public boolean isMinimapOpen;
     // 位置记忆 (二百零八): 小地图/主面板上次关闭位置; -1 = 无记忆 (按默认位置打开)
     public float minimapPosX = -1.0f;
@@ -311,11 +314,18 @@ public class CoreAPI {
             {"isVisualsTrailersEnable", "k85"},
             {"isAnimalSpeciesAll", "k86"},
             {"watchlist", "k87"},
+            {"itemScanLayerMode", "k88"},
+            {"movementSpeedMultiplier", "k89"},
         };
         for (String[] e : m) {
             CONFIG_KEY_CODES.put(e[0], e[1]);
             CONFIG_CODE_TO_KEY.put(e[1], e[0]);
         }
+    }
+
+    /** Only the three documented presets are accepted; anything else falls back to all loaded floors. */
+    public static int normalizeLayerMode(int value){
+        return value == 1 || value == 2 ? value : 0;
     }
 
     /** 键名双向重映射: toCode=true 存盘前 (语义→中性码), false 读盘后 (中性码→语义)。 */
@@ -356,6 +366,7 @@ public class CoreAPI {
         var3.setProperty("isUnlimitedEndurance", Boolean.toString(this.isUnlimitedEndurance));
         var3.setProperty("isCritMax", Boolean.toString(this.isCritMax));
         var3.setProperty("combatSpeedMultiplier", Float.toString(this.combatSpeedMultiplier));
+        var3.setProperty("movementSpeedMultiplier", Integer.toString(MovementSpeedPolicy.normalizePreset(this.movementSpeedMultiplier)));
         var3.setProperty("attackRangeBonus", Float.toString(this.attackRangeBonus));
         var3.setProperty("isAutoRepairItems", Boolean.toString(this.isAutoRepairItems));
         var3.setProperty("isRepairClothing", Boolean.toString(this.isRepairClothing));
@@ -403,6 +414,7 @@ public class CoreAPI {
         var3.setProperty("isMapDrawVehicles", Boolean.toString(this.isMapDrawVehicles));
         var3.setProperty("isMapDrawZombies", Boolean.toString(this.isMapDrawZombies));
         var3.setProperty("isMapDrawItems", Boolean.toString(this.isMapDrawItems));
+        var3.setProperty("itemScanLayerMode", Integer.toString(this.itemScanLayerMode));
         var3.setProperty("isMinimapOpen", Boolean.toString(this.isMinimapOpen));
         var3.setProperty("minimapPosX", Float.toString(this.minimapPosX));
         var3.setProperty("minimapPosY", Float.toString(this.minimapPosY));
@@ -462,6 +474,7 @@ public class CoreAPI {
     }
 
     private void applyConfig(Properties var3) {
+        FoodRecoveryRuntime.cancel();
         this.mainUIAccentColor = ConfigUtils.getColorFromConfig(var3, "mainUIAccentColor", new Color(72, 216, 168));
         this.vehiclesUIColor = ConfigUtils.getColorFromConfig(var3, "vehiclesUIColor", CoreAPI.defaultVehicleUIColor());
         // 2026-11-12: 旧默认紫色 (150,150,200) 不够醒目, 统一升级为亮粉色;
@@ -491,6 +504,8 @@ public class CoreAPI {
         this.isUnlimitedEndurance = ConfigUtils.getBooleanFromConfig(var3, "isUnlimitedEndurance", false);
         this.isCritMax = ConfigUtils.getBooleanFromConfig(var3, "isCritMax", false);
         this.combatSpeedMultiplier = ConfigUtils.getFloatFromConfig(var3, "combatSpeedMultiplier", 1.0f);
+        this.movementSpeedMultiplier = MovementSpeedPolicy.normalizePreset(
+                ConfigUtils.getIntFromConfig(var3, "movementSpeedMultiplier", 1));
         this.attackRangeBonus = ConfigUtils.getFloatFromConfig(var3, "attackRangeBonus", 0.0f);
         this.isAutoRepairItems = ConfigUtils.getBooleanFromConfig(var3, "isAutoRepairItems", false);
         this.isRepairClothing = ConfigUtils.getBooleanFromConfig(var3, "isRepairClothing", false);
@@ -545,6 +560,7 @@ public class CoreAPI {
         this.isMapDrawVehicles = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawVehicles", false);
         this.isMapDrawZombies = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawZombies", false);
         this.isMapDrawItems = ConfigUtils.getBooleanFromConfig(var3, "isMapDrawItems", false);
+        this.itemScanLayerMode = normalizeLayerMode(ConfigUtils.getIntFromConfig(var3, "itemScanLayerMode", 0));
         this.isMinimapOpen = ConfigUtils.getBooleanFromConfig(var3, "isMinimapOpen", false);
         this.minimapPosX = ConfigUtils.getFloatFromConfig(var3, "minimapPosX", -1.0f);
         this.minimapPosY = ConfigUtils.getFloatFromConfig(var3, "minimapPosY", -1.0f);
@@ -650,6 +666,7 @@ public class CoreAPI {
         this.exposer.exposeRenderingAPI();
         // 探鱼雷达取数桥 (2026-10-18, 两阶段 fishRadarScanBegin/Finish)
         this.exposer.exposeFishRadar();
+        this.exposer.exposeItemScanAPI();
         this.exposer.exposeAutoDrive();
         PrivateGlobals.endCapture();
     }
@@ -1968,6 +1985,17 @@ public class CoreAPI {
                 }
                 this.exposeGlobalClassFunction(LuaManager.env, FishRadarAPI.class, method, name);
                 Logger.printLog("Exposed FishRadarAPI method: " + name);
+            }
+        }
+
+        public void exposeItemScanAPI() {
+            for (Method method : ItemScanAPI.class.getMethods()) {
+                if (!method.isAnnotationPresent(LuaMethod.class)) continue;
+                LuaMethod annotation = method.getAnnotation(LuaMethod.class);
+                String name = annotation.name();
+                if (name == null || name.isEmpty()) name = method.getName();
+                this.exposeGlobalClassFunction(LuaManager.env, ItemScanAPI.class, method, name);
+                Logger.printLog("Exposed ItemScanAPI method: " + name);
             }
         }
 

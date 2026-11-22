@@ -1725,6 +1725,9 @@ public class GamePatcher {
         // 一百三十九 (用户实测「图标闪一下」驱动): 无限耐力的读取点归零 —— 与负重同一套解法,
         // 让 moodle/冲刺判定一律看到满耐力, 不再与游戏每帧扣减赛跑 (见该类文件头)
         modcore.core.EnduranceStatPatch.install();
+        modcore.core.MovementSpeedPatch.install();
+        modcore.core.FoodRecoverySyncPatch.install();
+        modcore.core.FoodRecoveryFoodPatch.install();
         // 一百九十一 (用户实测「无限负重时不时被服务端回退」驱动): maxWeight 读取点重写重建 ——
         // 服务端 PlayerDamagePacket (纯下行) 周期推回 + vanilla BodyDamage 自重算 双覆盖源下,
         // 字段踩值存在可见竞态窗口; 与耐力同构, 按项目原则改读取点 (沿革见该类文件头:
@@ -1820,6 +1823,9 @@ public class GamePatcher {
         steps.put("RootCapacityPatch", modcore.core.RootCapacityPatch::install);
         steps.put("CarryMoodlePatch", modcore.core.CarryMoodlePatch::install);
         steps.put("EnduranceStatPatch", modcore.core.EnduranceStatPatch::install);
+        steps.put("MovementSpeedPatch", modcore.core.MovementSpeedPatch::install);
+        steps.put("FoodRecoverySyncPatch", modcore.core.FoodRecoverySyncPatch::install);
+        steps.put("FoodRecoveryFoodPatch", modcore.core.FoodRecoveryFoodPatch::install);
         steps.put("MaxWeightPatch", modcore.core.MaxWeightPatch::install);
         steps.put("NoJamPatch", modcore.core.NoJamPatch::install);
         steps.put("WindowShotPatch", modcore.core.WindowShotPatch::install);

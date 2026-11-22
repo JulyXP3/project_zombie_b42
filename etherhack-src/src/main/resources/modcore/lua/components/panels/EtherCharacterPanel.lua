@@ -148,30 +148,57 @@ end
 --* 构建表单内容 (基类 createChildren 回调): 四个功能模块。
 --* 描述表在运行时构建, 确保引用的全局已暴露。
 --*********************************************************
+-- Preset layout is shared by height budgeting and placement; never cache width globally.
+function EtherCharacterPanel.movementPresetLayout(innerW)
+    local gap = EtherTheme.ctrlGap;
+    local available = math.max(1, innerW);
+    local bw = math.min(available, UIButton.measureGroupWidth({"[1x]", "[2x]", "[3x]"}));
+    local columns = math.max(1, math.min(3, math.floor((available + gap) / (bw + gap))));
+    local rows = math.ceil(3 / columns);
+    return columns, bw, rows * EtherTheme.ctrlH + (rows - 1) * gap;
+end
+
+function EtherCharacterPanel.refreshMovementPresets(panel)
+    local available = type(getMovementSpeedMultiplier) == "function" and type(setMovementSpeedMultiplier) == "function";
+    local preset = available and getMovementSpeedMultiplier() or 1;
+    if preset ~= 2 and preset ~= 3 then preset = 1; end
+    for i, button in ipairs(panel.movementPresetButtons or {}) do
+        button.title = i == preset and ("[" .. tostring(i) .. "x]") or (tostring(i) .. "x");
+        button:setEnable(available);
+    end
+end
+
+function EtherCharacterPanel.placeMovementPresets(panel, bx, by, innerW)
+    local columns, bw, height = EtherCharacterPanel.movementPresetLayout(innerW);
+    local gap = EtherTheme.ctrlGap;
+    panel.movementPresetButtons = {};
+    for i = 1, 3 do
+        local preset = i;
+        local col = (i - 1) % columns;
+        local row = math.floor((i - 1) / columns);
+        local button = UIButton:new(bx + col * (bw + gap), by + row * (EtherTheme.ctrlH + gap),
+            bw, EtherTheme.ctrlH, tostring(preset) .. "x", function()
+                if type(setMovementSpeedMultiplier) == "function" then
+                    setMovementSpeedMultiplier(preset);
+                    EtherCharacterPanel.refreshMovementPresets(panel);
+                end
+            end, bw);
+        panel:addWidget(button);
+        panel.movementPresetButtons[i] = button;
+    end
+    EtherCharacterPanel.refreshMovementPresets(panel);
+    return height;
+end
+
+function EtherCharacterPanel:prerender()
+    EtherFormPanel.prerender(self);
+    EtherCharacterPanel.refreshMovementPresets(self);
+    if FoodRecovery and type(FoodRecovery.refreshUi)=="function" then FoodRecovery.refreshUi(self); end
+end
+
 function EtherCharacterPanel:build()
+    self.movementPresetButtons = {};
     local modules = {
-        {
-            title = "UI_CharacterPanel_Group_DebugCheats",
-            hint = "UI_CharacterPanel_DebugHint",
-            items = {
-                { key = "UI_CharacterPanel_GodMode",         on = toggleGodMode,           get = isEnableGodMode },
-                { key = "UI_CharacterPanel_NoClip",          on = toggleNoclip,            get = isEnableNoclip },
-                { key = "UI_CharacterPanel_Invisible",       on = toggleInvisible,         get = isEnableInvisible },
-                { key = "UI_CharacterPanel_TimedActionCheat", on = toggleTimedActionCheat, get = isTimedActionCheat },
-                -- 创造模式: 双写 ISBuildMenu.cheat (Lua 全局, 放行菜单/免走位/免锤子/免材料判定)
-                -- + player:setBuildCheat (Java 位, 新建造窗口"建造"按钮 canBuild or isBuildCheat()
-                --   与服务端 ISBuildIsoEntity:create 免消耗判定读的就是它)。
-                -- setBuildCheat 被 Role.hasCapability(UseBuildCheat) 门禁: SP 下本 mod 的 Role 补丁
-                -- 无条件放行 → 生效; MP 管理员 → 生效; MP 非管理员 → 静默拒绝 (无害, 不发包不触反作弊)。
-                { key = "UI_CharacterPanel_BuildCheat",
-                  on = function(c)
-                      ISBuildMenu.cheat = c;
-                      local p = getPlayer();
-                      if p ~= nil then p:setBuildCheat(c); end
-                  end,
-                  get = function() return ISBuildMenu.cheat; end },
-            },
-        },
         {
             title = "UI_CharacterPanel_Group_Items",
             items = {
@@ -197,6 +224,35 @@ function EtherCharacterPanel:build()
             },
         },
         {
+            title = "UI_CharacterPanel_Group_Movement",
+            hint = "UI_CharacterPanel_MovementHint",
+            movement = true,
+        },
+        -- 调试权限排在「食物恢复」之后 (2026-11-23 用户要求): 两者位置对调, 仍紧邻「状态与需求」。
+        {
+            title = "UI_CharacterPanel_Group_DebugCheats",
+            hint = "UI_CharacterPanel_DebugHint",
+            items = {
+                { key = "UI_CharacterPanel_GodMode",         on = toggleGodMode,           get = isEnableGodMode },
+                { key = "UI_CharacterPanel_NoClip",          on = toggleNoclip,            get = isEnableNoclip },
+                { key = "UI_CharacterPanel_Invisible",       on = toggleInvisible,         get = isEnableInvisible },
+                { key = "UI_CharacterPanel_TimedActionCheat", on = toggleTimedActionCheat, get = isTimedActionCheat },
+                -- 创造模式: 双写 ISBuildMenu.cheat (Lua 全局, 放行菜单/免走位/免锤子/免材料判定)
+                -- + player:setBuildCheat (Java 位, 新建造窗口"建造"按钮 canBuild or isBuildCheat()
+                --   与服务端 ISBuildIsoEntity:create 免消耗判定读的就是它)。
+                -- setBuildCheat 被 Role.hasCapability(UseBuildCheat) 门禁: SP 下本 mod 的 Role 补丁
+                -- 无条件放行 → 生效; MP 管理员 → 生效; MP 非管理员 → 静默拒绝 (无害, 不发包不触反作弊)。
+                { key = "UI_CharacterPanel_BuildCheat",
+                  on = function(c)
+                      ISBuildMenu.cheat = c;
+                      local p = getPlayer();
+                      if p ~= nil then p:setBuildCheat(c); end
+                  end,
+                  get = function() return ISBuildMenu.cheat; end },
+            },
+        },
+        {
+            -- 食物恢复现在位于「调试权限」之上、「状态与需求」之外 (2026-11-23 用户要求的位置)。
             title = "UI_CharacterPanel_Group_Needs",
             items = {
                 { key = "UI_CharacterPanel_UnlimitedEndurance", on = toggleUnlimitedEndurance, get = isUnlimitedEndurance },
@@ -237,6 +293,10 @@ function EtherCharacterPanel:build()
         -- 高度预算: 网格 (预排一次, 摆放复用同一份 rows) + 可选说明行/输入行/按钮行
         local rows, gridH, colW = planGrid(mod.items or {}, innerW);
         local contentH = gridH;
+        if mod.movement then
+            local _, _, presetH = EtherCharacterPanel.movementPresetLayout(innerW);
+            contentH = contentH + 6 + presetH;
+        end
         local hintH = 0;
         if mod.hint ~= nil then
             hintH = #EtherTheme.wrapHint(tr(mod.hint), innerW - 8) * EtherTheme.fontHgtHint + 2;
@@ -253,12 +313,21 @@ function EtherCharacterPanel:build()
             end
         end
 
+        -- Food recovery and the debug/toggle group swap places (2026-11-23 user request): recovery now sits
+        -- above the debug switches, which stay directly above the needs group.
+        if mod.title == "UI_CharacterPanel_Group_DebugCheats" and FoodRecovery and type(FoodRecovery.addModule)=="function" then
+            FoodRecovery.addModule(self, ModuleHint);
+            self:addSpacer(EtherFormPanel.SECTION_GAP);
+        end
         self:addModule(mod.title, contentH + 2, function(bx, by, bw)
             local ix = bx + EtherFormPanel.BOX_PAD_X;
             local iW = bw - EtherFormPanel.BOX_PAD_X * 2;
             local cy = by;
             placeGrid(self, rows, ix, cy, colW);
             cy = cy + gridH;
+            if mod.movement then
+                cy = cy + 6 + EtherCharacterPanel.placeMovementPresets(self, ix, cy + 6, iW);
+            end
             if mod.hint ~= nil then
                 local hint = ModuleHint:new(ix, cy + 6, iW, tr(mod.hint));
                 hint:initialise();
@@ -279,6 +348,7 @@ function EtherCharacterPanel:build()
                 end
             end
         end);
+
         if mod.title == "UI_CharacterPanel_Group_Items" then
             self:addSpacer(EtherFormPanel.SECTION_GAP);
             GeneratorMaintenance.addModule(self);

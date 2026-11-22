@@ -1,6 +1,32 @@
 # Changelog
 
-## [3.2.8] - Current
+## [3.2.9] - Current
+
+- Added: the Survival page offers remembered 1x/2x/3x movement presets for normal walking, running and sprinting, while special actions keep their original speed.
+
+- Improved: endurance, fatigue, thirst, stress, boredom and unhappiness can be restored by one-click eating of ordinary safe food, preferring held food and serving small portions. Cancelling does not consume food, and leftover food keeps its own values.
+
+- Improved: removed the food-recovery debug logging so the game log no longer fills with progress lines.
+
+- Build: version bumped to 3.2.9.
+
+## [3.2.8] - Previous version
+
+- Changed: Gather now pulls zombies onto one tile 4 tiles ahead of your facing direction instead of scattering them around you; their own collision then pushes them apart.
+
+- Improved: updated item radar descriptions and messages in Chinese, English and Russian to clarify floor ranges, list tracking, display toggles and how to retry after a failed scan.
+
+- Fixed: item radar could retain old markers after items were picked up or transferred. Previously found locations are rechecked first; failed or timed-out searches now withdraw old markers and can be retried by enabling a display again.
+
+- Fixed: reopening map markers or ESP after editing a paused watch list now uses the current list. Clearing the list can immediately resume searching the current selection.
+
+- Changed: the item radar no longer has a separate "Track list" checkbox; enabling map markers or ESP lines now tracks every item in the list, and an empty list falls back to the selected item or the whole filtered list.
+
+- Improved: item radar has a new layer-range button cycling through All floors / This floor ±2 / This floor only; the choice is remembered (default All floors), and only affected positions are updated after movement or container changes.
+
+- Improved: item radar floor names are now absolute (for example "Floor 3" or "Basement 2") and no longer change when you walk up or down; searches show progress, and a failure or timeout is no longer reported as "no items found".
+
+- Fixed: item tracking retains search-result messages when only map markers or world lines are enabled, instead of clearing the message or leaving it at the tracking prompt.
 
 - Fixed: starting, finishing and cancelling fast-move (through walls). Synchronization failures stop the task and show a warning, disappearing players or disconnections do not retain an old task, and cancelling does not freeze ordinary walking. Regular fast-move and vehicle teleport features remain unchanged. The user confirmed wall-crossing works on their private server.
 

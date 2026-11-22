@@ -57,17 +57,32 @@ class GeneratorMaintenancePanelTest {
                 for i, m in ipairs(modules) do
                     if m.key == "UI_Generator_Title" then position = i end
                 end
-                local fuel = buttons[1]
-                local repair = buttons[2]
+                -- Find the generator buttons by title: the food-recovery module also adds buttons and now
+                -- renders before the needs group, so a fixed index would break on unrelated layout changes.
+                local fuel, repair = nil, nil
+                for _, b in ipairs(buttons) do
+                    if b.title == translations.UI_Generator_Fuel then fuel = b end
+                    if b.title == translations.UI_Generator_Repair then repair = b end
+                end
                 local hint = nil
                 for _, child in ipairs(panel.children) do
                     if child.lines and child.lines[1] == translations.UI_Generator_Range then hint = child end
                 end
+                -- The generator must have exactly one button of each kind; the global list now also holds
+                -- the food-recovery buttons, so its total length is not a generator-specific fact.
+                local generatorButtons = 0
+                for _, b in ipairs(buttons) do
+                    if b.title == translations.UI_Generator_Fuel or b.title == translations.UI_Generator_Repair then
+                        generatorButtons = generatorButtons + 1
+                    end
+                end
                 return position > 0, position > 0 and modules[position - 1].key or "missing",
-                    #buttons, fuel and fuel.title or "missing", repair and repair.title or "missing",
+                    generatorButtons, fuel and fuel.title or "missing", repair and repair.title or "missing",
                     hint ~= nil and hint.y > fuel.y + fuel.height,
                     panel.generatorStatus ~= nil and panel.generatorStatus.height >= 26
                 """);
+        // The generator still follows the items group; food recovery now sits above the needs group, so the
+        // module immediately before the generator is unchanged, but the module count grew by one.
         assertArrayEquals(new Object[]{true, "UI_CharacterPanel_Group_Items", 2.0,
                 "加满燃油", "修复至满", true, true}, result);
     }
