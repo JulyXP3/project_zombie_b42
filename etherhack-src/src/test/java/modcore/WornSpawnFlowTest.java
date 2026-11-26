@@ -166,6 +166,127 @@ public class WornSpawnFlowTest {
         assertEquals(0.2f, Player.instance.food.getActualWeight(), 0.001f);
     }
 
+    @Test
+    void generatedLogBundleIsInitializedOnlyAfterTheConfirmedDropIsPickedUp() throws Exception {
+        Class<?> worn = runtime();
+        assertEquals("started", worn.getMethod("wornSpawnStart", String.class).invoke(null, "Base.LogStacks2"));
+        Item ghost = Player.instance.getWornItem(Location.TSHIRT);
+        Item received = new Item("Base.LogStacks2", ghost.id, null);
+        Receipt.value = 1; Player.instance.worn.setItem(Location.TSHIRT, Player.instance.trigger);
+        assertEquals("waiting-drop", poll(worn));
+        Player.instance.square.world.add(new WorldItem(received));
+        assertEquals("done", poll(worn));
+        Class<?> recipe = recipeRuntime();
+        assertEquals(0, synchronizeBundles(recipe), "a ground item has no inventory field address");
+        assertNull(received.getModData().rawget("ropeItems"));
+        Player.instance.inventory.add(received);
+        received.getModData().rawset("note", "preserve");
+        assertEquals(1, synchronizeBundles(recipe));
+        assertEquals(List.of("Base.Rope", "Base.Rope"), GeneratedBundleRopesTest.values(FieldsWire.received.getFirst().rawget("ropeItems")));
+        assertEquals("preserve", FieldsWire.received.getFirst().rawget("note"));
+        assertEquals(0, synchronizeBundles(recipe));
+        assertEquals(1, FieldsWire.received.size());
+    }
+
+    @Test
+    void initializationSendFailureRollsBackMetadataAndCanRetry() throws Exception {
+        Class<?> worn = runtime();
+        assertEquals("started", worn.getMethod("wornSpawnStart", String.class).invoke(null, "Base.FirewoodBundle"));
+        Item ghost = Player.instance.getWornItem(Location.TSHIRT);
+        Item received = new Item("Base.FirewoodBundle", ghost.id, null);
+        Player.instance.square.world.add(new WorldItem(received));
+        Player.instance.worn.setItem(Location.TSHIRT, Player.instance.trigger); Receipt.value = 1;
+        assertEquals("done", poll(worn)); Player.instance.inventory.add(received);
+        Class<?> recipe = recipeRuntime(); FieldsWire.fail = true;
+        assertEquals(0, synchronizeBundles(recipe));
+        assertNull(received.getModData().rawget("ropeItems"));
+        assertEquals(1, Client.connection.cancelled);
+        FieldsWire.fail = false; assertEquals(1, synchronizeBundles(recipe));
+        assertEquals(List.of("Base.Rope"), GeneratedBundleRopesTest.values(FieldsWire.received.getFirst().rawget("ropeItems")));
+    }
+
+    @Test
+    void knownGeneratedIdDoesNotPermitChangingAnotherTypeOrAnotherSession() throws Exception {
+        Class<?> worn = runtime();
+        assertEquals("started", worn.getMethod("wornSpawnStart", String.class).invoke(null, "Base.LogStacks2"));
+        Item ghost = Player.instance.getWornItem(Location.TSHIRT);
+        Item received = new Item("Base.LogStacks2", ghost.id, null);
+        Player.instance.square.world.add(new WorldItem(received));
+        Player.instance.worn.setItem(Location.TSHIRT, Player.instance.trigger); Receipt.value = 1;
+        assertEquals("done", poll(worn));
+        Item other = new Item("Base.Other", ghost.id, null); Player.instance.inventory.add(other);
+        Class<?> recipe = recipeRuntime(); assertEquals(0, synchronizeBundles(recipe));
+        assertNull(other.getModData().rawget("ropeItems"));
+        Player.instance.inventory.items.remove(other); Player.instance.inventory.add(received);
+        Client.connection = new Connection();
+        assertEquals(0, synchronizeBundles(recipe)); assertNull(received.getModData().rawget("ropeItems"));
+    }
+
+    @Test
+    void aConnectionChangeDuringOwnershipValidationNeverSendsToTheReplacementConnection() throws Exception {
+        Class<?> worn=runtime();assertEquals("started",worn.getMethod("wornSpawnStart",String.class).invoke(null,"Base.LogStacks2"));
+        Item ghost=Player.instance.getWornItem(Location.TSHIRT),received=new Item("Base.LogStacks2",ghost.id,null);
+        Player.instance.square.world.add(new WorldItem(received));Player.instance.worn.setItem(Location.TSHIRT,Player.instance.trigger);Receipt.value=1;
+        assertEquals("done",poll(worn));Player.instance.inventory.add(received);Class<?> recipe=recipeRuntime();
+        Connection original=Client.connection,replacement=new Connection();java.util.concurrent.atomic.AtomicInteger reads=new java.util.concurrent.atomic.AtomicInteger();
+        received.onOutermost=()->{if(reads.incrementAndGet()==2)Client.connection=replacement;};
+        assertEquals(0,synchronizeBundles(recipe));assertNull(received.getModData().rawget("ropeItems"));
+        assertNull(original.writer);assertNull(replacement.writer);assertTrue(FieldsWire.received.isEmpty());
+    }
+
+    @Test
+    void defaultMaterialApiDoesNotRequireGenerationOrPlayerContextAndReturnsFreshTables() throws Exception {
+        Class<?> recipe=recipeRuntime();var method=recipe.getMethod("defaultBundleRopeItems",String.class);
+        KahluaTable first=(KahluaTable)method.invoke(null,"Base.LogStacks2");
+        assertEquals(List.of("Base.Rope","Base.Rope"),GeneratedBundleRopesTest.values(first));
+        first.rawset(0,"Base.SheetRope");KahluaTable next=(KahluaTable)method.invoke(null,"Base.LogStacks2");
+        assertNotSame(first,next);assertEquals(List.of("Base.Rope","Base.Rope"),GeneratedBundleRopesTest.values(next));
+        assertEquals(List.of("Base.Rope"),GeneratedBundleRopesTest.values(method.invoke(null,"Base.FirewoodBundle")));
+        assertNull(method.invoke(null,"Base.Log"));
+    }
+
+    private static int synchronizeBundles(Class<?> api) throws Exception {
+        try { return ((Number) api.getMethod("syncGeneratedBundleRopes", boolean.class).invoke(null, false)).intValue(); }
+        catch (NoSuchMethodException missing) { return fail("Generated bundle synchronization is not installed"); }
+    }
+
+    private static Class<?> recipeRuntime() throws Exception {
+        Map<String, String> names = Map.ofEntries(
+                Map.entry("modcore/core/RecipeAPI", "modcore/fixture/BundleRecipe"),
+                Map.entry("zombie/network/IConnection", BytecodeFixture.owner(Connection.class)),
+                Map.entry("zombie/core/raknet/UdpConnection", BytecodeFixture.owner(Connection.class)),
+                Map.entry("modcore/utils/Logger", BytecodeFixture.owner(Log.class)),
+                Map.entry("zombie/network/GameClient", BytecodeFixture.owner(Client.class)),
+                Map.entry("zombie/characters/IsoPlayer", BytecodeFixture.owner(Player.class)),
+                Map.entry("zombie/inventory/InventoryItem", BytecodeFixture.owner(Item.class)),
+                Map.entry("zombie/inventory/ItemContainer", BytecodeFixture.owner(Inventory.class)),
+                Map.entry("zombie/core/network/ByteBufferWriter", BytecodeFixture.owner(FieldsWriter.class)),
+                Map.entry("zombie/network/packets/SyncItemFieldsPacket", BytecodeFixture.owner(FieldsPacket.class)),
+                Map.entry("zombie/network/PacketTypes$PacketType", BytecodeFixture.owner(PacketType.class)));
+        ClassNode source = BytecodeFixture.read("modcore/core/RecipeAPI");
+        ClassNode target = BytecodeFixture.type("modcore/fixture/BundleRecipe"); target.methods.clear();
+        for (FieldNode field : source.fields) target.fields.add(new FieldNode(field.access, field.name, field.desc, null, field.value));
+        for (var method : source.methods) {
+            var copy = BytecodeFixture.copy(method, names);
+            for (var instruction : copy.instructions) if (instruction instanceof org.objectweb.asm.tree.InvokeDynamicInsnNode dynamic) {
+                for (int i = 0; i < dynamic.bsmArgs.length; i++) {
+                    Object arg = dynamic.bsmArgs[i];
+                    if (arg instanceof org.objectweb.asm.Handle handle) dynamic.bsmArgs[i] = new org.objectweb.asm.Handle(
+                            handle.getTag(), names.getOrDefault(handle.getOwner(), handle.getOwner()), handle.getName(),
+                            recipeDescriptor(handle.getDesc(), names), handle.isInterface());
+                    else if (arg instanceof org.objectweb.asm.Type type) dynamic.bsmArgs[i] = org.objectweb.asm.Type.getType(recipeDescriptor(type.getDescriptor(), names));
+                }
+            }
+            target.methods.add(copy);
+        }
+        return BytecodeFixture.define(target);
+    }
+
+    private static String recipeDescriptor(String descriptor, Map<String, String> names) {
+        for (var entry : names.entrySet()) descriptor = descriptor.replace("L" + entry.getKey() + ";", "L" + entry.getValue() + ";");
+        return descriptor;
+    }
+
     private static Object start(Class<?> api) throws Exception {
         Log.lines.clear();
         Object status = api.getMethod("wornSpawnStart", String.class).invoke(null, "Base.Target");
@@ -191,7 +312,7 @@ public class WornSpawnFlowTest {
         Client.client = true;
         Client.connection = new Connection();
         Clock.now = 1000;
-        Packets.sent.clear();
+        Packets.sent.clear(); FieldsWire.fail = false; FieldsWire.received.clear();
         Actions.action = null;
         Actions.owner = null;
         Actions.failSend = false;
@@ -238,11 +359,42 @@ public class WornSpawnFlowTest {
     }
 
     public enum Location { TSHIRT, HAT }
-    public enum PacketType { ItemStats, SyncClothing, GeneralAction }
+    public enum PacketType {
+        ItemStats, SyncClothing, GeneralAction, SyncItemFields;
+        public void doPacket(FieldsWriter writer) { }
+        public void send(Connection connection) {
+            if (this != SyncItemFields) throw new AssertionError("wrong metadata packet");
+            FieldsWire.receive(connection.writer);
+        }
+    }
+    public static class FieldsWriter {
+        public final java.nio.ByteBuffer buffer = java.nio.ByteBuffer.allocate(8192);
+    }
+    public static class FieldsPacket {
+        private Item item;
+        public void setData(Object... values) { item = (Item) values[1]; }
+        public void write(FieldsWriter writer) {
+            if (FieldsWire.fail) throw new IllegalStateException("write failed");
+            try { item.getModData().save(writer.buffer); }
+            catch (java.io.IOException error) { throw new AssertionError(error); }
+        }
+    }
+    public static class FieldsWire {
+        static boolean fail;
+        static final List<KahluaTable> received = new ArrayList<>();
+        static void receive(FieldsWriter writer) {
+            writer.buffer.flip(); KahluaTable data = GeneratedBundleRopesTest.table();
+            try { data.load(writer.buffer, 251); received.add(data); }
+            catch (java.io.IOException error) { throw new AssertionError(error); }
+        }
+    }
     public static class Connection {
         /** 客户端就绪标志；isFullyConnected 只在服务端置位，故意不提供。 */
         public boolean ready = true;
+        public FieldsWriter writer; public int cancelled;
         public boolean isReady() { return ready; }
+        public FieldsWriter startPacket() { writer = new FieldsWriter(); return writer; }
+        public void cancelPacket() { cancelled++; }
     }
     public static class Client {
         public static boolean client;
@@ -262,6 +414,10 @@ public class WornSpawnFlowTest {
         public int id;
         public final Location location;
         public Inventory container;
+        private final KahluaTable modData = GeneratedBundleRopesTest.table();
+        public KahluaTable getModData() { return modData; }
+        public Runnable onOutermost;
+        public Inventory getOutermostContainer() { if(onOutermost!=null)onOutermost.run();return container; }
         public Item(String type, int id, Location location) {
             this.type = type;
             this.id = id;
@@ -340,6 +496,8 @@ public class WornSpawnFlowTest {
         public Square square = new Square();
         public Player() { inventory.add(trigger); inventory.add(food); }
         public static Player getInstance() { return instance; }
+        public boolean isLocalPlayer() { return this == instance; }
+        public boolean isAlive() { return true; }
         public Inventory getInventory() { return inventory; }
         public WornItems getWornItems() { return worn; }
         public Item getWornItem(Location location) { return worn.items.get(location); }

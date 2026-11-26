@@ -28,6 +28,7 @@ package modcore.core;
 import se.krka.kahlua.integration.annotations.LuaMethod;
 import zombie.characters.IsoPlayer;
 import zombie.core.network.ByteBufferWriter;
+import zombie.core.raknet.UdpConnection;
 import zombie.inventory.InventoryItem;
 import zombie.network.GameClient;
 import zombie.network.PacketTypes;
@@ -86,6 +87,52 @@ public class RecipeAPI {
         }
     }
 
+    @LuaMethod(name = "defaultBundleRopeItems", global = true)
+    public static se.krka.kahlua.vm.KahluaTable defaultBundleRopeItems(String itemType) {
+        return GeneratedBundleRopes.defaultRopeItems(itemType);
+    }
+
+    /** Called on inventory updates, with a reset on disconnect; no idle inventory polling. */
+    @LuaMethod(name = "syncGeneratedBundleRopes", global = true)
+    public static int syncGeneratedBundleRopes(boolean reset) {
+        if (reset) { GeneratedBundleRopes.INSTANCE.clear(); return 0; }
+        var connection = GameClient.connection;
+        IsoPlayer player = IsoPlayer.getInstance();
+        if (!GameClient.client || connection == null || !connection.isReady()
+                || player == null || !player.isLocalPlayer() || !player.isAlive()) {
+            GeneratedBundleRopes.INSTANCE.clear(); return 0;
+        }
+        return GeneratedBundleRopes.INSTANCE.synchronize(connection, player, (id, type) -> {
+            InventoryItem item = player.getInventory().getItemWithIDRecursiv(id);
+            return item != null && type.equals(item.getFullType()) && item.getContainer() != null
+                    && item.getOutermostContainer() == player.getInventory() ? item.getModData() : null;
+        }, (id, data) -> {
+            InventoryItem item = player.getInventory().getItemWithIDRecursiv(id);
+            if (GameClient.connection != connection || IsoPlayer.getInstance() != player
+                    || !connection.isReady() || item == null || item.getModData() != data
+                    || item.getOutermostContainer() != player.getInventory() || item.getContainer() == null)
+                throw new IllegalStateException("generated bundle ownership changed");
+            sendItemFields(connection, player, item);
+        });
+    }
+
+    private static void sendItemFields(UdpConnection connection, IsoPlayer player, InventoryItem item) {
+        if (GameClient.connection != connection || IsoPlayer.getInstance() != player || !connection.isReady())
+            throw new IllegalStateException("item field session changed");
+        SyncItemFieldsPacket packet = new SyncItemFieldsPacket();
+        packet.setData(player, item);
+        if (GameClient.connection != connection || IsoPlayer.getInstance() != player || !connection.isReady())
+            throw new IllegalStateException("item field session changed while serializing");
+        ByteBufferWriter buffer = connection.startPacket();
+        try {
+            PacketTypes.PacketType.SyncItemFields.doPacket(buffer);
+            packet.write(buffer);
+            PacketTypes.PacketType.SyncItemFields.send(connection);
+        } catch (RuntimeException failure) {
+            connection.cancelPacket(); throw failure;
+        }
+    }
+
     /*
      * Red-team POC writer: push one own-inventory item's full field snapshot
      * (including its LOCAL modData table) to the server (multiplayer only).
@@ -102,7 +149,8 @@ public class RecipeAPI {
     @LuaMethod(name = "syncItemFieldsNow", global = true)
     public static String syncItemFieldsNow(int itemId) {
         try {
-            if (!GameClient.client || GameClient.connection == null) {
+            UdpConnection connection = GameClient.connection;
+            if (!GameClient.client || connection == null) {
                 return "offline: multiplayer only";
             }
             IsoPlayer player = IsoPlayer.getInstance();
@@ -113,12 +161,7 @@ public class RecipeAPI {
             if (item == null) {
                 return "no item id " + itemId;
             }
-            SyncItemFieldsPacket pkt = new SyncItemFieldsPacket();
-            pkt.setData(player, item);
-            ByteBufferWriter bb = GameClient.connection.startPacket();
-            PacketTypes.PacketType.SyncItemFields.doPacket(bb);
-            pkt.write(bb);
-            PacketTypes.PacketType.SyncItemFields.send(GameClient.connection);
+            sendItemFields(connection, player, item);
             Logger.printLog("[RecipeAPI] sent fields: " + item.getFullType() + " (#" + itemId + ")");
             return "sent fields: " + item.getFullType() + " (#" + itemId + ")";
         }

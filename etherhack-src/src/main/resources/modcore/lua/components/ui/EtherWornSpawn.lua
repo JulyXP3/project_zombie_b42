@@ -84,11 +84,34 @@ function EtherWornSpawn.tick()
     EtherWornSpawn.active = false
     print("[WornSpawn] poll -> " .. tostring(status))
     if status == "done" then
+        if type(syncGeneratedBundleRopes) == "function" then pcall(syncGeneratedBundleRopes, false); end
         setMsg("UI_WornSpawn_Done")
     else
         showFailure(status)
     end
 end
+
+-- Deferred bundle metadata needs a real inventory container; never poll inventory while idle.
+local previousBundleHooks = EtherWornSpawn.bundleHooks;
+if previousBundleHooks then
+    for _, binding in ipairs(previousBundleHooks) do
+        if type(binding.event.Remove) == "function" then binding.event.Remove(binding.handler); end
+    end
+end
+local bundleHooks = {};
+local function bundleHook(event, reset)
+    if event and type(event.Add) == "function" then
+        local handler = function()
+            if type(syncGeneratedBundleRopes) == "function" then pcall(syncGeneratedBundleRopes, reset); end
+        end
+        event.Add(handler);
+        table.insert(bundleHooks, { event = event, handler = handler });
+    end
+end
+bundleHook(Events.OnContainerUpdate, false);
+bundleHook(Events.OnDisconnect, true);
+bundleHook(Events.OnMainMenuEnter, true);
+EtherWornSpawn.bundleHooks = bundleHooks;
 
 Events.OnTick.Add(EtherWornSpawn.tick)
 Events.OnDisconnect.Add(EtherWornSpawn.cancel)

@@ -37,6 +37,36 @@ local function findAllCarriers(inv, types)
     return out;
 end
 
+-- Uses the same Kahlua iterator as vanilla splitLogStack, including sparse/zero-based keys.
+local function copyUnpackEntries(original)
+    if original == nil then return nil, 0, "missing"; end
+    if type(original) ~= "table" then return nil, 0, "invalid"; end
+    local ok, entries, size, reason = pcall(function()
+        local result = {}; local n = 0;
+        for _, value in pairs(original) do
+            if type(value) ~= "string" or value == "" then return nil, 0, "invalid"; end
+            if n >= 256 then return nil, 0, "oversized"; end
+            result[n] = value; n = n + 1;
+        end
+        if n == 0 then return nil, 0, "empty"; end
+        return result, n;
+    end);
+    if not ok then return nil, 0, "read-failed"; end
+    return entries, size, reason;
+end
+
+local function prepareUnpackEntries(original, itemType)
+    local entries, size, reason = copyUnpackEntries(original);
+    if entries then return entries, size, false; end
+    if reason ~= "missing" and reason ~= "empty" then return nil, 0, false, reason; end
+    if type(defaultBundleRopeItems) ~= "function" then return nil, 0, false, "defaults-unavailable"; end
+    local ok, defaults = pcall(defaultBundleRopeItems, itemType);
+    if not ok then return nil, 0, false, "defaults-failed"; end
+    entries, size = copyUnpackEntries(defaults);
+    if not entries then return nil, 0, false, "defaults-invalid"; end
+    return entries, size, true;
+end
+
 --*********************************************************
 --* 入口: 目标物品全名 + 数量 (1..100)
 --*********************************************************
@@ -85,45 +115,42 @@ function EtherBoxPoison.trigger(target, count)
             table.insert(names, box:getFullType());
         end
     end
-    local keptRopes = 0;
+    local keptEntries, skipped, failed, defaulted = 0, 0, 0, 0;
     for _, stack in ipairs(stacks) do
-        local mod = stack:getModData()
-        if mod ~= nil then
-            -- B2: 保留原有绳索条目再追加目标 —— 之前整表替换导致绳子消失
-            -- (用户实测)。原条目是合法堆自带的绳 (createLogStack 写入)。
-            -- 读法用整数索引直取 (createLogStack 以 0 起逐项 rawset),
-            -- 不用 pairs (Kahlua 表迭代语义不可靠); 读不到=该堆已被旧版毒坏
-            -- (服务端 wipe 后原绳已丢), 只能用新堆重测。
-            local rope = {}
-            local idx = 0;
-            local ok, old = pcall(function() return mod["ropeItems"] end)
-            if ok and old ~= nil then
-                for i = 0, 31 do
-                    local v = old[i];
-                    if v == nil then break; end
-                    if type(v) == "string" and v ~= "" then
-                        rope[idx] = v;
-                        idx = idx + 1;
-                        keptRopes = keptRopes + 1;
-                    end
-                end
+        local mod = stack:getModData();
+        local original = nil;
+        if mod then original = mod["ropeItems"]; end
+        local entries, kept, usedDefaults, reason = prepareUnpackEntries(original, stack:getFullType());
+        if mod and entries then
+            local index = kept;
+            for i = 0, count - 1 do entries[index] = target; index = index + 1; end
+            mod["ropeItems"] = entries;
+            local ok, status = pcall(syncItemFieldsNow, stack:getID());
+            if ok and type(status) == "string" and string.sub(status, 1, 12) == "sent fields:" then
+                keptEntries = keptEntries + kept;
+                if usedDefaults then defaulted = defaulted + 1; end
+                table.insert(names, stack:getFullType());
+            else
+                mod["ropeItems"] = original;
+                failed = failed + 1;
+                print("[BoxPoison] preparation failed " .. stack:getFullType() .. " #" .. tostring(stack:getID()) .. ": " .. tostring(status));
             end
-            for i = 0, count - 1 do
-                rope[idx] = target;
-                idx = idx + 1;
-            end
-            mod["ropeItems"] = rope
-            syncItemFieldsNow(stack:getID())
-            table.insert(names, stack:getFullType());
+        else
+            skipped = skipped + 1;
+            print("[BoxPoison] skipped " .. stack:getFullType() .. " #" .. tostring(stack:getID()) .. ": " .. tostring(reason));
         end
     end
+
     if #names == 0 then
-        return
+        EtherBoxPoison.message = getTranslate(failed > 0 and "UI_BoxPoison_SyncFailed" or "UI_BoxPoison_BundleDataMissing");
+        return;
     end
     local res = "ready: " .. table.concat(names, " + ") .. " x" .. tostring(count);
-    if #stacks > 0 then
-        res = res .. " (kept " .. tostring(keptRopes) .. " ropes)";
-    end
-    EtherBoxPoison.message = res .. " -> " .. getTranslate("UI_BoxPoison_NextStep")
+    if #stacks > 0 then res = res .. " (kept " .. tostring(keptEntries) .. " records)"; end
+    if defaulted > 0 then res = res .. " (default ropes: " .. tostring(defaulted) .. " bundles)"; end
+    EtherBoxPoison.message = res .. " -> " .. getTranslate("UI_BoxPoison_NextStep");
+    if defaulted > 0 then EtherBoxPoison.message = EtherBoxPoison.message .. " | " .. getTranslate("UI_BoxPoison_DefaultRopes"); end
+    if skipped > 0 then EtherBoxPoison.message = EtherBoxPoison.message .. " | " .. getTranslate("UI_BoxPoison_BundleDataMissing"); end
+    if failed > 0 then EtherBoxPoison.message = EtherBoxPoison.message .. " | " .. getTranslate("UI_BoxPoison_SyncFailed"); end
     print("[BoxPoison] " .. res)
 end

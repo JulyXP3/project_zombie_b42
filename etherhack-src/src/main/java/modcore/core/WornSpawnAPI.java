@@ -215,6 +215,7 @@ public class WornSpawnAPI {
                 restoreFood();
             }
             if (triggerWorn && dropped) {
+                GeneratedBundleRopes.INSTANCE.remember(cycleConnection, cyclePlayer, ghostId, ghostType);
                 return finish("done", false) ? "done" : "error";
             }
             if (System.currentTimeMillis() - startMs > WEAR_TIMEOUT_MS) {

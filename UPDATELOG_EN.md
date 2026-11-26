@@ -2,6 +2,8 @@
 
 ## [3.2.9] - Current
 
+- Fixed: Unbox spawn no longer omits the selected item when unpacking a bundle. Known binding materials are returned unchanged; ordinary rope is used when the original material is unknown. The user confirmed both item output and rope return in game.
+
 - Added: the Survival page offers remembered 1x/2x/3x movement presets for normal walking, running and sprinting, while special actions keep their original speed.
 
 - Improved: endurance, fatigue, thirst, stress, boredom and unhappiness can be restored by one-click eating of ordinary safe food, preferring held food and serving small portions. Cancelling does not consume food, and leftover food keeps its own values.

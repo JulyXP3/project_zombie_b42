@@ -170,7 +170,7 @@ set "BUILD_GAME_DIR=E:\Steam\steamapps\common\ProjectZomboid"
 
 | 路径 | 说明 |
 |---|---|
-| `etherhack-src/build/modcore-3.2.9-B42.jar` | 3.2.9 产物（适配 42.22.2）：移动倍率与六项状态恢复已实机验收（其余功能按各自文档状态） |
+| `etherhack-src/build/modcore-3.2.9-B42.jar` | 3.2.9 产物（适配 42.22.2）：移动倍率、六项状态恢复与开盒目标物品及返绳已实机验收（其余功能按各自文档状态） |
 | `etherhack-src/` | 完整源码 (Gradle 工程, 含 `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua 冒烟测试 + Kahlua 兼容性检查脚本 |
 | `analysis/` | 反编译取证与设计文档 (`analysis/**/*.md` 入库, 反编译产物仅存本地) |

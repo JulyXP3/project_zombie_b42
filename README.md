@@ -170,7 +170,7 @@ Full acceptance requires zero failed, errored or skipped tests; `gradlew.bat jar
 
 | Path | Description |
 |---|---|
-| `etherhack-src/build/modcore-3.2.9-B42.jar` | 3.2.9 artifact (for 42.22.2): movement presets and six-state recovery confirmed in game; auto-repair accepted in-game (other features per their docs) |
+| `etherhack-src/build/modcore-3.2.9-B42.jar` | 3.2.9 artifact (for 42.22.2): movement presets, six-state recovery, and Unbox spawn item and rope returns confirmed in game; auto-repair accepted in-game (other features per their docs) |
 | `etherhack-src/` | Full source (Gradle project, includes `build.bat` / `install.bat` / `uninstall.bat`) |
 | `tests/` | Lua smoke tests + Kahlua compatibility checker |
 | `analysis/` | Reverse-engineering evidence and design docs (`analysis/**/*.md` is tracked; decompiled sources stay local only) |
